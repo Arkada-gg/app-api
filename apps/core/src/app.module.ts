@@ -1,20 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { _ConfigModule } from './_config/config.module';
+import { DatabaseModule } from './database/database.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
-    ThrottlerModule.forRoot([
-      {
-        ttl: +(process.env.THROTTLER_TTL ?? '60'),
-        limit: +(process.env.THROTTLER_LIMIT ?? '20'),
-      },
-    ]),
-  ],
-  controllers: [],
-  providers: [],
+  imports: [DatabaseModule, _ConfigModule, AuthModule],
 })
 export class AppModule {}
