@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { IUser } from './interface';
+import { IUser } from '../shared/interfaces';
 
 @Injectable()
 export class AuthRepository {
