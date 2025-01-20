@@ -1,20 +1,23 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { Client } from 'pg';
+import { ConfigService } from '../_config/config.service';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit {
+  private readonly logger = new Logger(DatabaseService.name);
   private client: Client;
 
-  constructor() {
+  constructor(private readonly configService: ConfigService) {
     this.client = new Client({
       connectionString:
-        process.env.DATABASE_URL ||
-        'postgres://user:pass@localhost:5432/arkada_db',
+        this.configService.get('DATABASE_URL') ||
+        'postgres://user:password@localhost:5432/arkada_db',
     });
   }
 
   async onModuleInit() {
     await this.client.connect();
+    this.logger.log('Connected to PostgreSQL');
     await this.initializeSchema();
   }
 
@@ -32,7 +35,7 @@ export class DatabaseService implements OnModuleInit {
     `);
   }
 
-  getClient() {
+  getClient(): Client {
     return this.client;
   }
 }
