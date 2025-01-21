@@ -8,14 +8,17 @@ import {
   BadRequestException,
   UseInterceptors,
   UploadedFile,
+  UseGuards,
+  Param,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { UpdateAvatarDto } from './dto/update-avatar.dto';
 import { ConnectSocialDto } from './dto/connect-social.dto';
 import { SessionRequest } from '../shared/interfaces';
 import { Multer } from 'multer';
+import { SessionAuthGuard } from '../auth/guard/session-auth.guard';
 
+@UseGuards(SessionAuthGuard)
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
@@ -36,8 +39,7 @@ export class UserController {
   @UseInterceptors(FileInterceptor('file'))
   async updateAvatar(
     @Req() req: SessionRequest,
-    @UploadedFile() file: Multer.File,
-    @Body() dto: UpdateAvatarDto
+    @UploadedFile() file: Multer.File
   ) {
     if (!req.session.userId) {
       throw new UnauthorizedException('Not authenticated');
@@ -50,60 +52,24 @@ export class UserController {
     return this.userService.updateAvatar(req.session.userId, file);
   }
 
-  @Patch('connect/twitter')
-  async connectTwitter(
+  @Patch('social/:platform')
+  async updateSocial(
+    @Param('platform') platform: string,
     @Req() req: SessionRequest,
     @Body() body: ConnectSocialDto
   ) {
-    if (!req.session.userId) {
-      throw new UnauthorizedException('Not authenticated');
-    }
-    return this.userService.updateTwitter(req.session.userId, body.username);
-  }
+    const userId: string = req.session.userId;
+    const username: string = body.username || null;
 
-  @Patch('disconnect/twitter')
-  async disconnectTwitter(@Req() req: SessionRequest) {
-    if (!req.session.userId) {
-      throw new UnauthorizedException('Not authenticated');
+    switch (platform) {
+      case 'twitter':
+        return this.userService.updateTwitter(userId, username);
+      case 'github':
+        return this.userService.updateGithub(userId, username);
+      case 'telegram':
+        return this.userService.updateTelegram(userId, username);
+      default:
+        throw new BadRequestException(`Unknown social: ${platform}`);
     }
-    return this.userService.updateTwitter(req.session.userId, null);
-  }
-
-  @Patch('connect/github')
-  async connectGithub(
-    @Req() req: SessionRequest,
-    @Body() body: ConnectSocialDto
-  ) {
-    if (!req.session.userId) {
-      throw new UnauthorizedException('Not authenticated');
-    }
-    return this.userService.updateGithub(req.session.userId, body.username);
-  }
-
-  @Patch('disconnect/github')
-  async disconnectGithub(@Req() req: SessionRequest) {
-    if (!req.session.userId) {
-      throw new UnauthorizedException('Not authenticated');
-    }
-    return this.userService.updateGithub(req.session.userId, null);
-  }
-
-  @Patch('connect/telegram')
-  async connectTelegram(
-    @Req() req: SessionRequest,
-    @Body() body: ConnectSocialDto
-  ) {
-    if (!req.session.userId) {
-      throw new UnauthorizedException('Not authenticated');
-    }
-    return this.userService.updateTelegram(req.session.userId, body.username);
-  }
-
-  @Patch('disconnect/telegram')
-  async disconnectTelegram(@Req() req: SessionRequest) {
-    if (!req.session.userId) {
-      throw new UnauthorizedException('Not authenticated');
-    }
-    return this.userService.updateTelegram(req.session.userId, null);
   }
 }

@@ -3,7 +3,7 @@ import { AppModule } from './app.module';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import { rateLimit } from 'express-rate-limit';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -39,6 +39,8 @@ async function bootstrap() {
     })
   );
 
-  await app.listen(process.env.CORE_PORT);
+  await app.listen(process.env.CORE_PORT, () => {
+    Logger.log(`Core Service is running on port ${process.env.CORE_PORT}`);
+  });
 }
 bootstrap();
