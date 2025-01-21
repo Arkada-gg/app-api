@@ -36,6 +36,7 @@
     },
     "test": {
       "options": {
+        "jestConfig": "apps/core/jest.config.ts",
         "passWithNoTests": true
       }
     },

@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ethers } from 'ethers';
 import { SignupDto } from './dto/signup.dto';
 import { AuthRepository } from './auth.repository';
@@ -11,16 +15,29 @@ export class AuthService {
     const { address, signature } = signupDto;
 
     const message = process.env.VERIFICATION_MESSAGE || '';
-
-    const messageHash = ethers.hashMessage(message);
-    const recovered = ethers.recoverAddress(messageHash, signature);
-
-    if (recovered.toLowerCase() !== address.toLowerCase()) {
-      throw new BadRequestException('Invalid signature');
+    if (!message) {
+      throw new InternalServerErrorException(
+        'Verification message is not configured'
+      );
     }
 
-    const user = await this.authRepository.createOrUpdateUser(address);
+    try {
+      const messageHash = ethers.hashMessage(message);
+      const recovered = ethers.recoverAddress(messageHash, signature);
+      if (recovered.toLowerCase() !== address.toLowerCase()) {
+        throw new BadRequestException('Invalid signature');
+      }
 
-    return user;
+      const user = await this.authRepository.createOrUpdateUser(address);
+      return user;
+    } catch (error) {
+      if (error.code === 'INVALID_ARGUMENT') {
+        throw new BadRequestException(
+          `Invalid signature format: ${error.message}`
+        );
+      }
+
+      throw new InternalServerErrorException('An unexpected error occurred');
+    }
   }
 }
