@@ -3,6 +3,7 @@ import { UserRepository } from './user.repository';
 import { S3Service } from '../s3/s3.service';
 import { Multer } from 'multer';
 import { IUser } from '../shared/interfaces';
+import { ESocialPlatform, SocialFieldMap } from './user.constants';
 
 @Injectable()
 export class UserService {
@@ -23,15 +24,12 @@ export class UserService {
     return { message: 'Avatar updated', avatarUrl };
   }
 
-  async updateTwitter(address: string, username: string | null) {
-    return this.userRepository.updateField(address, 'twitter', username);
-  }
-
-  async updateGithub(address: string, username: string | null) {
-    return this.userRepository.updateField(address, 'github', username);
-  }
-
-  async updateTelegram(address: string, username: string | null) {
-    return this.userRepository.updateField(address, 'telegram', username);
+  async updateSocialPlatform(
+    address: string,
+    platform: ESocialPlatform,
+    username: string | null
+  ) {
+    const fieldName = SocialFieldMap[platform];
+    return this.userRepository.updateField(address, fieldName, username);
   }
 }
