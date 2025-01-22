@@ -32,13 +32,13 @@ import {
 } from '@nestjs/swagger';
 
 @UseFilters(MulterExceptionFilter)
-@UseGuards(SessionAuthGuard)
 @Controller('user')
 @ApiTags('User')
-@ApiCookieAuth()
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  @UseGuards(SessionAuthGuard)
+  @ApiCookieAuth()
   @Get('profile')
   @ApiOperation({ summary: 'Получить профиль текущего пользователя' })
   @ApiResponse({ status: 200, description: 'Успешно получен профиль' })
@@ -51,6 +51,25 @@ export class UserController {
     return user;
   }
 
+  @Get(':hash')
+  @ApiOperation({ summary: 'Получить пользователя по хэшу адреса' })
+  @ApiParam({
+    name: 'hash',
+    description: 'Хэш адреса пользователя',
+    required: true,
+  })
+  @ApiResponse({ status: 200, description: 'Пользователь найден' })
+  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
+  async getUserByHash(@Param('hash') hash: string) {
+    const user = await this.userService.findByAddress(hash);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+    return user;
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @ApiCookieAuth()
   @Patch('avatar')
   @ApiOperation({ summary: 'Обновить аватар пользователя' })
   @ApiConsumes('multipart/form-data')
@@ -84,6 +103,8 @@ export class UserController {
     return this.userService.updateAvatar(req.session.userId, file);
   }
 
+  @UseGuards(SessionAuthGuard)
+  @ApiCookieAuth()
   @Patch('social/:platform')
   @ApiOperation({ summary: 'Подключить или отключить соцсеть' })
   @ApiParam({ name: 'platform', enum: ['twitter', 'github', 'telegram'] })

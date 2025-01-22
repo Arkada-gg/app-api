@@ -5,9 +5,21 @@ import cookieParser from 'cookie-parser';
 import { rateLimit } from 'express-rate-limit';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import basicAuth from 'express-basic-auth';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.use(
+    ['/api', '/api-json'],
+    basicAuth({
+      users: {
+        [process.env.SWAGGER_USER || 'admin']:
+          process.env.SWAGGER_PASS || 'password',
+      },
+      challenge: true,
+    })
+  );
 
   const config = new DocumentBuilder()
     .setTitle('Arkada API')
