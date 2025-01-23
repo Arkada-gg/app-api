@@ -16,6 +16,13 @@ async function bootstrap() {
 
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
   //const app = await NestFactory.create(AppModule);
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    })
+  );
   app.useGlobalFilters(new AllExceptionsFilter());
   app.enableCors({
     origin: [
@@ -25,11 +32,6 @@ async function bootstrap() {
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
-  });
-
-  app.use((req, res, next) => {
-    Logger.log('Global log:', req.method, req.url);
-    next();
   });
 
   app.use(

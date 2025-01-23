@@ -27,7 +27,7 @@ export class CampaignController {
   @ApiResponse({ status: 200, description: 'Список кампаний' })
   @ApiBadRequestResponse({ description: 'Некорректные параметры запроса' })
   async getCampaigns(@Query() query: GetCampaignsDto) {
-    const { type, page, limit } = query;
+    const { type, page = 1, limit = 5 } = query;
     return this.campaignService.getActiveCampaigns(page, limit, type);
   }
 

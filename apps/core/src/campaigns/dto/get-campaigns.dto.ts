@@ -1,4 +1,5 @@
 import { IsOptional, IsEnum, IsInt, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum CampaignType {
@@ -14,7 +15,7 @@ export class GetCampaignsDto {
 
   @ApiPropertyOptional({ description: 'Номер страницы', example: 1 })
   @IsOptional()
-  @IsInt()
+  @Type(() => Number)
   @Min(1)
   page?: number;
 
@@ -23,7 +24,7 @@ export class GetCampaignsDto {
     example: 10,
   })
   @IsOptional()
-  @IsInt()
+  @Type(() => Number)
   @Min(1)
   limit?: number;
 }

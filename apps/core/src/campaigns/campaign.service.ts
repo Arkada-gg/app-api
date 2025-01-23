@@ -11,7 +11,7 @@ export class CampaignService {
     limit: number,
     type?: CampaignType
   ): Promise<any[]> {
-    return this.campaignRepository.findActiveCampaigns(type, page, limit);
+    return this.campaignRepository.findActiveCampaigns(page, limit, type);
   }
 
   async getCampaignByIdOrSlug(idOrSlug: string): Promise<any> {

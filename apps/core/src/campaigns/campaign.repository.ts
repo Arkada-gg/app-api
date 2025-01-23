@@ -7,9 +7,9 @@ export class CampaignRepository {
   constructor(private readonly dbService: DatabaseService) {}
 
   async findActiveCampaigns(
-    type?: CampaignType,
     page = 1,
-    limit = 10
+    limit = 5,
+    type?: CampaignType
   ): Promise<any[]> {
     const client = this.dbService.getClient();
     try {
@@ -33,6 +33,7 @@ export class CampaignRepository {
       const result = await client.query(query, params);
       return result.rows;
     } catch (error) {
+      console.error('Error in findActiveCampaigns:', error);
       throw new InternalServerErrorException(error.message);
     }
   }
