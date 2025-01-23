@@ -6,9 +6,31 @@ import { rateLimit } from 'express-rate-limit';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import basicAuth from 'express-basic-auth';
+import express from 'express';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import { AllExceptionsFilter } from './common/all-exceptions.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const server = express();
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
+
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  //const app = await NestFactory.create(AppModule);
+  app.useGlobalFilters(new AllExceptionsFilter());
+  app.enableCors({
+    origin: [
+      'https://dev-app-api.arkada.gg',
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+
+  app.use((req, res, next) => {
+    Logger.log('Global log:', req.method, req.url);
+    next();
+  });
 
   app.use(
     ['/api', '/api-json'],
@@ -40,7 +62,7 @@ async function bootstrap() {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        secure: false, // if we switch to HTTPS ===> true
+        secure: true, // if we switch to HTTPS ===> true
         maxAge: 1000 * 60 * 60, // 1h
       },
     })

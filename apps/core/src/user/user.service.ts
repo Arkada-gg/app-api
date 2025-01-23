@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { UserRepository } from './user.repository';
 import { S3Service } from '../s3/s3.service';
 import { Multer } from 'multer';
@@ -16,12 +16,34 @@ export class UserService {
     return this.userRepository.findByAddress(address);
   }
 
-  async updateAvatar(address: string, file: Multer.File) {
-    const avatarUrl = await this.s3Service.uploadFile(file);
+  async updateUsername(address: string, username: string) {
+    return this.userRepository.updateUsername(address, username);
+  }
 
-    await this.userRepository.updateAvatar(address, avatarUrl);
+  async updateAvatar(
+    address: string,
+    file: Multer.File
+  ): Promise<{ message: string; avatarUrl: string }> {
+    const user = await this.userRepository.findByAddress(address);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
 
-    return { message: 'Avatar updated', avatarUrl };
+    if (user.avatar) {
+      try {
+        const urlParts = user.avatar.split('/');
+        const key = urlParts.slice(3).join('/');
+        await this.s3Service.deleteFile(key);
+      } catch (error) {
+        console.error('Error deleting old avatar:', error);
+      }
+    }
+
+    const newAvatarUrl = await this.s3Service.uploadFile(file);
+
+    await this.userRepository.updateAvatar(address, newAvatarUrl);
+
+    return { message: 'Avatar updated successfully', avatarUrl: newAvatarUrl };
   }
 
   async updateSocialPlatform(

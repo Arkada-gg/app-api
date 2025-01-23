@@ -33,6 +33,19 @@ export class UserRepository {
     }
   }
 
+  async updateUsername(address: string, username: string) {
+    const client = this.dbService.getClient();
+    try {
+      const result = await client.query(
+        `UPDATE users SET name = $2 WHERE address = $1 RETURNING *`,
+        [address.toLowerCase(), username]
+      );
+      return result.rows[0] || { success: true };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
   async updateField(
     address: string,
     fieldName: keyof IUser,

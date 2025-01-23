@@ -9,7 +9,5 @@ export interface IUser {
 }
 
 export interface SessionRequest extends Request {
-  session: {
-    userId?: string;
-  };
+  userAddress: { address: string };
 }

@@ -4,8 +4,18 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { S3Module } from './s3/s3.module';
 import { UserModule } from './user/user.module';
+import { CampaignModule } from './campaigns/campaign.module';
+import { QuestModule } from './quests/quest.module';
 
 @Module({
-  imports: [DatabaseModule, _ConfigModule, AuthModule, S3Module, UserModule],
+  imports: [
+    DatabaseModule,
+    _ConfigModule,
+    AuthModule,
+    S3Module,
+    UserModule,
+    CampaignModule,
+    QuestModule,
+  ],
 })
 export class AppModule {}
