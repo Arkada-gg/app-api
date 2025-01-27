@@ -16,17 +16,14 @@ export class QuestRepository {
     questId: string,
     userAddress: string
   ): Promise<boolean> {
+    const lowerAddress = userAddress.toLowerCase();
     try {
-      const userAddressBytes = Buffer.from(userAddress.toLowerCase());
       const query = `
         SELECT 1 FROM quest_completions
         WHERE quest_id = $1 AND user_address = $2
         LIMIT 1
       `;
-      const result = await this.client.query(query, [
-        questId,
-        userAddressBytes,
-      ]);
+      const result = await this.client.query(query, [questId, lowerAddress]);
       return result.rowCount > 0;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
@@ -34,14 +31,14 @@ export class QuestRepository {
   }
 
   async completeQuest(questId: string, userAddress: string): Promise<void> {
+    const lowerAddress = userAddress.toLowerCase();
     try {
-      const userAddressBytes = Buffer.from(userAddress.toLowerCase());
       const query = `
         INSERT INTO quest_completions (quest_id, user_address, completed_at)
         VALUES ($1, $2, NOW())
         ON CONFLICT (quest_id, user_address) DO NOTHING
       `;
-      await this.client.query(query, [questId, userAddressBytes]);
+      await this.client.query(query, [questId, lowerAddress]);
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
@@ -90,8 +87,8 @@ export class QuestRepository {
     userAddress: string,
     campaignId: string
   ): Promise<QuestCompletionDto[]> {
+    const lowerAddress = userAddress.toLowerCase();
     try {
-      const userAddressBytes = Buffer.from(userAddress.toLowerCase());
       const query = `
         SELECT qc.id, q.name AS quest_name, qc.completed_at
         FROM quest_completions qc
@@ -99,10 +96,7 @@ export class QuestRepository {
         WHERE qc.user_address = $1 AND q.campaign_id = $2
         ORDER BY qc.completed_at DESC
       `;
-      const result = await this.client.query(query, [
-        userAddressBytes,
-        campaignId,
-      ]);
+      const result = await this.client.query(query, [lowerAddress, campaignId]);
       return result.rows.map((row) => ({
         id: row.id,
         quest_name: row.quest_name,
@@ -118,8 +112,8 @@ export class QuestRepository {
   async getAllCompletedQuestsByUser(
     userAddress: string
   ): Promise<QuestCompletionDto[]> {
+    const lowerAddress = userAddress.toLowerCase();
     try {
-      const userAddressBytes = Buffer.from(userAddress.toLowerCase());
       const query = `
         SELECT qc.id, q.name AS quest_name, qc.completed_at
         FROM quest_completions qc
@@ -127,7 +121,7 @@ export class QuestRepository {
         WHERE qc.user_address = $1
         ORDER BY qc.completed_at DESC
       `;
-      const result = await this.client.query(query, [userAddressBytes]);
+      const result = await this.client.query(query, [lowerAddress]);
       return result.rows.map((row) => ({
         id: row.id,
         quest_name: row.quest_name,

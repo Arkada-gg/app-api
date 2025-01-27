@@ -1,5 +1,3 @@
-// src/migrations/1674235300001_create_users_table.ts
-
 import { Client } from 'pg';
 
 export const name = '1674235300001_create_users_table';

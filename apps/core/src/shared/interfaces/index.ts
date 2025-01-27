@@ -176,4 +176,25 @@ export class GetUserResponse {
     required: false,
   })
   email?: string;
+
+  @ApiProperty({
+    example: '250',
+    description: 'Поинты пользователя',
+    required: false,
+  })
+  points?: number;
+
+  @ApiProperty({
+    example: '2025-01-27 06:10:35.315982',
+    description: 'Время создания пользователя',
+    required: false,
+  })
+  created_at?: Date;
+
+  @ApiProperty({
+    example: '2025-01-27 06:10:35.315982',
+    description: 'Время обновления пользователя',
+    required: false,
+  })
+  updated_at?: Date;
 }

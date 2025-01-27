@@ -65,8 +65,8 @@ export class CampaignRepository {
     idOrSlug: string,
     address: string
   ): Promise<void> {
+    const lowerAddress = address.toLowerCase();
     const client = this.dbService.getClient();
-    const addressBytes = Buffer.from(address.toLowerCase());
 
     try {
       await client.query('BEGIN');
@@ -93,7 +93,7 @@ export class CampaignRepository {
       `;
       const checkResult = await client.query(checkQuery, [
         campaignId,
-        addressBytes,
+        lowerAddress,
       ]);
 
       if (checkResult.rows.length > 0) {
@@ -104,7 +104,7 @@ export class CampaignRepository {
         INSERT INTO campaign_completions (campaign_id, user_address)
         VALUES ($1, $2);
       `;
-      await client.query(insertQuery, [campaignId, addressBytes]);
+      await client.query(insertQuery, [campaignId, lowerAddress]);
 
       await client.query('COMMIT');
     } catch (error) {
@@ -123,8 +123,8 @@ export class CampaignRepository {
     idOrSlug: string,
     address: string
   ): Promise<boolean> {
+    const lowerAddress = address.toLowerCase();
     const client = this.dbService.getClient();
-    const addressBytes = Buffer.from(address.toLowerCase());
 
     try {
       const campaignQuery = `
@@ -149,7 +149,7 @@ export class CampaignRepository {
       `;
       const checkResult = await client.query(checkQuery, [
         campaignId,
-        addressBytes,
+        lowerAddress,
       ]);
 
       return checkResult.rows.length > 0;

@@ -136,7 +136,6 @@ export class UserRepository {
   async updatePoints(address: string, points: number): Promise<void> {
     const client = this.dbService.getClient();
 
-    const addressBytes = Buffer.from(address.toLowerCase());
     try {
       await client.query('BEGIN');
 
@@ -147,7 +146,7 @@ export class UserRepository {
         RETURNING points;
       `;
 
-      const result = await client.query(query, [points, addressBytes]);
+      const result = await client.query(query, [points, address]);
 
       if (result.rowCount === 0) {
         throw new NotFoundException('Пользователь не найден');

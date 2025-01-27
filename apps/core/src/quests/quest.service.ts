@@ -57,6 +57,7 @@ export class QuestService {
     questId: string,
     userAddress: string
   ): Promise<void> {
+    const lowerAddress = userAddress.toLowerCase();
     try {
       const quest = await this.questRepository.getQuest(questId);
       const campaignId = quest.campaign_id;
@@ -64,7 +65,7 @@ export class QuestService {
       const alreadyCompleted =
         await this.campaignService.hasUserCompletedCampaign(
           campaignId,
-          userAddress
+          lowerAddress
         );
 
       if (alreadyCompleted) return;
@@ -73,22 +74,17 @@ export class QuestService {
         campaignId
       );
 
-      console.log('------>', allCampaignQuests);
-
       const completedQuests =
         await this.questRepository.getCompletedQuestsByUserInCampaign(
-          userAddress,
+          lowerAddress,
           campaignId
         );
-
-      console.log('------>', completedQuests, campaignId);
 
       if (completedQuests.length === allCampaignQuests.length) {
         const campaign = await this.campaignService.getCampaignByIdOrSlug(
           campaignId
         );
         const rewards = campaign.rewards; // [{ "type": "type1", "value": "100 tokens" }, ...]
-        console.log('campaign------>', campaign);
         let totalPoints = 0;
         rewards.forEach((reward: any) => {
           if (reward.type === 'tokens') {
@@ -96,10 +92,10 @@ export class QuestService {
           }
         });
 
-        await this.userService.updatePoints(userAddress, totalPoints);
+        await this.userService.updatePoints(lowerAddress, totalPoints);
         await this.campaignService.completeCampaignForUser(
           campaignId,
-          userAddress
+          lowerAddress
         );
       }
     } catch (error) {

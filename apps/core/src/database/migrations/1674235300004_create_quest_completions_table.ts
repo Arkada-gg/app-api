@@ -1,5 +1,3 @@
-// src/migrations/1674235300004_create_quest_completions_table.ts
-
 import { Client } from 'pg';
 
 export const name = '1674235300004_create_quest_completions_table';
@@ -15,7 +13,6 @@ export async function up(client: Client): Promise<void> {
     );
   `);
 
-  // Добавление внешнего ключа на users(address)
   await client.query(`
     ALTER TABLE quest_completions
     ADD CONSTRAINT fk_quest_completions_user_address

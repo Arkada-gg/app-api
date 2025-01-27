@@ -39,22 +39,22 @@ import { UpdateUserDto } from './dto/update-user.dto';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @UseGuards(SessionAuthGuard)
-  @Get('profile')
-  @ApiOperation({ summary: 'Получить профиль текущего пользователя' })
-  @ApiResponse({
-    status: 200,
-    description: 'Успешно получен профиль',
-    type: GetUserResponse,
-  })
-  @ApiUnauthorizedResponse({ description: 'Not authenticated (No session)' })
-  async getProfile(@Req() req: SessionRequest) {
-    const user = await this.userService.findByAddress(req.userAddress.address);
-    if (!user) {
-      throw new BadRequestException('User not found');
-    }
-    return user;
-  }
+  // @UseGuards(SessionAuthGuard)
+  // @Get('profile')
+  // @ApiOperation({ summary: 'Получить профиль текущего пользователя' })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Успешно получен профиль',
+  //   type: GetUserResponse,
+  // })
+  // @ApiUnauthorizedResponse({ description: 'Not authenticated (No session)' })
+  // async getProfile(@Req() req: SessionRequest) {
+  //   const user = await this.userService.findByAddress(req.userAddress.address);
+  //   if (!user) {
+  //     throw new BadRequestException('User not found');
+  //   }
+  //   return user;
+  // }
 
   @Post('update-user')
   @ApiConsumes('multipart/form-data')
@@ -153,73 +153,73 @@ export class UserController {
     return user;
   }
 
-  @Patch('avatar')
-  @ApiOperation({ summary: 'Обновить аватар пользователя' })
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: { fileSize: 1024 * 1024 },
-    })
-  )
-  @ApiBody({
-    description: 'Form data для загрузки аватара',
-    schema: {
-      type: 'object',
-      properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-        },
-        address: {
-          type: 'string',
-          example: '0xe688b84b23f322a994A53dbF8E15FA82CDB71127',
-        },
-        signature: {
-          type: 'string',
-          example: '0x7520b00a05171ba73f837f6270d6e6c79d37136b...',
-        },
-      },
-      required: ['file', 'address', 'signature'],
-    },
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Успешно получен профиль',
-    type: GetUserResponse,
-  })
-  @ApiUnauthorizedResponse({ description: 'Not authenticated (No session)' })
-  async updateAvatar(
-    @Req() req: SessionRequest,
-    @UploadedFile() file: Multer.File,
-    @Body() body: { address: string; signature: string }
-  ) {
-    if (req.userAddress.address !== body.address) {
-      throw new BadRequestException('Not Authorized');
-    }
-    if (!file) {
-      throw new BadRequestException('No file provided');
-    }
+  // @Patch('avatar')
+  // @ApiOperation({ summary: 'Обновить аватар пользователя' })
+  // @ApiConsumes('multipart/form-data')
+  // @UseInterceptors(
+  //   FileInterceptor('file', {
+  //     limits: { fileSize: 1024 * 1024 },
+  //   })
+  // )
+  // @ApiBody({
+  //   description: 'Form data для загрузки аватара',
+  //   schema: {
+  //     type: 'object',
+  //     properties: {
+  //       file: {
+  //         type: 'string',
+  //         format: 'binary',
+  //       },
+  //       address: {
+  //         type: 'string',
+  //         example: '0xe688b84b23f322a994A53dbF8E15FA82CDB71127',
+  //       },
+  //       signature: {
+  //         type: 'string',
+  //         example: '0x7520b00a05171ba73f837f6270d6e6c79d37136b...',
+  //       },
+  //     },
+  //     required: ['file', 'address', 'signature'],
+  //   },
+  // })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Успешно получен профиль',
+  //   type: GetUserResponse,
+  // })
+  // @ApiUnauthorizedResponse({ description: 'Not authenticated (No session)' })
+  // async updateAvatar(
+  //   @Req() req: SessionRequest,
+  //   @UploadedFile() file: Multer.File,
+  //   @Body() body: { address: string; signature: string }
+  // ) {
+  //   if (req.userAddress.address !== body.address) {
+  //     throw new BadRequestException('Not Authorized');
+  //   }
+  //   if (!file) {
+  //     throw new BadRequestException('No file provided');
+  //   }
 
-    const rawMessage = process.env.VERIFICATION_MESSAGE || '';
-    let message = rawMessage.trim();
-    if (message.startsWith('"') && message.endsWith('"')) {
-      message = message.slice(1, -1);
-    }
-    message = message.replace(/\\n/g, '\n');
+  //   const rawMessage = process.env.VERIFICATION_MESSAGE || '';
+  //   let message = rawMessage.trim();
+  //   if (message.startsWith('"') && message.endsWith('"')) {
+  //     message = message.slice(1, -1);
+  //   }
+  //   message = message.replace(/\\n/g, '\n');
 
-    try {
-      const messageHash = ethers.hashMessage(message);
-      const recovered = ethers.recoverAddress(messageHash, body.signature);
-      if (recovered.toLowerCase() !== body.address.toLowerCase()) {
-        throw new BadRequestException('Invalid signature');
-      }
-    } catch (error) {
-      console.error('Signature verification error:', error);
-      throw new BadRequestException('Invalid signature or verification failed');
-    }
+  //   try {
+  //     const messageHash = ethers.hashMessage(message);
+  //     const recovered = ethers.recoverAddress(messageHash, body.signature);
+  //     if (recovered.toLowerCase() !== body.address.toLowerCase()) {
+  //       throw new BadRequestException('Invalid signature');
+  //     }
+  //   } catch (error) {
+  //     console.error('Signature verification error:', error);
+  //     throw new BadRequestException('Invalid signature or verification failed');
+  //   }
 
-    return this.userService.updateAvatar(body.address, file);
-  }
+  //   return this.userService.updateAvatar(body.address, file);
+  // }
 
   // @UseGuards(SessionAuthGuard)
   // @ApiCookieAuth()
