@@ -10,6 +10,8 @@ export class AuthRepository {
     const client = this.dbService.getClient();
     const lowerAddress = address.toLowerCase();
 
+    console.log('------>', lowerAddress);
+
     try {
       const existing = await client.query<IUser>(
         `SELECT * FROM users WHERE address = $1`,

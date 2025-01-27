@@ -23,15 +23,19 @@ export class DatabaseService implements OnModuleInit {
 
   private async initializeSchema() {
     await this.client.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        address VARCHAR(255) PRIMARY KEY,
-        name VARCHAR(255),
-        avatar VARCHAR(255),
-        twitter VARCHAR(255),
-        discord VARCHAR(255),
-        telegram VARCHAR(255),
-        github VARCHAR(255)
-      );
+    CREATE TABLE IF NOT EXISTS users (
+      address BYTEA PRIMARY KEY,
+      name VARCHAR(255),
+      avatar VARCHAR(255),
+      twitter VARCHAR(255),
+      discord VARCHAR(255),
+      telegram VARCHAR(255),
+      github VARCHAR(255),
+      email VARCHAR(255) UNIQUE,
+      points INTEGER DEFAULT 0,
+      created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+    );
     `);
   }
 

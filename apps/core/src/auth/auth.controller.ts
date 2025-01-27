@@ -1,8 +1,9 @@
-import { Controller, Post, Body, Req } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards } from '@nestjs/common';
 import { SignupDto } from './dto/signup.dto';
 import { AuthService } from './auth.service';
 import { SessionRequest } from '../shared/interfaces';
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { SignatureAuthGuard } from './guard/signature-auth.guard';
 
 @Controller('auth')
 @ApiTags('Auth')
@@ -10,6 +11,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('signup')
+  @UseGuards(SignatureAuthGuard)
   @ApiOperation({ summary: 'Авторизация' })
   @ApiResponse({ status: 200, description: 'Успешно получен профиль' })
   @ApiBody({
@@ -27,9 +29,8 @@ export class AuthController {
       },
     },
   })
-  async signup(@Body() signupDto: SignupDto, @Req() req: SessionRequest) {
+  async signup(@Body() signupDto: SignupDto) {
     const user = await this.authService.signup(signupDto);
-    req.session.userId = user.address;
 
     return {
       message: 'Signup successful',

@@ -1,5 +1,9 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { Multer } from 'multer';
 
 @Injectable()
@@ -9,7 +13,10 @@ export class S3Service {
 
   constructor() {
     const region = process.env.AWS_REGION || 'us-east-1';
-    this.bucket = process.env.S3_BUCKET_NAME || 'my-arkada-bucket';
+    this.bucket =
+      process.env.ENV === 'prod'
+        ? process.env.S3_BUCKET_NAME_PROD
+        : process.env.S3_BUCKET_NAME_DEV;
 
     this.s3Client = new S3Client({
       region,
@@ -40,6 +47,18 @@ export class S3Service {
       throw new InternalServerErrorException(
         `Failed to upload file: ${error.message}`
       );
+    }
+  }
+
+  async deleteFile(key: string): Promise<void> {
+    try {
+      const command = new DeleteObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      });
+      await this.s3Client.send(command);
+    } catch (error) {
+      console.error('Failed to delete file:', error);
     }
   }
 }
