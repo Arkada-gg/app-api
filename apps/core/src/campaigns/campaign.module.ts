@@ -8,5 +8,6 @@ import { DatabaseModule } from '../database/database.module';
   imports: [DatabaseModule],
   controllers: [CampaignController],
   providers: [CampaignService, CampaignRepository],
+  exports: [CampaignService],
 })
 export class CampaignModule {}

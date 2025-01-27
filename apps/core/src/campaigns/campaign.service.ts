@@ -17,4 +17,18 @@ export class CampaignService {
   async getCampaignByIdOrSlug(idOrSlug: string): Promise<any> {
     return this.campaignRepository.findCampaignByIdOrSlug(idOrSlug);
   }
+
+  async completeCampaignForUser(
+    idOrSlug: string,
+    address: string
+  ): Promise<any> {
+    return this.campaignRepository.completeCampaignForUser(idOrSlug, address);
+  }
+
+  async hasUserCompletedCampaign(
+    idOrSlug: string,
+    address: string
+  ): Promise<any> {
+    return this.campaignRepository.hasUserCompletedCampaign(idOrSlug, address);
+  }
 }

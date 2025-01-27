@@ -8,14 +8,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import basicAuth from 'express-basic-auth';
 import express from 'express';
 import { ExpressAdapter } from '@nestjs/platform-express';
-import { AllExceptionsFilter } from './common/all-exceptions.filter';
 
 async function bootstrap() {
   const server = express();
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
 
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
-  //const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -23,10 +21,11 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     })
   );
-  app.useGlobalFilters(new AllExceptionsFilter());
+  // app.useGlobalFilters(new AllExceptionsFilter());
   app.enableCors({
     origin: [
       'https://dev-app-api.arkada.gg',
+      'https://dev-app.arkada.gg',
       'http://localhost:3000',
       'http://127.0.0.1:3000',
     ],

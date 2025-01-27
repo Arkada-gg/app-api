@@ -15,6 +15,8 @@ export async function up(client: Client): Promise<void> {
       image VARCHAR(255),
       value JSONB NOT NULL,
       campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
+      quest_type quest_type NOT NULL,
+      sequence INTEGER,
       created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
     );

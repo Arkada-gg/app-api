@@ -1,9 +1,15 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { UserRepository } from './user.repository';
 import { S3Service } from '../s3/s3.service';
 import { Multer } from 'multer';
 import { IUser } from '../shared/interfaces';
 import { ESocialPlatform, SocialFieldMap } from './user.constants';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UserService {
@@ -16,8 +22,48 @@ export class UserService {
     return this.userRepository.findByAddress(address);
   }
 
-  async updateUsername(address: string, username: string) {
-    return this.userRepository.updateUsername(address, username);
+  async findByEmail(email: string): Promise<IUser | null> {
+    return this.userRepository.findByEmail(email);
+  }
+
+  async updateUser(
+    updateUserDto: UpdateUserDto,
+    file: Multer.file
+  ): Promise<IUser | { success: boolean }> {
+    try {
+      const user = await this.userRepository.findByAddress(
+        updateUserDto.address
+      );
+      if (!user) {
+        throw new BadRequestException('User not found');
+      }
+      if (file) {
+        if (user.avatar) {
+          try {
+            const urlParts = user.avatar.split('/');
+            const key = urlParts.slice(3).join('/');
+            await this.s3Service.deleteFile(key);
+          } catch (error) {
+            console.error('Error deleting old avatar:', error);
+          }
+        }
+        const newAvatarUrl = await this.s3Service.uploadFile(file);
+
+        await this.userRepository.updateAvatar(user.address, newAvatarUrl);
+      }
+
+      const updatedUser = await this.userRepository.updateUser(updateUserDto);
+
+      return updatedUser;
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException(error.message);
+    }
   }
 
   async updateAvatar(
@@ -53,5 +99,9 @@ export class UserService {
   ) {
     const fieldName = SocialFieldMap[platform];
     return this.userRepository.updateField(address, fieldName, username);
+  }
+
+  async updatePoints(address: string, points: number) {
+    return this.userRepository.updatePoints(address, points);
   }
 }

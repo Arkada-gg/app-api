@@ -14,11 +14,12 @@ export async function up(client: Client): Promise<void> {
       name VARCHAR(255) NOT NULL,
       description TEXT NOT NULL,
       image VARCHAR(255),
-      reward JSONB NOT NULL,
+      rewards JSONB NOT NULL,
       started_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
       finished_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
       participants INTEGER DEFAULT 0,
       type campaign_type NOT NULL,
+      tags TEXT[] DEFAULT '{}',
       created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
     );
