@@ -12,6 +12,12 @@ export class QuestRepository {
   constructor(private readonly dbService: DatabaseService) {}
   private readonly client = this.dbService.getClient();
 
+  private isUUID(str: string): boolean {
+    const regex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return regex.test(str);
+  }
+
   async checkQuestCompletion(
     questId: string,
     userAddress: string
@@ -70,6 +76,9 @@ export class QuestRepository {
         created_at: questRow.created_at,
         updated_at: questRow.updated_at,
         sequence: questRow.sequence,
+        type: questRow.quest_type,
+        link: questRow.link,
+        quest_type: questRow.quest_type,
       };
 
       return quest;
@@ -84,19 +93,42 @@ export class QuestRepository {
   }
 
   async getCompletedQuestsByUserInCampaign(
-    userAddress: string,
-    campaignId: string
+    campaignIdOrSlug: string,
+    userAddress: string
   ): Promise<QuestCompletionDto[]> {
-    const lowerAddress = userAddress.toLowerCase();
+    const client = this.dbService.getClient();
+    const lower = userAddress.toLowerCase();
     try {
-      const query = `
-        SELECT qc.id, q.name AS quest_name, qc.completed_at
-        FROM quest_completions qc
-        JOIN quests q ON qc.quest_id = q.id
-        WHERE qc.user_address = $1 AND q.campaign_id = $2
-        ORDER BY qc.completed_at DESC
-      `;
-      const result = await this.client.query(query, [lowerAddress, campaignId]);
+      const all = await this.getAllCompletedQuestsByUser(lower);
+      if (!all) {
+        return [];
+      }
+      let query = '';
+      const params: any[] = [lower];
+
+      if (this.isUUID(campaignIdOrSlug)) {
+        query = `
+          SELECT qc.id, q.name AS quest_name, qc.completed_at
+          FROM quest_completions qc
+          JOIN quests q ON qc.quest_id = q.id
+          WHERE qc.user_address = $1 AND q.campaign_id = $2
+          ORDER BY qc.completed_at DESC;
+        `;
+        params.push(campaignIdOrSlug);
+      } else {
+        query = `
+          SELECT qc.id, q.name AS quest_name, qc.completed_at
+          FROM quest_completions qc
+          JOIN quests q ON qc.quest_id = q.id
+          JOIN campaigns c ON q.campaign_id = c.id
+          WHERE qc.user_address = $1 AND c.slug = $2
+          ORDER BY qc.completed_at DESC;
+        `;
+        params.push(campaignIdOrSlug);
+      }
+
+      const result = await client.query(query, params);
+
       return result.rows.map((row) => ({
         id: row.id,
         quest_name: row.quest_name,
@@ -161,6 +193,9 @@ export class QuestRepository {
           created_at: row.created_at,
           updated_at: row.updated_at,
           sequence: row.sequence,
+          type: row.quest_type,
+          link: row.link,
+          quest_type: row.quest_type,
         };
       });
 

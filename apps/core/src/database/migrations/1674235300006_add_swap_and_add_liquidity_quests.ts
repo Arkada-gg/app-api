@@ -23,7 +23,7 @@ export async function up(client: Client): Promise<void> {
           "minSwapAmountUSD": 10,
           "abiFile": "swapRouter.ts"
         }',
-        '11111111-1111-1111-1111-111111111111',
+        '018f0071-a409-4ec2-960b-7bdddd74d2ab',
         'onchain',
         NOW(),
         NOW(),
@@ -45,7 +45,7 @@ export async function up(client: Client): Promise<void> {
           "minLiquidityAmountUSD": 20,
           "abiFile": "uniswapV3.ts"
         }',
-        '11111111-1111-1111-1111-111111111111',
+        '018f0071-a409-4ec2-960b-7bdddd74d2ab',
         'onchain',
         NOW(),
         NOW(),

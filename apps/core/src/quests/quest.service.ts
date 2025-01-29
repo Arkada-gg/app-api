@@ -15,6 +15,7 @@ import { ArkadaAbi } from '../shared/abi/arkada';
 import { SwapRouterABI } from '../shared/abi/swapRouter';
 import { UserService } from '../user/user.service';
 import { CampaignService } from '../campaigns/campaign.service';
+import { PriceService } from '../price/price.service';
 
 @Injectable()
 export class QuestService {
@@ -36,7 +37,8 @@ export class QuestService {
   constructor(
     private readonly questRepository: QuestRepository,
     private readonly userService: UserService,
-    private readonly campaignService: CampaignService
+    private readonly campaignService: CampaignService,
+    private readonly priceService: PriceService
   ) {}
 
   async getAllCompletedQuestsByUser(address: string) {
@@ -44,13 +46,28 @@ export class QuestService {
   }
 
   async getCompletedQuestsByUserInCampaign(
-    address: string,
-    campaignId: string
+    campaignId: string,
+    address: string
   ) {
     return await this.questRepository.getCompletedQuestsByUserInCampaign(
-      address,
-      campaignId
+      campaignId,
+      address
     );
+  }
+  async checkQuestCompletion(id: string, address: string) {
+    return await this.questRepository.checkQuestCompletion(id, address);
+  }
+
+  async completeQuestQuiz(id: string, userAddress: string): Promise<boolean> {
+    const lowerAddress = userAddress.toLowerCase();
+    try {
+      await this.questRepository.completeQuest(id, lowerAddress);
+      return true;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Ошибка при завершении квеста и начислении баллов: ${error.message}`
+      );
+    }
   }
 
   async completeQuestAndAwardPoints(
@@ -62,41 +79,37 @@ export class QuestService {
       const quest = await this.questRepository.getQuest(questId);
       const campaignId = quest.campaign_id;
 
-      const alreadyCompleted =
-        await this.campaignService.hasUserCompletedCampaign(
-          campaignId,
-          lowerAddress
-        );
-
-      if (alreadyCompleted) return;
-
       const allCampaignQuests = await this.questRepository.getQuestsByCampaign(
         campaignId
       );
 
       const completedQuests =
         await this.questRepository.getCompletedQuestsByUserInCampaign(
-          lowerAddress,
-          campaignId
-        );
-
-      if (completedQuests.length === allCampaignQuests.length) {
-        const campaign = await this.campaignService.getCampaignByIdOrSlug(
-          campaignId
-        );
-        const rewards = campaign.rewards; // [{ "type": "type1", "value": "100 tokens" }, ...]
-        let totalPoints = 0;
-        rewards.forEach((reward: any) => {
-          if (reward.type === 'tokens') {
-            totalPoints += parseInt(reward.value, 10);
-          }
-        });
-
-        await this.userService.updatePoints(lowerAddress, totalPoints);
-        await this.campaignService.completeCampaignForUser(
           campaignId,
           lowerAddress
         );
+
+      if (completedQuests.length === allCampaignQuests.length) {
+        const wasMarked = await this.campaignService.markCampaignAsCompleted(
+          campaignId,
+          lowerAddress
+        );
+
+        if (wasMarked) {
+          const campaign = await this.campaignService.getCampaignByIdOrSlug(
+            campaignId
+          );
+          const rewards = campaign.rewards; // [{ "type": "tokens", "value": "100" }, ...]
+
+          let totalPoints = 0;
+          rewards.forEach((reward: any) => {
+            if (reward.type === 'tokens') {
+              totalPoints += parseInt(reward.value, 10);
+            }
+          });
+
+          await this.userService.updatePoints(lowerAddress, totalPoints);
+        }
       }
     } catch (error) {
       throw new InternalServerErrorException(
@@ -116,6 +129,7 @@ export class QuestService {
       }
 
       const questStored: QuestType = await this.questRepository.getQuest(id);
+
       const questTask: QuestTask = questStored.value;
 
       const allQuests: QuestType[] =
@@ -156,7 +170,7 @@ export class QuestService {
 
       let url: string | undefined;
       if (questTask.chain === 'Soneium') {
-        url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=1&offset=100&sort=asc`;
+        url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=1&offset=1000&sort=asc`;
       } else {
         throw new BadRequestException(`Unsupported chain: ${questTask.chain}`);
       }
@@ -454,6 +468,7 @@ export class QuestService {
       const amountIn = parsedTransaction.args.params.amountIn;
       const amountInETH = ethers.formatEther(amountIn);
       const usdAmount = await this.getUSDValue('ethereum', amountInETH);
+      Logger.debug('------>', usdAmount);
       //TODO: switch if needed
       if (usdAmount < 0.5) {
         Logger.debug(`Sum of swap is less than needed: ${usdAmount} USD`);
@@ -475,8 +490,12 @@ export class QuestService {
       const hasASTR = tokens.includes(
         '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441'.toLowerCase()
       );
-      if (!hasASTR) {
-        Logger.debug('ASTR not found in logs');
+
+      const hasETH = tokens.includes(
+        '0x4200000000000000000000000000000000000006'.toLowerCase()
+      );
+      if (!hasASTR || !hasETH) {
+        Logger.debug('ASTR or ETH not found in logs');
         return false;
       }
       let liquidityAmount: string | undefined;
@@ -502,6 +521,7 @@ export class QuestService {
         'astroport',
         ethers.formatUnits(liquidityAmount, 18)
       );
+      console.log('------>', liquidityAmountUSD);
       //TODO: switch if needed
       if (liquidityAmountUSD < 0.1) {
         Logger.debug(
@@ -538,37 +558,12 @@ export class QuestService {
         return 0;
       }
 
-      const currentTime = Date.now();
-      const cacheEntry = this.priceCache[tokenId];
-      const cacheTTL = 60 * 1000;
-
-      if (cacheEntry && currentTime - cacheEntry.timestamp < cacheTTL) {
-        return parseFloat(amount) * cacheEntry.price;
-      }
-
-      const response = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${tokenId}&vs_currencies=usd`
-      );
-
-      if (!response.ok) {
-        Logger.error(
-          `Error fetching price from CoinGecko: ${response.statusText}`
-        );
-        return 0;
-      }
-
-      const data = await response.json();
-      const price = data[tokenId]?.usd;
+      const price = await this.priceService.getTokenPrice(tokenId);
 
       if (!price) {
         Logger.warn(`No price data found for token: ${tokenId}`);
         return 0;
       }
-
-      this.priceCache[tokenId] = {
-        price,
-        timestamp: currentTime,
-      };
 
       return parseFloat(amount) * price;
     } catch (error) {
@@ -580,5 +575,10 @@ export class QuestService {
   async getQuestValue(id: string): Promise<any> {
     const quest: QuestType = await this.questRepository.getQuest(id);
     return quest.value;
+  }
+
+  async getQuest(id: string): Promise<QuestType> {
+    const quest: QuestType = await this.questRepository.getQuest(id);
+    return quest;
   }
 }

@@ -5,7 +5,7 @@ export const name = '1674235300001_create_users_table';
 export async function up(client: Client): Promise<void> {
   await client.query(`
     CREATE TABLE IF NOT EXISTS users (
-      address BYTEA PRIMARY KEY,
+      address VARCHAR(255) PRIMARY KEY,
       name VARCHAR(255),
       avatar VARCHAR(255),
       twitter VARCHAR(255),

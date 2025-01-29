@@ -22,4 +22,7 @@ export interface QuestType {
   created_at: Date;
   updated_at: Date;
   sequence: number;
+  type: string;
+  link: string;
+  quest_type: string;
 }

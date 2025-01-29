@@ -45,6 +45,20 @@ export class UserRepository {
     }
   }
 
+  async findByName(name: string): Promise<IUser | null> {
+    const client = this.dbService.getClient();
+    const lower = name.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM users WHERE name = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
   async updateAvatar(address: string, avatarUrl: string) {
     const client = this.dbService.getClient();
     try {
@@ -83,6 +97,7 @@ export class UserRepository {
 
     const lowerAddress = address.toLowerCase();
     const lowerEmail = email ? email.toLowerCase() : '';
+    const lowerName = name ? name.toLowerCase() : '';
 
     const existingUser = await this.findByAddress(lowerAddress);
     if (!existingUser) {
@@ -93,8 +108,12 @@ export class UserRepository {
     const values: any[] = [];
     let index = 1;
     if (name) {
+      const nameRes = await this.findByName(lowerName);
+      if (nameRes && nameRes.address.toString() !== lowerAddress) {
+        throw new BadRequestException('Name already in use');
+      }
       fields.push(`name = $${index}`);
-      values.push(name);
+      values.push(lowerName);
       index++;
     }
     if (lowerEmail) {
@@ -105,7 +124,7 @@ export class UserRepository {
       }
 
       fields.push(`email = $${index}`);
-      values.push(email);
+      values.push(lowerEmail);
       index++;
     }
 

@@ -11,6 +11,32 @@ import { CampaignType } from './dto/get-campaigns.dto';
 export class CampaignRepository {
   constructor(private readonly dbService: DatabaseService) {}
 
+  private isUUID(str: string): boolean {
+    const regex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return regex.test(str);
+  }
+
+  async markCampaignAsCompleted(
+    campaignId: string,
+    userAddress: string
+  ): Promise<{ rowCount: number }> {
+    const lowerAddress = userAddress.toLowerCase();
+    try {
+      const query = `
+        INSERT INTO campaign_completions (campaign_id, user_address, completed_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (campaign_id, user_address) DO NOTHING
+      `;
+      const result = await this.dbService
+        .getClient()
+        .query(query, [campaignId, lowerAddress]);
+      return { rowCount: result.rowCount };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
   async findActiveCampaigns(
     page = 1,
     limit = 5,
@@ -46,11 +72,38 @@ export class CampaignRepository {
   async findCampaignByIdOrSlug(idOrSlug: string): Promise<any> {
     const client = this.dbService.getClient();
     try {
-      const query = `
-          SELECT * FROM campaigns
-          WHERE id = $1
-          LIMIT 1;
+      let query = '';
+
+      if (this.isUUID(idOrSlug)) {
+        query = `
+          SELECT 
+            c.*, 
+            COALESCE(json_agg(q) FILTER (WHERE q.id IS NOT NULL), '[]') AS quests
+          FROM 
+            campaigns c
+          LEFT JOIN 
+            quests q ON c.id = q.campaign_id
+          WHERE 
+            c.id = $1
+          GROUP BY 
+            c.id;
         `;
+      } else {
+        query = `
+          SELECT 
+            c.*, 
+            COALESCE(json_agg(q) FILTER (WHERE q.id IS NOT NULL), '[]') AS quests
+          FROM 
+            campaigns c
+          LEFT JOIN 
+            quests q ON c.id = q.campaign_id
+          WHERE 
+            c.slug = $1
+          GROUP BY 
+            c.id;
+        `;
+      }
+
       const result = await client.query(query, [idOrSlug]);
       if (result.rows.length === 0) {
         throw new NotFoundException('Campaign not found');

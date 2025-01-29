@@ -7,7 +7,7 @@ export async function up(client: Client): Promise<void> {
     CREATE TABLE IF NOT EXISTS quest_completions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       quest_id UUID REFERENCES quests(id) ON DELETE CASCADE,
-      user_address BYTEA NOT NULL,
+      user_address VARCHAR(255) NOT NULL,
       completed_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
       UNIQUE (quest_id, user_address)
     );

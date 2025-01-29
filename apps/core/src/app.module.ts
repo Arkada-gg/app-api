@@ -6,9 +6,12 @@ import { S3Module } from './s3/s3.module';
 import { UserModule } from './user/user.module';
 import { CampaignModule } from './campaigns/campaign.module';
 import { QuestModule } from './quests/quest.module';
+import { PriceModule } from './price/price.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     DatabaseModule,
     _ConfigModule,
     AuthModule,
@@ -16,6 +19,7 @@ import { QuestModule } from './quests/quest.module';
     UserModule,
     CampaignModule,
     QuestModule,
+    PriceModule,
   ],
 })
 export class AppModule {}

@@ -4,10 +4,6 @@ export const name = '1674235300002_create_campaigns_table';
 
 export async function up(client: Client): Promise<void> {
   await client.query(`
-    CREATE TYPE campaign_type AS ENUM ('basic', 'premium');
-  `);
-
-  await client.query(`
     CREATE TABLE IF NOT EXISTS campaigns (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       slug VARCHAR(255) UNIQUE NOT NULL,
@@ -20,6 +16,7 @@ export async function up(client: Client): Promise<void> {
       participants INTEGER DEFAULT 0,
       type campaign_type NOT NULL,
       tags TEXT[] DEFAULT '{}',
+      promo VARCHAR(255),
       created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
     );
