@@ -85,8 +85,26 @@ export class QuestDto {
   })
   image: string;
 
+  @ApiProperty({
+    example: 'link',
+    description: 'Ссылка',
+  })
+  link: string;
+
   @ApiProperty({ type: QuestTypeDto })
   value: QuestTypeDto;
+
+  @ApiProperty({
+    example: 'quiz',
+    description: 'Тип квеста',
+  })
+  quest_type: string;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Последовательность выполнения квестов',
+  })
+  sequence: number;
 }
 
 export class GetCampaignResponse {
@@ -115,6 +133,12 @@ export class GetCampaignResponse {
   rewards: RewardDto[];
 
   @ApiProperty({
+    example: 'promo',
+    description: 'promo',
+  })
+  promo: string;
+
+  @ApiProperty({
     example: '2025-01-01T00:00:00Z',
     description: 'Дата начала кампании',
   })
@@ -134,6 +158,86 @@ export class GetCampaignResponse {
 
   @ApiProperty({ example: '["dApp"]', description: 'Тэги кампании' })
   tags: string[];
+
+  @ApiProperty({
+    example: 'medium',
+    description: 'easy-medium-hard',
+  })
+  difficulty: string;
+
+  @ApiProperty({
+    example: 'Краткое описание',
+    description: 'Краткое описание',
+  })
+  short_description: string;
+}
+
+export class GetCampaignByIdOrSlugResponse {
+  @ApiProperty({ example: '12345', description: 'ID кампании' })
+  id: string;
+
+  @ApiProperty({ example: 'campaign-slug', description: 'Slug кампании' })
+  slug: string;
+
+  @ApiProperty({ example: 'Campaign name', description: 'Название кампании' })
+  name: string;
+
+  @ApiProperty({
+    example: 'Campaign description',
+    description: 'Описание кампании',
+  })
+  description: string;
+
+  @ApiProperty({
+    example: 'campaign-image.png',
+    description: 'Изображение кампании',
+  })
+  image: string;
+
+  @ApiProperty({ type: [RewardDto] })
+  rewards: RewardDto[];
+
+  @ApiProperty({
+    example: 'promo',
+    description: 'promo',
+  })
+  promo: string;
+
+  @ApiProperty({ type: [QuestDto] })
+  quests: QuestDto[];
+
+  @ApiProperty({
+    example: '2025-01-01T00:00:00Z',
+    description: 'Дата начала кампании',
+  })
+  startedAt: string;
+
+  @ApiProperty({
+    example: '2025-02-01T00:00:00Z',
+    description: 'Дата окончания кампании',
+  })
+  finishedAt: string;
+
+  @ApiProperty({ example: 100, description: 'Количество участников' })
+  participants: number;
+
+  @ApiProperty({ example: 'basic', description: 'Тип кампании' })
+  type: 'basic' | 'premium';
+
+  @ApiProperty({ example: '["dApp"]', description: 'Тэги кампании' })
+  tags: string[];
+
+  @ApiProperty({
+    example: 'medium',
+    description: 'easy-medium-hard',
+  })
+  difficulty: string;
+
+  @ApiProperty({
+    example: 'Краткое описание',
+    description: 'Краткое описание',
+  })
+  short_description: string;
 }
 
 export class GetUserResponse {
@@ -176,4 +280,25 @@ export class GetUserResponse {
     required: false,
   })
   email?: string;
+
+  @ApiProperty({
+    example: '250',
+    description: 'Поинты пользователя',
+    required: false,
+  })
+  points?: number;
+
+  @ApiProperty({
+    example: '2025-01-27 06:10:35.315982',
+    description: 'Время создания пользователя',
+    required: false,
+  })
+  created_at?: Date;
+
+  @ApiProperty({
+    example: '2025-01-27 06:10:35.315982',
+    description: 'Время обновления пользователя',
+    required: false,
+  })
+  updated_at?: Date;
 }

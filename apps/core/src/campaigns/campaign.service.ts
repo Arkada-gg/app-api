@@ -31,4 +31,15 @@ export class CampaignService {
   ): Promise<any> {
     return this.campaignRepository.hasUserCompletedCampaign(idOrSlug, address);
   }
+
+  async markCampaignAsCompleted(
+    campaignId: string,
+    userAddress: string
+  ): Promise<boolean> {
+    const result = await this.campaignRepository.markCampaignAsCompleted(
+      campaignId,
+      userAddress
+    );
+    return result.rowCount === 1;
+  }
 }

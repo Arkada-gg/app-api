@@ -14,7 +14,10 @@ import {
   ApiResponse,
   ApiBadRequestResponse,
 } from '@nestjs/swagger';
-import { GetCampaignResponse } from '../shared/interfaces';
+import {
+  GetCampaignByIdOrSlugResponse,
+  GetCampaignResponse,
+} from '../shared/interfaces';
 
 @ApiTags('Campaigns')
 @Controller('campaigns')
@@ -41,7 +44,7 @@ export class CampaignController {
   @ApiResponse({
     status: 200,
     description: 'Детальная информация о кампании',
-    type: GetCampaignResponse,
+    type: GetCampaignByIdOrSlugResponse,
   })
   @ApiBadRequestResponse({ description: 'Кампания не найдена' })
   async getCampaign(@Param() params: GetCampaignDto) {

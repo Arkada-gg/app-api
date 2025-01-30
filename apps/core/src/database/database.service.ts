@@ -24,8 +24,8 @@ export class DatabaseService implements OnModuleInit {
   private async initializeSchema() {
     await this.client.query(`
     CREATE TABLE IF NOT EXISTS users (
-      address BYTEA PRIMARY KEY,
-      name VARCHAR(255),
+      address VARCHAR(255) PRIMARY KEY,
+      name VARCHAR(255) UNIQUE,
       avatar VARCHAR(255),
       twitter VARCHAR(255),
       discord VARCHAR(255),

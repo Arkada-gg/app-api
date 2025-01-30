@@ -8,9 +8,7 @@ export class AuthRepository {
 
   async createOrUpdateUser(address: string): Promise<IUser> {
     const client = this.dbService.getClient();
-    const lowerAddress = address.toLowerCase();
-
-    console.log('------>', lowerAddress);
+    const lowerAddress: unknown = address.toLowerCase();
 
     try {
       const existing = await client.query<IUser>(
@@ -21,10 +19,10 @@ export class AuthRepository {
       if (existing.rows.length === 0) {
         const name = address;
         await client.query(`INSERT INTO users(address, name) VALUES($1, $2)`, [
-          lowerAddress,
+          lowerAddress as Buffer,
           name,
         ]);
-        return { address: lowerAddress, name };
+        return { address: lowerAddress.toString(), name };
       } else {
         return existing.rows[0];
       }

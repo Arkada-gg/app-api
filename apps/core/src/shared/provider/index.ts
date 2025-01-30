@@ -3,6 +3,8 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const BLOCKSCOUT_RPC_URL = 'https://rpc.soneium.org/';
+const SONEIUM_PROVIDER = 'https://rpc.soneium.org/';
+const ETH_PROVIDER = 'https://ethereum-rpc.publicnode.com';
 
-export const provider = new ethers.JsonRpcProvider(BLOCKSCOUT_RPC_URL);
+export const soneiumProvider = new ethers.JsonRpcProvider(SONEIUM_PROVIDER);
+export const ethProvider = new ethers.JsonRpcProvider(ETH_PROVIDER);

@@ -5,10 +5,11 @@ export interface QuestTask {
   event: string;
   method?: string;
   methods?: string[];
+  abi_to_find: string[];
+  abi_equals: any;
   contract: string;
   tokens: string[];
-  minSwapAmountUSD?: number;
-  minLiquidityAmountUSD?: number;
+  minAmountUSD?: number;
   abiFile: string;
 }
 
@@ -22,4 +23,7 @@ export interface QuestType {
   created_at: Date;
   updated_at: Date;
   sequence: number;
+  type: string;
+  link: string;
+  quest_type: string;
 }

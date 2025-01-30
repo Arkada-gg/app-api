@@ -16,9 +16,9 @@ async function bootstrap() {
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
   app.useGlobalPipes(
     new ValidationPipe({
-      transform: true,
       whitelist: true,
       forbidNonWhitelisted: true,
+      transform: true,
     })
   );
   // app.useGlobalFilters(new AllExceptionsFilter());
@@ -26,6 +26,8 @@ async function bootstrap() {
     origin: [
       'https://dev-app-api.arkada.gg',
       'https://dev-app.arkada.gg',
+      'https://app.arkada.gg',
+      'https://api.arkada.gg',
       'http://localhost:3000',
       'http://127.0.0.1:3000',
     ],

@@ -1,5 +1,3 @@
-// src/migrations/1674235300004_create_quest_completions_table.ts
-
 import { Client } from 'pg';
 
 export const name = '1674235300004_create_quest_completions_table';
@@ -9,13 +7,12 @@ export async function up(client: Client): Promise<void> {
     CREATE TABLE IF NOT EXISTS quest_completions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       quest_id UUID REFERENCES quests(id) ON DELETE CASCADE,
-      user_address BYTEA NOT NULL,
+      user_address VARCHAR(255) NOT NULL,
       completed_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
       UNIQUE (quest_id, user_address)
     );
   `);
 
-  // Добавление внешнего ключа на users(address)
   await client.query(`
     ALTER TABLE quest_completions
     ADD CONSTRAINT fk_quest_completions_user_address
