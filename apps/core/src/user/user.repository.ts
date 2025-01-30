@@ -97,7 +97,7 @@ export class UserRepository {
 
     const lowerAddress = address.toLowerCase();
     const lowerEmail = email ? email.toLowerCase() : '';
-    const lowerName = name ? name.toLowerCase() : '';
+    const lowerName = name.trim() ? name.toLowerCase() : '';
 
     const existingUser = await this.findByAddress(lowerAddress);
     if (!existingUser) {
@@ -113,7 +113,7 @@ export class UserRepository {
         throw new BadRequestException('Name already in use');
       }
       fields.push(`name = $${index}`);
-      values.push(lowerName);
+      values.push(name);
       index++;
     }
     if (lowerEmail) {

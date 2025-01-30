@@ -6,10 +6,11 @@ import { DatabaseModule } from '../database/database.module';
 import { UserModule } from '../user/user.module';
 import { CampaignModule } from '../campaigns/campaign.module';
 import { PriceModule } from '../price/price.module';
+import { NftController } from './nft.controller';
 
 @Module({
   imports: [DatabaseModule, UserModule, CampaignModule, PriceModule],
-  controllers: [QuestController],
+  controllers: [QuestController, NftController],
   providers: [QuestService, QuestRepository],
 })
 export class QuestModule {}

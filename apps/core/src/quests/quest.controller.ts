@@ -6,6 +6,9 @@ import {
   Get,
   Param,
   InternalServerErrorException,
+  HttpException,
+  HttpStatus,
+  UseInterceptors,
 } from '@nestjs/common';
 import { QuestService } from './quest.service';
 import { CheckQuestDto } from './dto/check-quest.dto';
@@ -20,6 +23,7 @@ import { ethers } from 'ethers';
 import { QuestCompletionDto } from './dto/quest.competion.dto';
 import { UserService } from '../user/user.service';
 import { CompleteQuestDto } from './dto/complete-quest.dto';
+import { WildcardCorsInterceptor } from './interceptors/wildcard-cors.interceptor';
 
 @ApiTags('Quests')
 @Controller('quests')
@@ -51,6 +55,8 @@ export class QuestController {
       );
       if (!isCompleted) {
         throw new BadRequestException('Quest not completed');
+      } else {
+        await this.questService.completeQuestAndAwardPoints(id, address);
       }
       return { id, address, isCompleted };
     }
@@ -142,6 +148,40 @@ export class QuestController {
       return completions;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  @Get('hasMinted/:address')
+  @UseInterceptors(WildcardCorsInterceptor)
+  @ApiOperation({
+    summary: 'Check if the user has minted the NFT',
+    description:
+      'Returns `1` if the user at :address has minted at least one NFT on a specific contract; otherwise returns `0`.',
+  })
+  @ApiParam({
+    name: 'address',
+    description: 'The user’s wallet address to check',
+    required: true,
+    example: '0x1234abcd...',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '1 if minted, 0 if not minted',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async checkHasMinted(@Param('address') address: string): Promise<number> {
+    try {
+      const hasMinted = await this.questService.hasMintedNft(address);
+      return hasMinted ? 1 : 0;
+    } catch (error) {
+      throw new HttpException(
+        `Error checking minted NFT: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 

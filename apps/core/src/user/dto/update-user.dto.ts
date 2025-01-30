@@ -1,5 +1,6 @@
 import { IsOptional, IsString, IsEmail } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotBlank } from '../validator/is-not-blank.decorator';
 
 export class UpdateUserDto {
   @ApiProperty({
@@ -16,6 +17,7 @@ export class UpdateUserDto {
   @ApiPropertyOptional({ example: 'John Doe', description: 'Имя пользователя' })
   @IsOptional()
   @IsString({ message: 'Name should be a string' })
+  @IsNotBlank({ message: 'Name cannot be empty or whitespace' })
   name?: string;
 
   @ApiPropertyOptional({
