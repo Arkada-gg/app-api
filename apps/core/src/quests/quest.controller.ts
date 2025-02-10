@@ -31,7 +31,7 @@ export class QuestController {
   ) {}
 
   @Post('check-quest')
-  @UseGuards(SignatureAuthGuard)
+  // @UseGuards(SignatureAuthGuard)
   @ApiOperation({ summary: 'Проверить выполнение задания пользователем' })
   @ApiResponse({ status: 200, description: 'Задание выполнено' })
   @ApiBadRequestResponse({
