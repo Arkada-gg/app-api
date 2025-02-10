@@ -223,19 +223,14 @@ export class UserService {
     });
     const jsonResponse = await response.json();
 
-    Logger.debug(
-      'bindDiscord -> users/@me response: ',
-      JSON.stringify(jsonResponse)
-    );
-
     if (!response.ok) {
       throw new BadRequestException('Discord token is invalid or expired');
     }
-    if (!jsonResponse?.data?.username) {
+    if (!jsonResponse?.username) {
       throw new BadRequestException('No username provided in Discord response');
     }
 
-    const discord_username = jsonResponse.data.username;
+    const discord_username = jsonResponse.username;
 
     const existingUser = await this.userRepository.findByDiscordUsername(
       discord_username
