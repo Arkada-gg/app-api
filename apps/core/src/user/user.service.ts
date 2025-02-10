@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { UserRepository } from './user.repository';
@@ -225,11 +226,11 @@ export class UserService {
     if (!response.ok) {
       throw new BadRequestException('Discord token is invalid or expired');
     }
-    if (!jsonResponse?.data?.username) {
+    if (!jsonResponse?.username) {
       throw new BadRequestException('No username provided in Discord response');
     }
 
-    const discord_username = jsonResponse.data.username;
+    const discord_username = jsonResponse.username;
 
     const existingUser = await this.userRepository.findByDiscordUsername(
       discord_username
