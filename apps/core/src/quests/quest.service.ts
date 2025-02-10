@@ -412,14 +412,24 @@ export class QuestService {
       }
 
       const transactions = data.result;
-      const userTransactions = transactions.filter((tx: any) =>
-        tx.to && questTask.contract1
-          ? tx.to.toLowerCase() === questTask.contract1.toLowerCase() ||
-            tx.to.toLowerCase() === questTask.contract.toLowerCase()
-          : tx.to.toLowerCase() === questTask.contract.toLowerCase() &&
-            tx.from &&
-            tx.from.toLowerCase() === address.toLowerCase()
-      );
+      const userTransactions = transactions.filter((tx: any) => {
+        if (!tx.to) return false;
+
+        const toAddr = tx.to.toLowerCase();
+        const fromAddr = tx.from?.toLowerCase();
+        const mainContract = questTask.contract.toLowerCase();
+        const altContract = questTask.contract1?.toLowerCase();
+
+        if (altContract) {
+          return (
+            (toAddr === mainContract || toAddr === altContract) &&
+            fromAddr === address.toLowerCase()
+          );
+        } else {
+          return toAddr === mainContract && fromAddr === address.toLowerCase();
+        }
+      });
+
       Logger.debug(`Txns found for user: ${userTransactions.length}`);
       const ifCaseSupply = questTask.abi_to_find.filter((el) =>
         el.includes('function supply')
