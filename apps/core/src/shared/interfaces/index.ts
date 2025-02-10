@@ -10,6 +10,7 @@ export interface IUser {
   github?: string;
   created_at?: Date;
   updated_at?: Date;
+  ref_owner: string;
 }
 
 export interface SessionRequest extends Request {

@@ -9,7 +9,7 @@ import { QuestRepository } from './quest.repository';
 import { ethers } from 'ethers';
 import { soneiumProvider, ethProvider } from '../shared/provider';
 import fetch from 'node-fetch';
-import { QuestTask, QuestType } from './interface';
+import { EPointsType, QuestTask, QuestType } from './interface';
 import { UniswapV3ABI } from '../shared/abi/uniswapV3';
 import { ArkadaAbi } from '../shared/abi/arkada';
 import { SwapRouterABI } from '../shared/abi/swapRouter';
@@ -175,7 +175,10 @@ export class QuestService {
               }
             });
 
-            await this.userService.updatePoints(lowerAddress, totalPoints);
+            await this.userService.awardCampaignCompletion(
+              lowerAddress,
+              totalPoints
+            );
           }
         }
       } catch (error) {
@@ -236,7 +239,10 @@ export class QuestService {
             }
           });
 
-          await this.userService.updatePoints(lowerAddress, totalPoints);
+          await this.userService.awardCampaignCompletion(
+            lowerAddress,
+            totalPoints
+          );
         }
       }
     } catch (error) {
@@ -406,14 +412,25 @@ export class QuestService {
       }
 
       const transactions = data.result;
-      const userTransactions = transactions.filter((tx: any) =>
-        tx.to && questTask.contract1
-          ? tx.to.toLowerCase() === questTask.contract.toLowerCase() ||
-            tx.to.toLowerCase() === questTask.contract1.toLowerCase()
-          : tx.to.toLowerCase() === questTask.contract.toLowerCase() &&
-            tx.from &&
-            tx.from.toLowerCase() === address.toLowerCase()
-      );
+      const userTransactions = transactions.filter((tx: any) => {
+        if (!tx.to) return false;
+
+        const toAddr = tx.to.toLowerCase();
+        const fromAddr = tx.from?.toLowerCase();
+        const mainContract = questTask.contract.toLowerCase();
+        const altContract = questTask.contract1?.toLowerCase();
+
+        if (altContract) {
+          return (
+            (toAddr === mainContract || toAddr === altContract) &&
+            fromAddr === address.toLowerCase()
+          );
+        } else {
+          return toAddr === mainContract && fromAddr === address.toLowerCase();
+        }
+      });
+
+      Logger.debug(`Txns found for user: ${userTransactions.length}`);
       const ifCaseSupply = questTask.abi_to_find.filter((el) =>
         el.includes('function supply')
       );
@@ -583,16 +600,19 @@ export class QuestService {
 
       if (ifCase.length > 0) {
         for (const el of userTransactions) {
+          console.log('------>', el);
           try {
             const multicallABI = ['function multicall(bytes[] data)'];
             const mcInterface = new ethers.Interface(multicallABI);
             let topParsed;
             try {
               topParsed = mcInterface.parseTransaction({ data: el.input });
+              console.log('topParsed------>', topParsed);
             } catch (e) {
               Logger.debug(`Ошибка парсинга multicall: ${e.message}`);
               continue;
             }
+
             if (!topParsed) continue;
 
             const parsed = this.parseMintManual(topParsed.args[0][0]);
@@ -604,6 +624,7 @@ export class QuestService {
             const token1 = parsed.token1.toLowerCase();
             const ASTR_ADDRESS = '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441';
             const SECOND_ADDRESS = questTask.abi_equals[0][1];
+            console.log('------>', parsed);
 
             if (token0 !== ASTR_ADDRESS && token1 !== ASTR_ADDRESS) {
               Logger.debug(`Ни token0, ни token1 не равен ASTR`);
@@ -763,6 +784,7 @@ export class QuestService {
         Logger.error(`Txn not found: ${txHash}`);
         return false;
       }
+
       const fallbackAbi = this.contractAbiMap[questTask.contract.toLowerCase()];
       let contractInterface: ethers.Interface | null = null;
       contractInterface = new ethers.Interface(fallbackAbi);

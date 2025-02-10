@@ -30,3 +30,9 @@ export interface QuestType {
   link: string;
   quest_type: string;
 }
+
+export enum EPointsType {
+  Campaign = 'base_campaign',
+  Quest = 'base_quest',
+  Referral = 'referral',
+}

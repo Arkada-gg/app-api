@@ -63,6 +63,20 @@ export class UserRepository {
     }
   }
 
+  async findByDiscordUsername(name: string): Promise<IUser | null> {
+    const client = this.dbService.getClient();
+    const lower = name.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM users WHERE discord = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
   async findByTwitterUsername(name: string): Promise<IUser | null> {
     const client = this.dbService.getClient();
     try {
@@ -82,20 +96,6 @@ export class UserRepository {
       const res = await client.query<IUser>(
         `SELECT * FROM users WHERE github = $1`,
         [name]
-      );
-      return res.rows[0] || null;
-    } catch (error) {
-      throw new InternalServerErrorException(error.message);
-    }
-  }
-
-  async findByDiscordUsername(name: string): Promise<IUser | null> {
-    const client = this.dbService.getClient();
-    const lower = name.toLowerCase();
-    try {
-      const res = await client.query<IUser>(
-        `SELECT * FROM users WHERE discord = $1`,
-        [lower]
       );
       return res.rows[0] || null;
     } catch (error) {
@@ -196,44 +196,6 @@ export class UserRepository {
     }
   }
 
-  async updatePoints(address: string, points: number): Promise<void> {
-    const client = this.dbService.getClient();
-
-    try {
-      await client.query('BEGIN');
-
-      const query = `
-        UPDATE users
-        SET points = points + $1
-        WHERE address = $2
-        RETURNING points;
-      `;
-
-      const result = await client.query(query, [points, address]);
-
-      if (result.rowCount === 0) {
-        throw new NotFoundException('Пользователь не найден');
-      }
-
-      const updatedPoints = result.rows[0].points;
-
-      if (updatedPoints < 0) {
-        throw new BadRequestException('Баланс не может быть отрицательным');
-      }
-
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      throw new InternalServerErrorException(error.message);
-    }
-  }
-
   async getCompletedQuestsCount(userAddress: string): Promise<number> {
     const client = this.dbService.getClient();
     const lowerAddress = userAddress.toLowerCase();
@@ -267,6 +229,137 @@ export class UserRepository {
       throw new InternalServerErrorException(
         `Ошибка при получении количества завершенных кампаний: ${error.message}`
       );
+    }
+  }
+
+  async findByReferralCode(refCode: string): Promise<IUser | null> {
+    const client = this.dbService.getClient();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM users WHERE referral_code = $1`,
+        [refCode]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async createUserWithReferral(address: string): Promise<IUser> {
+    const lower = address.toLowerCase();
+    try {
+      const refCode = await this.generateShortCode(5);
+      const result = await this.dbService.getClient().query<IUser>(
+        `INSERT INTO users (address, referral_code)
+         VALUES ($1, $2)
+         RETURNING *`,
+        [lower, refCode]
+      );
+      return result.rows[0];
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  private async generateUniqueReferralCode(): Promise<string> {
+    while (true) {
+      const code = this.generateShortCode(4);
+      const exists = await this.findByReferralCode(code);
+      if (!exists) {
+        return code;
+      }
+    }
+  }
+
+  private generateShortCode(length: number): string {
+    let base = Math.random()
+      .toString(36)
+      .substring(2, 2 + length);
+    base = base.toUpperCase();
+    return base;
+  }
+
+  async updatePoints(
+    address: string,
+    points: number,
+    pointType: 'base_campaign' | 'base_quest' | 'referral'
+  ) {
+    const lower = address.toLowerCase();
+    const client = this.dbService.getClient();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO user_points (user_address, points, point_type)
+         VALUES ($1, $2, $3)`,
+        [lower, points, pointType]
+      );
+      const sumResult = await client.query(
+        `SELECT COALESCE(SUM(points),0) as total
+         FROM user_points
+         WHERE user_address = $1`,
+        [lower]
+      );
+      const totalPoints = +sumResult.rows[0].total;
+      await client.query(
+        `UPDATE users
+         SET points = $1
+         WHERE address = $2`,
+        [totalPoints, lower]
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async getTotalPointsByType(address: string): Promise<Record<string, number>> {
+    const lower = address.toLowerCase();
+    try {
+      const result = await this.dbService.getClient().query(
+        `SELECT point_type, SUM(points) AS total
+         FROM user_points
+         WHERE user_address = $1
+         GROUP BY point_type`,
+        [lower]
+      );
+      const data: Record<string, number> = {};
+      for (const row of result.rows) {
+        data[row.point_type] = Number(row.total);
+      }
+      return data;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async getReferralsCount(address: string): Promise<number> {
+    const lower = address.toLowerCase();
+    try {
+      const result = await this.dbService
+        .getClient()
+        .query(`SELECT COUNT(*) AS cnt FROM users WHERE ref_owner = $1`, [
+          lower,
+        ]);
+      return parseInt(result.rows[0].cnt, 10) || 0;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async setRefOwner(referredAddress: string, refOwnerAddress: string) {
+    const lowerRef = referredAddress.toLowerCase();
+    const lowerOwner = refOwnerAddress.toLowerCase();
+    try {
+      await this.dbService.getClient().query(
+        `UPDATE users
+         SET ref_owner = $1
+         WHERE address = $2
+           AND ref_owner IS NULL`,
+        [lowerOwner, lowerRef]
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
     }
   }
 }
