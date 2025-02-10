@@ -65,11 +65,10 @@ export class UserRepository {
 
   async findByTwitterUsername(name: string): Promise<IUser | null> {
     const client = this.dbService.getClient();
-    const lower = name.toLowerCase();
     try {
       const res = await client.query<IUser>(
         `SELECT * FROM users WHERE twitter = $1`,
-        [lower]
+        [name]
       );
       return res.rows[0] || null;
     } catch (error) {
@@ -79,11 +78,10 @@ export class UserRepository {
 
   async findByGithubUsername(name: string): Promise<IUser | null> {
     const client = this.dbService.getClient();
-    const lower = name.toLowerCase();
     try {
       const res = await client.query<IUser>(
         `SELECT * FROM users WHERE github = $1`,
-        [lower]
+        [name]
       );
       return res.rows[0] || null;
     } catch (error) {
