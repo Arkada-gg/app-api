@@ -228,7 +228,7 @@ export class UserService {
     if (!jsonResponse?.data?.username) {
       throw new BadRequestException('No username provided in Discord response');
     }
-    console.log('-----------------> jsonResponse: ', jsonResponse);
+
     const discord_username = jsonResponse.data.username;
 
     const existingUser = await this.userRepository.findByDiscordUsername(
