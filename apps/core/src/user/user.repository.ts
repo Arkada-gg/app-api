@@ -63,6 +63,20 @@ export class UserRepository {
     }
   }
 
+  async findByDiscordUsername(name: string): Promise<IUser | null> {
+    const client = this.dbService.getClient();
+    const lower = name.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM users WHERE discord = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
   async findByTwitterUsername(name: string): Promise<IUser | null> {
     const client = this.dbService.getClient();
     try {
@@ -181,44 +195,6 @@ export class UserRepository {
       throw new InternalServerErrorException(error.message);
     }
   }
-
-  // async updatePoints(address: string, points: number): Promise<void> {
-  //   const client = this.dbService.getClient();
-
-  //   try {
-  //     await client.query('BEGIN');
-
-  //     const query = `
-  //       UPDATE users
-  //       SET points = points + $1
-  //       WHERE address = $2
-  //       RETURNING points;
-  //     `;
-
-  //     const result = await client.query(query, [points, address]);
-
-  //     if (result.rowCount === 0) {
-  //       throw new NotFoundException('Пользователь не найден');
-  //     }
-
-  //     const updatedPoints = result.rows[0].points;
-
-  //     if (updatedPoints < 0) {
-  //       throw new BadRequestException('Баланс не может быть отрицательным');
-  //     }
-
-  //     await client.query('COMMIT');
-  //   } catch (error) {
-  //     await client.query('ROLLBACK');
-  //     if (
-  //       error instanceof NotFoundException ||
-  //       error instanceof BadRequestException
-  //     ) {
-  //       throw error;
-  //     }
-  //     throw new InternalServerErrorException(error.message);
-  //   }
-  // }
 
   async getCompletedQuestsCount(userAddress: string): Promise<number> {
     const client = this.dbService.getClient();

@@ -276,6 +276,13 @@ export class GetUserResponse {
   github?: string;
 
   @ApiProperty({
+    example: 'johndoe',
+    description: 'Имя в Discord',
+    required: false,
+  })
+  discord?: string;
+
+  @ApiProperty({
     example: 'johndoe@example.com',
     description: 'Email пользователя',
     required: false,

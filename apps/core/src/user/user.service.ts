@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { UserRepository } from './user.repository';
@@ -139,10 +140,12 @@ export class UserService {
     dto: BindSocialDto
   ): Promise<{ success: boolean }> {
     switch (platform) {
-      case 'twitter':
+      case ESocialPlatform.Twitter:
         return this.bindTwitter(dto);
-      case 'github':
+      case ESocialPlatform.Github:
         return this.bindGitHub(dto);
+      case ESocialPlatform.Discord:
+        return this.bindDiscord(dto);
       // ... case 'telegram': return this.bindTelegram(dto);
       default:
         throw new BadRequestException(`Unknown platform: ${platform}`);
@@ -153,14 +156,18 @@ export class UserService {
     platform: string,
     dto: UnbindSocialDto
   ): Promise<{ success: boolean }> {
-    switch (platform) {
-      case 'twitter':
-        return this.unbindTwitter(dto);
-      case 'github':
-        return this.unbindGitHub(dto);
-      default:
-        throw new BadRequestException(`Unknown platform: ${platform}`);
+    const allowedPlatforms = new Set(Object.keys(SocialFieldMap));
+    if (!allowedPlatforms.has(platform)) {
+      throw new BadRequestException('Unsupported platform');
     }
+
+    const lowerAddress = dto.address.toLowerCase();
+    await this.userRepository.updateField(
+      lowerAddress,
+      platform as keyof IUser,
+      null
+    );
+    return { success: true };
   }
 
   private async bindTwitter(dto: BindSocialDto): Promise<{ success: boolean }> {
@@ -200,14 +207,6 @@ export class UserService {
     return { success: true };
   }
 
-  private async unbindTwitter(
-    dto: UnbindSocialDto
-  ): Promise<{ success: boolean }> {
-    const lowerAddress = dto.address.toLowerCase();
-    await this.userRepository.updateField(lowerAddress, 'twitter', null);
-    return { success: true };
-  }
-
   private async bindGitHub(dto: BindSocialDto): Promise<{ success: boolean }> {
     const { address, token } = dto;
     const lowerAddress = address.toLowerCase();
@@ -241,11 +240,41 @@ export class UserService {
     return { success: true };
   }
 
-  private async unbindGitHub(
-    dto: UnbindSocialDto
-  ): Promise<{ success: boolean }> {
-    const lowerAddress = dto.address.toLowerCase();
-    await this.userRepository.updateField(lowerAddress, 'github', null);
+  private async bindDiscord(dto: BindSocialDto): Promise<{ success: boolean }> {
+    const { address, token } = dto;
+    const lowerAddress = address.toLowerCase();
+    const discordApiUrl = 'https://discord.com/api/users/@me';
+
+    const response = await fetch(discordApiUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const jsonResponse = await response.json();
+
+    if (!response.ok) {
+      throw new BadRequestException('Discord token is invalid or expired');
+    }
+    if (!jsonResponse?.username) {
+      throw new BadRequestException('No username provided in Discord response');
+    }
+
+    const discord_username = jsonResponse.username;
+
+    const existingUser = await this.userRepository.findByDiscordUsername(
+      discord_username
+    );
+    if (existingUser && existingUser.address.toLowerCase() !== lowerAddress) {
+      throw new BadRequestException('Discord account already taken');
+    }
+
+    await this.userRepository.updateField(
+      lowerAddress,
+      'discord',
+      discord_username
+    );
     return { success: true };
   }
 
