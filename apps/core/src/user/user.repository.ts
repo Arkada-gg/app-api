@@ -91,6 +91,20 @@ export class UserRepository {
     }
   }
 
+  async findByDiscordUsername(name: string): Promise<IUser | null> {
+    const client = this.dbService.getClient();
+    const lower = name.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM users WHERE discord = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
   async updateAvatar(address: string, avatarUrl: string) {
     const client = this.dbService.getClient();
     try {
