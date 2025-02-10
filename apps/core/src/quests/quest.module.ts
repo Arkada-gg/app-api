@@ -7,9 +7,16 @@ import { UserModule } from '../user/user.module';
 import { CampaignModule } from '../campaigns/campaign.module';
 import { PriceModule } from '../price/price.module';
 import { NftController } from './nft.controller';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [DatabaseModule, UserModule, CampaignModule, PriceModule],
+  imports: [
+    DatabaseModule,
+    UserModule,
+    CampaignModule,
+    PriceModule,
+    AuthModule,
+  ],
   controllers: [QuestController, NftController],
   providers: [QuestService, QuestRepository],
 })

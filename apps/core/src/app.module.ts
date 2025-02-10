@@ -8,6 +8,9 @@ import { CampaignModule } from './campaigns/campaign.module';
 import { QuestModule } from './quests/quest.module';
 import { PriceModule } from './price/price.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { SignatureAuthGuard } from './auth/guard/signature-auth.guard';
+import { APP_GUARD } from '@nestjs/core';
+import { ConditionalSignatureAuthGuard } from './auth/guard/conditional-auth.guard';
 
 @Module({
   imports: [
