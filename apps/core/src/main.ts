@@ -30,11 +30,13 @@ async function bootstrap() {
       'https://api.arkada.gg',
       'http://localhost:3000',
       'http://127.0.0.1:3000',
+      'https://dashboard.galxe.com',
+      'https://galxe.com',
+      'https://app-galxe.com',
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
-
   app.use(
     ['/api', '/api-json'],
     basicAuth({

@@ -9,6 +9,7 @@ import {
   HttpException,
   HttpStatus,
   UseInterceptors,
+  Options,
 } from '@nestjs/common';
 import { QuestService } from './quest.service';
 import { CheckQuestDto } from './dto/check-quest.dto';
@@ -20,7 +21,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { ethers } from 'ethers';
-import { WildcardCorsInterceptor } from './interceptors/wildcard-cors.interceptor';
+import { GalxeCorsInterceptor } from './interceptors/wildcard-cors.interceptor';
 
 @ApiTags('Nft')
 @Controller('nft')
@@ -28,7 +29,7 @@ export class NftController {
   constructor(private readonly questService: QuestService) {}
 
   @Get('hasMinted/:address')
-  @UseInterceptors(WildcardCorsInterceptor)
+  @UseInterceptors(GalxeCorsInterceptor)
   @ApiOperation({
     summary: 'Check if the user has minted the NFT',
     description:

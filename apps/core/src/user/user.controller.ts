@@ -1,22 +1,22 @@
 import {
   Controller,
   Get,
-  Patch,
   Body,
   Req,
   BadRequestException,
   UseInterceptors,
   UploadedFile,
-  UseGuards,
   Param,
   UseFilters,
   Post,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { GetUserResponse, IUser, SessionRequest } from '../shared/interfaces';
 import { Multer } from 'multer';
-import { SessionAuthGuard } from '../auth/guard/session-auth.guard';
 import { MulterExceptionFilter } from '../common/multer-exception.filter';
 import { ethers } from 'ethers';
 import {
@@ -28,33 +28,19 @@ import {
   ApiParam,
   ApiResponse,
   ApiTags,
-  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { UpdateUserResponse } from './dto/update-user-res.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { SignatureAuthGuard } from '../auth/guard/signature-auth.guard';
+import { BindSocialDto } from './dto/bind-social.dto';
+import { UnbindSocialDto } from './dto/unbind-social.dto';
+const socials = ['twitter', 'github', 'telegram'];
 
 @UseFilters(MulterExceptionFilter)
 @Controller('user')
 @ApiTags('User')
 export class UserController {
   constructor(private readonly userService: UserService) {}
-
-  // @UseGuards(SessionAuthGuard)
-  // @Get('profile')
-  // @ApiOperation({ summary: 'Получить профиль текущего пользователя' })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Успешно получен профиль',
-  //   type: GetUserResponse,
-  // })
-  // @ApiUnauthorizedResponse({ description: 'Not authenticated (No session)' })
-  // async getProfile(@Req() req: SessionRequest) {
-  //   const user = await this.userService.findByAddress(req.userAddress.address);
-  //   if (!user) {
-  //     throw new BadRequestException('User not found');
-  //   }
-  //   return user;
-  // }
 
   @Post('update-user')
   @ApiConsumes('multipart/form-data')
@@ -150,101 +136,81 @@ export class UserController {
     if (!user) {
       throw new BadRequestException('User not found');
     }
-    return user;
+    const questsCompleted = await this.userService.getCompletedQuestsCount(
+      address
+    );
+    const campaignsCompleted =
+      await this.userService.getCompletedCampaignsCount(address);
+    return {
+      ...user,
+      quests_completed: questsCompleted,
+      campaigns_completed: campaignsCompleted,
+    };
   }
 
-  // @Patch('avatar')
-  // @ApiOperation({ summary: 'Обновить аватар пользователя' })
-  // @ApiConsumes('multipart/form-data')
-  // @UseInterceptors(
-  //   FileInterceptor('file', {
-  //     limits: { fileSize: 1024 * 1024 },
-  //   })
-  // )
-  // @ApiBody({
-  //   description: 'Form data для загрузки аватара',
-  //   schema: {
-  //     type: 'object',
-  //     properties: {
-  //       file: {
-  //         type: 'string',
-  //         format: 'binary',
-  //       },
-  //       address: {
-  //         type: 'string',
-  //         example: '0xe688b84b23f322a994A53dbF8E15FA82CDB71127',
-  //       },
-  //       signature: {
-  //         type: 'string',
-  //         example: '0x7520b00a05171ba73f837f6270d6e6c79d37136b...',
-  //       },
-  //     },
-  //     required: ['file', 'address', 'signature'],
-  //   },
-  // })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Успешно получен профиль',
-  //   type: GetUserResponse,
-  // })
-  // @ApiUnauthorizedResponse({ description: 'Not authenticated (No session)' })
-  // async updateAvatar(
-  //   @Req() req: SessionRequest,
-  //   @UploadedFile() file: Multer.File,
-  //   @Body() body: { address: string; signature: string }
-  // ) {
-  //   if (req.userAddress.address !== body.address) {
-  //     throw new BadRequestException('Not Authorized');
-  //   }
-  //   if (!file) {
-  //     throw new BadRequestException('No file provided');
-  //   }
+  @Post(':platform/bind')
+  @UseGuards(SignatureAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Привязать соцсеть (Twitter/GitHub/...)' })
+  @ApiBody({
+    description: 'Параметры для привязки соцсети',
+    schema: {
+      type: 'object',
+      properties: {
+        address: { type: 'string', example: '0xe688b84b...' },
+        signature: { type: 'string', example: '0x7520b00a...' },
+        token: {
+          type: 'string',
+          example: 'ACCESS_TOKEN_или_другой_токен_для_API_соцсети',
+        },
+      },
+      required: ['address', 'signature', 'token'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Соцсеть успешно привязана',
+  })
+  async bindSocial(
+    @Param('platform') platform: string,
+    @Body() dto: BindSocialDto
+  ): Promise<{ success: boolean }> {
+    if (!socials.includes(platform)) {
+      throw new BadRequestException(
+        'Only Twitter, Github and Telegram are allowed'
+      );
+    }
+    return this.userService.bindSocial(platform.toLowerCase(), dto);
+  }
 
-  //   const rawMessage = process.env.VERIFICATION_MESSAGE || '';
-  //   let message = rawMessage.trim();
-  //   if (message.startsWith('"') && message.endsWith('"')) {
-  //     message = message.slice(1, -1);
-  //   }
-  //   message = message.replace(/\\n/g, '\n');
-
-  //   try {
-  //     const messageHash = ethers.hashMessage(message);
-  //     const recovered = ethers.recoverAddress(messageHash, body.signature);
-  //     if (recovered.toLowerCase() !== body.address.toLowerCase()) {
-  //       throw new BadRequestException('Invalid signature');
-  //     }
-  //   } catch (error) {
-  //     console.error('Signature verification error:', error);
-  //     throw new BadRequestException('Invalid signature or verification failed');
-  //   }
-
-  //   return this.userService.updateAvatar(body.address, file);
-  // }
-
-  // @UseGuards(SessionAuthGuard)
-  // @ApiCookieAuth()
-  // @Patch('social/:platform')
-  // @UseGuards(SignatureAuthGuard)
-  // @ApiOperation({ summary: 'Подключить или отключить соцсеть' })
-  // @ApiParam({ name: 'platform', enum: ['twitter', 'github', 'telegram'] })
-  // @ApiBody({
-  //   description:
-  //     'Имя пользователя (username), если нужно подключить. Пустое/отсутствует — отключить.',
-  //   type: ConnectSocialDto,
-  // })
-  // @ApiUnauthorizedResponse({ description: 'Not authenticated (No session)' })
-  // async updateSocial(
-  //   @Param('platform', new ParseEnumPipe(ESocialPlatform))
-  //   platform: ESocialPlatform,
-  //   @Req() req: SessionRequest,
-  //   @Body() body: ConnectSocialDto
-  // ) {
-  //   const userAddress: string = req.userAddress;
-  //   const username: string = body.username || null;
-  //   return this.userService.updateSocialPlatform(
-  //     userAddress,
-  //     platform,
-  //     username
-  //   );
-  // }
+  @Post(':platform/unbind')
+  @UseGuards(SignatureAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Отвязать соцсеть (Twitter/GitHub/...)' })
+  @ApiBody({
+    description: 'Параметры для отвязки соцсети',
+    schema: {
+      type: 'object',
+      properties: {
+        address: { type: 'string', example: '0xe688b84b...' },
+        signature: { type: 'string', example: '0x7520b00a...' },
+      },
+      required: ['address', 'signature'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Соцсеть успешно отвязана',
+  })
+  async unbindSocial(
+    @Param('platform') platform: string,
+    @Body() dto: UnbindSocialDto
+  ): Promise<{ success: boolean }> {
+    if (!socials.includes(platform)) {
+      throw new BadRequestException(
+        'Only Twitter, Github and Telegram are allowed'
+      );
+    }
+    return this.userService.unbindSocial(platform.toLowerCase(), dto);
+  }
 }

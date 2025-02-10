@@ -6,9 +6,7 @@ import {
   Get,
   Param,
   InternalServerErrorException,
-  HttpException,
-  HttpStatus,
-  UseInterceptors,
+  UseGuards,
 } from '@nestjs/common';
 import { QuestService } from './quest.service';
 import { CheckQuestDto } from './dto/check-quest.dto';
@@ -19,11 +17,10 @@ import {
   ApiBadRequestResponse,
   ApiParam,
 } from '@nestjs/swagger';
-import { ethers } from 'ethers';
 import { QuestCompletionDto } from './dto/quest.competion.dto';
 import { UserService } from '../user/user.service';
 import { CompleteQuestDto } from './dto/complete-quest.dto';
-import { WildcardCorsInterceptor } from './interceptors/wildcard-cors.interceptor';
+import { SignatureAuthGuard } from '../auth/guard/signature-auth.guard';
 
 @ApiTags('Quests')
 @Controller('quests')
@@ -34,6 +31,7 @@ export class QuestController {
   ) {}
 
   @Post('check-quest')
+  @UseGuards(SignatureAuthGuard)
   @ApiOperation({ summary: 'Проверить выполнение задания пользователем' })
   @ApiResponse({ status: 200, description: 'Задание выполнено' })
   @ApiBadRequestResponse({
@@ -41,9 +39,7 @@ export class QuestController {
   })
   async checkQuest(@Body() checkQuestDto: CheckQuestDto) {
     const { id, address } = checkQuestDto;
-    if (!ethers.isAddress(address)) {
-      throw new BadRequestException('Incorrect address');
-    }
+
     const quest = await this.questService.getQuest(id);
     if (!quest) {
       throw new BadRequestException(`No quest with id ${id}`);
@@ -70,41 +66,21 @@ export class QuestController {
   }
 
   @Post('complete-quest')
-  @ApiOperation({ summary: 'Выполнить квест QUIZ' })
+  @UseGuards(SignatureAuthGuard)
+  @ApiOperation({ summary: 'Выполнить квест NOT ONCHAIN' })
   @ApiResponse({ status: 200, description: 'Задание выполнено' })
   @ApiBadRequestResponse({
     description: 'Задание не выполнено или некорректные данные',
   })
   async completeQuest(@Body() completeQuestDto: CompleteQuestDto) {
-    const { id, address, signature } = completeQuestDto;
-    if (!ethers.isAddress(address)) {
-      throw new BadRequestException('Incorrect address');
-    }
-    const rawMessage = process.env.VERIFICATION_MESSAGE || '';
-
-    let message = rawMessage.trim();
-    if (message.startsWith('"') && message.endsWith('"')) {
-      message = message.slice(1, -1);
-    }
-    message = message.replace(/\\n/g, '\n');
-
-    try {
-      const messageHash = ethers.hashMessage(message);
-      const recovered = ethers.recoverAddress(messageHash, signature);
-      if (recovered.toLowerCase() !== address.toLowerCase()) {
-        throw new BadRequestException('Invalid signature');
-      }
-    } catch (error) {
-      console.error('Signature verification error:', error);
-      throw new BadRequestException('Invalid signature or verification failed');
-    }
+    const { id, address } = completeQuestDto;
 
     const quest = await this.questService.getQuest(id);
     if (!quest) {
       throw new BadRequestException(`No quest with id ${id}`);
     }
-    if (quest.type !== 'quiz') {
-      throw new BadRequestException('Cant complete qust if it is not Quiz');
+    if (quest.type === 'onchain') {
+      throw new BadRequestException('Cant complete qust if it is Onchain');
     }
 
     const questIsCompleted = await this.questService.checkQuestCompletion(
@@ -148,40 +124,6 @@ export class QuestController {
       return completions;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
-    }
-  }
-
-  @Get('hasMinted/:address')
-  @UseInterceptors(WildcardCorsInterceptor)
-  @ApiOperation({
-    summary: 'Check if the user has minted the NFT',
-    description:
-      'Returns `1` if the user at :address has minted at least one NFT on a specific contract; otherwise returns `0`.',
-  })
-  @ApiParam({
-    name: 'address',
-    description: 'The user’s wallet address to check',
-    required: true,
-    example: '0x1234abcd...',
-  })
-  @ApiResponse({
-    status: 200,
-    description: '1 if minted, 0 if not minted',
-    type: Number,
-  })
-  @ApiResponse({
-    status: 500,
-    description: 'Internal server error',
-  })
-  async checkHasMinted(@Param('address') address: string): Promise<number> {
-    try {
-      const hasMinted = await this.questService.hasMintedNft(address);
-      return hasMinted ? 1 : 0;
-    } catch (error) {
-      throw new HttpException(
-        `Error checking minted NFT: ${error.message}`,
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
     }
   }
 
