@@ -34,7 +34,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { SignatureAuthGuard } from '../auth/guard/signature-auth.guard';
 import { BindSocialDto } from './dto/bind-social.dto';
 import { UnbindSocialDto } from './dto/unbind-social.dto';
-const socials = ['twitter', 'github', 'telegram'];
+import { SocialFieldMap } from './user.constants';
 
 @UseFilters(MulterExceptionFilter)
 @Controller('user')
@@ -175,9 +175,9 @@ export class UserController {
     @Param('platform') platform: string,
     @Body() dto: BindSocialDto
   ): Promise<{ success: boolean }> {
-    if (!socials.includes(platform)) {
+    if (!Object.keys(SocialFieldMap).includes(platform)) {
       throw new BadRequestException(
-        'Only Twitter, Github and Telegram are allowed'
+        'Only Twitter, Github, Discord and Telegram are allowed'
       );
     }
     return this.userService.bindSocial(platform.toLowerCase(), dto);
@@ -206,9 +206,9 @@ export class UserController {
     @Param('platform') platform: string,
     @Body() dto: UnbindSocialDto
   ): Promise<{ success: boolean }> {
-    if (!socials.includes(platform)) {
+    if (!Object.keys(SocialFieldMap).includes(platform)) {
       throw new BadRequestException(
-        'Only Twitter, Github and Telegram are allowed'
+        'Only Twitter, Github, Discord and Telegram are allowed'
       );
     }
     return this.userService.unbindSocial(platform.toLowerCase(), dto);
