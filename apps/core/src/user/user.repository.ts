@@ -9,10 +9,14 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { IUser } from '../shared/interfaces';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { QuestRepository } from '../quests/quest.repository';
 
 @Injectable()
 export class UserRepository {
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(
+    private readonly dbService: DatabaseService,
+    private readonly questRepository: QuestRepository
+  ) {}
 
   async findByAddress(address: string): Promise<IUser | null> {
     const client = this.dbService.getClient();
@@ -51,6 +55,34 @@ export class UserRepository {
     try {
       const res = await client.query<IUser>(
         `SELECT * FROM users WHERE name = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async findByTwitterUsername(name: string): Promise<IUser | null> {
+    const client = this.dbService.getClient();
+    const lower = name.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM users WHERE twitter = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async findByGithubUsername(name: string): Promise<IUser | null> {
+    const client = this.dbService.getClient();
+    const lower = name.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM users WHERE github = $1`,
         [lower]
       );
       return res.rows[0] || null;
@@ -187,6 +219,42 @@ export class UserRepository {
         throw error;
       }
       throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async getCompletedQuestsCount(userAddress: string): Promise<number> {
+    const client = this.dbService.getClient();
+    const lowerAddress = userAddress.toLowerCase();
+    try {
+      const query = `
+        SELECT COUNT(*) AS count 
+        FROM quest_completions
+        WHERE user_address = $1
+      `;
+      const result = await client.query(query, [lowerAddress]);
+      return parseInt(result.rows[0].count, 10);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Ошибка при получении количества выполненных квестов: ${error.message}`
+      );
+    }
+  }
+
+  async getCompletedCampaignsCount(userAddress: string): Promise<number> {
+    const client = this.dbService.getClient();
+    const lowerAddress = userAddress.toLowerCase();
+    try {
+      const query = `
+        SELECT COUNT(*) AS count 
+        FROM campaign_completions
+        WHERE user_address = $1
+      `;
+      const result = await client.query(query, [lowerAddress]);
+      return parseInt(result.rows[0].count, 10);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Ошибка при получении количества завершенных кампаний: ${error.message}`
+      );
     }
   }
 }

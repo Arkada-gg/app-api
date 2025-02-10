@@ -1,4 +1,4 @@
-export const mintABI = [
+export const MintNewABI = [
   {
     inputs: [
       { internalType: 'string', name: 'name', type: 'string' },

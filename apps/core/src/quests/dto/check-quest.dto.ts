@@ -14,4 +14,8 @@ export class CheckQuestDto {
   @IsString()
   @IsNotEmpty()
   address: string;
+
+  @ApiProperty({ description: 'Подпись для верификации', example: '0x...' })
+  @IsString()
+  signature: string;
 }

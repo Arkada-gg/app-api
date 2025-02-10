@@ -9,9 +9,26 @@ import * as m8 from './1674235300010_add_short_description_and_difficulty_to_cam
 import * as m9 from './1674235300011_modify_promo_column_in_campaigns';
 import * as m10 from './1674235300014_add_unique_constraint_campaign_completions';
 import * as m11 from './1674235300015_modify_short_desc_in_campaigns';
+import * as m12 from './1674235300016_recreate_quest_type_enum';
+import * as m13 from './1674235500017_add_link_quests_and_update_quest_type';
 
 // import * as s1 from './1674235300005_seed_campaigns_and_quests';
 // import * as s2 from './1674235300006_add_swap_and_add_liquidity_quests';
 import * as s3 from './1674235300013_seed_sonnex_campaign_and_quiz_quest';
 
-export const allMigrations = [m1, m2, m3, m4, m5, m6, m7, m8, m9, s3, m10, m11];
+export const allMigrations = [
+  m1,
+  m2,
+  m3,
+  m4,
+  m5,
+  m6,
+  m7,
+  m8,
+  m9,
+  s3,
+  m10,
+  m11,
+  m12,
+  m13,
+];

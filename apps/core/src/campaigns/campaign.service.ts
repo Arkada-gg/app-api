@@ -18,6 +18,10 @@ export class CampaignService {
     return this.campaignRepository.findCampaignByIdOrSlug(idOrSlug);
   }
 
+  async incrementParticipants(id: string) {
+    return this.campaignRepository.incrementParticipants(id);
+  }
+
   async completeCampaignForUser(
     idOrSlug: string,
     address: string

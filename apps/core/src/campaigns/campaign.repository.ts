@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
@@ -15,6 +16,23 @@ export class CampaignRepository {
     const regex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     return regex.test(str);
+  }
+
+  async incrementParticipants(campaignId: string): Promise<void> {
+    const client = this.dbService.getClient();
+    try {
+      const updateQuery = `
+        UPDATE campaigns 
+        SET participants = participants + 1 
+        WHERE id = $1
+      `;
+      await client.query(updateQuery, [campaignId]);
+      Logger.debug(`Participants incremented for campaign ${campaignId}`);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Error incrementing participants: ${error.message}`
+      );
+    }
   }
 
   async markCampaignAsCompleted(

@@ -25,7 +25,6 @@ export async function up(client: Client): Promise<void> {
 
 export async function down(client: Client): Promise<void> {
   try {
-    // Удаление уникального ограничения
     await client.query(`
       ALTER TABLE campaign_completions
       DROP CONSTRAINT IF EXISTS unique_campaign_user;

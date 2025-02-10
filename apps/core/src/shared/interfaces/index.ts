@@ -301,4 +301,18 @@ export class GetUserResponse {
     required: false,
   })
   updated_at?: Date;
+
+  @ApiProperty({
+    example: '250',
+    description: 'Квесты завершенные юзером',
+    required: false,
+  })
+  quests_completed?: number;
+
+  @ApiProperty({
+    example: '250',
+    description: 'Кампании завершенные юзером',
+    required: false,
+  })
+  campaigns_completed?: number;
 }
