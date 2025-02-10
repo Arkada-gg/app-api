@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { UserRepository } from './user.repository';
@@ -221,6 +222,11 @@ export class UserService {
       },
     });
     const jsonResponse = await response.json();
+
+    Logger.debug(
+      'bindDiscord -> users/@me response: ',
+      JSON.stringify(jsonResponse)
+    );
 
     if (!response.ok) {
       throw new BadRequestException('Discord token is invalid or expired');
