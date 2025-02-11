@@ -14,6 +14,7 @@ export interface QuestTask {
   tokens: string[];
   minAmountUSD?: number;
   abiFile: string;
+  params?: any;
 }
 
 export interface QuestType {
@@ -29,4 +30,10 @@ export interface QuestType {
   type: string;
   link: string;
   quest_type: string;
+}
+
+export enum EPointsType {
+  Campaign = 'base_campaign',
+  Quest = 'base_quest',
+  Referral = 'referral',
 }

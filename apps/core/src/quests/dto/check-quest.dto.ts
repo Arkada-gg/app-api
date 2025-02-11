@@ -1,4 +1,4 @@
-import { IsUUID, IsString, IsNotEmpty } from 'class-validator';
+import { IsUUID, IsString, IsNotEmpty, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CheckQuestDto {
@@ -15,7 +15,14 @@ export class CheckQuestDto {
   @IsNotEmpty()
   address: string;
 
+<<<<<<< HEAD
   // @ApiProperty({ description: 'Подпись для верификации', example: '0x...' })
   // @IsString()
   // signature: string;
+=======
+  @ApiProperty({ description: 'Подпись для верификации', example: '0x...' })
+  @IsString()
+  @IsOptional()
+  signature: string;
+>>>>>>> a117b3ae48d7f49e9157c9d44eeaa3395a110db8
 }

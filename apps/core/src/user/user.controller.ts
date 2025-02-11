@@ -12,6 +12,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Put,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -34,7 +35,8 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { SignatureAuthGuard } from '../auth/guard/signature-auth.guard';
 import { BindSocialDto } from './dto/bind-social.dto';
 import { UnbindSocialDto } from './dto/unbind-social.dto';
-const socials = ['twitter', 'github', 'telegram'];
+import { SocialFieldMap } from './user.constants';
+import { BindRefDto } from './dto/bind-ref.dto';
 
 @UseFilters(MulterExceptionFilter)
 @Controller('user')
@@ -148,6 +150,35 @@ export class UserController {
     };
   }
 
+  @Put('/ref/bind')
+  @UseGuards(SignatureAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Привязать рефералку' })
+  @ApiBody({
+    description: 'Параметры для привязки соцсети',
+    schema: {
+      type: 'object',
+      properties: {
+        address: { type: 'string', example: '0xe688b84b...' },
+        signature: { type: 'string', example: '0x7520b00a...' },
+        refCode: {
+          type: 'string',
+          example: '98KJL1',
+        },
+      },
+      required: ['address', 'signature', 'token'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Успешно получен профиль',
+    type: GetUserResponse,
+  })
+  async bindReferral(@Body() dto: BindRefDto): Promise<IUser> {
+    const { refCode, address } = dto;
+    return this.userService.bindReferral(refCode, address);
+  }
+
   @Post(':platform/bind')
   @UseGuards(SignatureAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -175,9 +206,9 @@ export class UserController {
     @Param('platform') platform: string,
     @Body() dto: BindSocialDto
   ): Promise<{ success: boolean }> {
-    if (!socials.includes(platform)) {
+    if (!Object.keys(SocialFieldMap).includes(platform)) {
       throw new BadRequestException(
-        'Only Twitter, Github and Telegram are allowed'
+        'Only Twitter, Github, Discord and Telegram are allowed'
       );
     }
     return this.userService.bindSocial(platform.toLowerCase(), dto);
@@ -206,9 +237,9 @@ export class UserController {
     @Param('platform') platform: string,
     @Body() dto: UnbindSocialDto
   ): Promise<{ success: boolean }> {
-    if (!socials.includes(platform)) {
+    if (!Object.keys(SocialFieldMap).includes(platform)) {
       throw new BadRequestException(
-        'Only Twitter, Github and Telegram are allowed'
+        'Only Twitter, Github, Discord and Telegram are allowed'
       );
     }
     return this.userService.unbindSocial(platform.toLowerCase(), dto);

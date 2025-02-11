@@ -21,6 +21,7 @@ import { QuestCompletionDto } from './dto/quest.competion.dto';
 import { UserService } from '../user/user.service';
 import { CompleteQuestDto } from './dto/complete-quest.dto';
 import { SignatureAuthGuard } from '../auth/guard/signature-auth.guard';
+import { ConditionalSignatureAuthGuard } from '../auth/guard/conditional-auth.guard';
 
 @ApiTags('Quests')
 @Controller('quests')
@@ -31,7 +32,7 @@ export class QuestController {
   ) {}
 
   @Post('check-quest')
-  // @UseGuards(SignatureAuthGuard)
+  @UseGuards(ConditionalSignatureAuthGuard)
   @ApiOperation({ summary: 'Проверить выполнение задания пользователем' })
   @ApiResponse({ status: 200, description: 'Задание выполнено' })
   @ApiBadRequestResponse({

@@ -10,6 +10,8 @@ export interface IUser {
   github?: string;
   created_at?: Date;
   updated_at?: Date;
+  ref_owner: string;
+  referral_code: string;
 }
 
 export interface SessionRequest extends Request {
@@ -275,6 +277,13 @@ export class GetUserResponse {
   github?: string;
 
   @ApiProperty({
+    example: 'johndoe',
+    description: 'Имя в Discord',
+    required: false,
+  })
+  discord?: string;
+
+  @ApiProperty({
     example: 'johndoe@example.com',
     description: 'Email пользователя',
     required: false,
@@ -315,4 +324,18 @@ export class GetUserResponse {
     required: false,
   })
   campaigns_completed?: number;
+
+  @ApiProperty({
+    example: 'HG5K9',
+    description: 'Реф код',
+    required: false,
+  })
+  referral_code?: string;
+
+  @ApiProperty({
+    example: '0x12345...',
+    description: 'Адрес чью рефералку использовал юзер',
+    required: false,
+  })
+  ref_owner?: string;
 }

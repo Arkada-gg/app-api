@@ -76,7 +76,7 @@ async function bootstrap() {
   app.use(
     rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 50,
+      max: 100,
       message: 'Too many requests from this IP, please try again later.',
     })
   );
