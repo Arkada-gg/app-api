@@ -245,25 +245,37 @@ export class UserRepository {
   async createUserWithReferral(address: string): Promise<IUser> {
     const lower = address.toLowerCase();
     try {
-      const refCode = await this.generateShortCode(5);
+      let refCode: string;
+
+      do {
+        refCode = this.generateShortCode(5);
+      } while (await this.isReferralCodeExists(refCode));
+
       const result = await this.dbService.getClient().query<IUser>(
         `INSERT INTO users (address, name, referral_code)
          VALUES ($1, $1, $2)
          RETURNING *`,
         [lower, refCode]
       );
+
       return result.rows[0];
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
   }
 
+  private async isReferralCodeExists(code: string): Promise<boolean> {
+    const result = await this.dbService
+      .getClient()
+      .query(`SELECT 1 FROM users WHERE referral_code = $1`, [code]);
+    return result.rows.length > 0;
+  }
+
   private generateShortCode(length: number): string {
-    let base = Math.random()
+    return Math.random()
       .toString(36)
-      .substring(2, 2 + length);
-    base = base.toUpperCase();
-    return base;
+      .slice(2, 2 + length)
+      .toUpperCase();
   }
 
   async updatePoints(

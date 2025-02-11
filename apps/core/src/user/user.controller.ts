@@ -171,7 +171,8 @@ export class UserController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Реферальный код успешно привязан',
+    description: 'Успешно получен профиль',
+    type: GetUserResponse,
   })
   async bindReferral(@Body() dto: BindRefDto): Promise<IUser> {
     const { refCode, address } = dto;
