@@ -5,7 +5,6 @@ import { AuthRepository } from './auth.repository';
 import { _ConfigModule } from '../_config/config.module';
 import { UserModule } from '../user/user.module';
 import { SignatureAuthGuard } from './guard/signature-auth.guard';
-import { APP_GUARD } from '@nestjs/core';
 import { ConditionalSignatureAuthGuard } from './guard/conditional-auth.guard';
 
 @Module({

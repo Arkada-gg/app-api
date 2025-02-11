@@ -1,5 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, Matches } from 'class-validator';
+import { IsString, Matches } from 'class-validator';
 
 export class SignupDto {
   @IsString()
@@ -10,9 +9,4 @@ export class SignupDto {
 
   @IsString()
   signature: string;
-
-  @ApiPropertyOptional({ example: '9fFR' })
-  @IsString()
-  @IsOptional()
-  refCode?: string;
 }

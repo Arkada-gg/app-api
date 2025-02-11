@@ -9,7 +9,7 @@ import { QuestRepository } from './quest.repository';
 import { ethers } from 'ethers';
 import { soneiumProvider, ethProvider } from '../shared/provider';
 import fetch from 'node-fetch';
-import { EPointsType, QuestTask, QuestType } from './interface';
+import { QuestTask, QuestType } from './interface';
 import { UniswapV3ABI } from '../shared/abi/uniswapV3';
 import { ArkadaAbi } from '../shared/abi/arkada';
 import { SwapRouterABI } from '../shared/abi/swapRouter';
@@ -319,6 +319,74 @@ export class QuestService {
       }
 
       if (questStored.type === 'link') {
+        if (questTask.contract) {
+          try {
+            const contractAddress = questTask.contract;
+
+            const minimalAbi = [
+              'function hasMinted(address) view returns (bool)',
+            ];
+
+            const contract = new ethers.Contract(
+              contractAddress,
+              minimalAbi,
+              soneiumProvider
+            );
+
+            const minted = await contract.hasMinted(address);
+            Logger.debug(`hasMinted(${address}) => ${minted}`);
+
+            if (minted) {
+              await this.questRepository.completeQuest(id, address);
+              if (questStored.sequence === 1) {
+                await this.campaignService.incrementParticipants(
+                  questStored.campaign_id
+                );
+                Logger.debug(
+                  `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
+                );
+              }
+              return true;
+            }
+          } catch (error) {
+            Logger.error(`Ошибка при вызове hasMinted: ${error.message}`);
+            return false;
+          }
+          return false;
+        }
+        if (questTask.params) {
+          const finalUrl = this.buildLinkUrl(
+            questTask.endpoint,
+            questTask.params,
+            address
+          );
+          Logger.debug(`Requesting link quest with URL: ${finalUrl}`);
+          const res = await fetch(finalUrl, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          if (!res.ok) {
+            throw new InternalServerErrorException(
+              `Error while requesting link endpoint: ${res.statusText}`
+            );
+          }
+          const data = await res.json();
+          Logger.debug(`Link quest data: ${JSON.stringify(data)}`);
+          if (data.verified) {
+            await this.questRepository.completeQuest(id, address);
+            if (questStored.sequence === 1) {
+              await this.campaignService.incrementParticipants(
+                questStored.campaign_id
+              );
+              Logger.debug(
+                `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
+              );
+            }
+            return true;
+          }
+          return false;
+        }
+
         const endpoint = questTask.endpoint.replace('{$address}', address);
         Logger.debug(`Link quest endpoint: ${endpoint}`);
         const res = await fetch(endpoint, {
@@ -594,6 +662,9 @@ export class QuestService {
         return false;
       }
 
+      Logger.debug(
+        `Txns for user ${address} -> ${questTask.contract}: ${userTransactions.length}. `
+      );
       const ifCase = questTask.abi_to_find.filter((el) =>
         el.includes('function mint')
       );
@@ -607,7 +678,6 @@ export class QuestService {
             let topParsed;
             try {
               topParsed = mcInterface.parseTransaction({ data: el.input });
-              console.log('topParsed------>', topParsed);
             } catch (e) {
               Logger.debug(`Ошибка парсинга multicall: ${e.message}`);
               continue;
@@ -693,10 +763,6 @@ export class QuestService {
         return false;
       }
 
-      Logger.debug(
-        `Txns for user ${address} -> ${questTask.contract}: ${userTransactions.length}. `
-      );
-
       for (const tx of userTransactions) {
         const txHash = tx.hash;
         const isQuestDone = await this.decodeTransaction(
@@ -767,6 +833,29 @@ export class QuestService {
       }
     }
     return null;
+  }
+
+  private buildLinkUrl(
+    endpoint: string,
+    paramsStr: string,
+    address: string
+  ): string {
+    const replaced = paramsStr.replace(/\$\{address\}/g, `"${address}"`);
+    let jsonStr = replaced.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
+    jsonStr = jsonStr.replace(/:\s*(0x[0-9a-fA-F]+)/g, ': "$1"');
+    let paramsObj: Record<string, any>;
+    try {
+      paramsObj = JSON.parse(jsonStr);
+    } catch (err) {
+      throw new Error(
+        `Error parsing params JSON: ${err.message}. JSON: ${jsonStr}`
+      );
+    }
+    if (paramsObj.minOutputAmount) {
+      paramsObj.minOutputAmount = Number(paramsObj.minOutputAmount) * 1000000;
+    }
+    const qs = new URLSearchParams(paramsObj).toString();
+    return `${endpoint}?${qs}`;
   }
 
   private async decodeTransaction(

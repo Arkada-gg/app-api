@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString } from 'class-validator';
 
-export class BindSocialDto {
+export class BindRefDto {
   @ApiProperty({ example: '0x123...', description: 'User Address' })
   @IsString()
   address: string;
@@ -11,9 +11,9 @@ export class BindSocialDto {
   signature: string;
 
   @ApiProperty({
-    example: 'ACCESS_TOKEN_или_другой_токен_для_API_соцсети',
-    description: 'OAuth или Bearer-токен соцсети',
+    example: '09HJKD',
+    description: 'Реферальный код',
   })
   @IsString()
-  token: string;
+  refCode: string;
 }

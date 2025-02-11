@@ -3,48 +3,70 @@ import { Client } from 'pg';
 export const name = '1674235300020_assign_ref_codes_to_existing_users';
 
 export async function up(client: Client): Promise<void> {
-  const { rows: users } = await client.query(`
-    SELECT address, referral_code
-    FROM users
-  `);
+  console.log('Fetching users without referral codes...');
+  const { rows: users } = await client.query(
+    `SELECT address FROM users WHERE referral_code IS NULL`
+  );
+
+  if (users.length === 0) {
+    console.log('All users already have referral codes. Skipping migration.');
+    return;
+  }
+
+  console.log(
+    `Found ${users.length} users without referral codes. Generating codes...`
+  );
+
+  const usedCodes = new Set<string>();
+  const newCodesMap = new Map<string, string>();
 
   for (const user of users) {
-    const currentCode = user.referral_code?.trim() || null;
-    if (!currentCode) {
-      const newCode = await generateUniqueReferralCode(client);
-      await client.query(
-        `UPDATE users SET referral_code = $1 WHERE address = $2`,
-        [newCode, user.address.toLowerCase()]
-      );
-      console.log(`Assigned new code "${newCode}" to ${user.address}`);
-    } else {
-      console.log(
-        `Skipping ${user.address}, because referral_code already set: "${currentCode}"`
-      );
-    }
+    let newCode: string;
+    do {
+      newCode = generateShortCode(5);
+    } while (usedCodes.has(newCode));
+
+    usedCodes.add(newCode);
+    newCodesMap.set(user.address.toLowerCase(), newCode);
   }
+
+  console.log(`Generated ${newCodesMap.size} unique referral codes.`);
+
+  console.log('Updating database in batches...');
+  const batchSize = 500;
+
+  const addresses = Array.from(newCodesMap.keys());
+
+  for (let i = 0; i < addresses.length; i += batchSize) {
+    const batch = addresses.slice(i, i + batchSize);
+
+    const values = batch
+      .map((addr, idx) => `($${idx * 2 + 1}, $${idx * 2 + 2})`)
+      .join(', ');
+
+    const updateQuery = `
+      UPDATE users AS u
+      SET referral_code = c.referral_code
+      FROM (VALUES ${values}) AS c(address, referral_code)
+      WHERE u.address = c.address;
+    `;
+
+    const updateValues = batch.flatMap((addr) => [addr, newCodesMap.get(addr)]);
+
+    await client.query(updateQuery, updateValues);
+    console.log(`Updated ${batch.length} users.`);
+  }
+
+  console.log('Migration complete.');
 }
 
 export async function down(client: Client): Promise<void> {
   await client.query(`UPDATE users SET referral_code = NULL`);
 }
 
-async function generateUniqueReferralCode(client: Client): Promise<string> {
-  while (true) {
-    const code = generateShortCode(5);
-    const existing = await client.query(
-      `SELECT address FROM users WHERE referral_code = $1`,
-      [code]
-    );
-    if (existing.rows.length === 0) {
-      return code;
-    }
-  }
-}
-
 function generateShortCode(length: number): string {
-  const base = Math.random()
+  return Math.random()
     .toString(36)
-    .substring(2, 2 + length);
-  return base.toUpperCase();
+    .slice(2, 2 + length)
+    .toUpperCase();
 }

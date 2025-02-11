@@ -24,10 +24,6 @@ export class AuthController {
           type: 'string',
           example: '0x7520b00a...',
         },
-        refCode: {
-          type: 'string',
-          example: '9fFR (реферальный код)',
-        },
       },
     },
   })

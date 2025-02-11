@@ -1,10 +1,7 @@
-// src/users/user.repository.ts
-
 import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
-  NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { IUser } from '../shared/interfaces';
@@ -250,24 +247,14 @@ export class UserRepository {
     try {
       const refCode = await this.generateShortCode(5);
       const result = await this.dbService.getClient().query<IUser>(
-        `INSERT INTO users (address, referral_code)
-         VALUES ($1, $2)
+        `INSERT INTO users (address, name, referral_code)
+         VALUES ($1, $1, $2)
          RETURNING *`,
         [lower, refCode]
       );
       return result.rows[0];
     } catch (error) {
       throw new InternalServerErrorException(error.message);
-    }
-  }
-
-  private async generateUniqueReferralCode(): Promise<string> {
-    while (true) {
-      const code = this.generateShortCode(4);
-      const exists = await this.findByReferralCode(code);
-      if (!exists) {
-        return code;
-      }
     }
   }
 
@@ -285,7 +272,10 @@ export class UserRepository {
     pointType: 'base_campaign' | 'base_quest' | 'referral'
   ) {
     const lower = address.toLowerCase();
+    const user = await this.findByAddress(address);
+    const userPoints = user.points;
     const client = this.dbService.getClient();
+
     try {
       await client.query('BEGIN');
       await client.query(
@@ -293,13 +283,7 @@ export class UserRepository {
          VALUES ($1, $2, $3)`,
         [lower, points, pointType]
       );
-      const sumResult = await client.query(
-        `SELECT COALESCE(SUM(points),0) as total
-         FROM user_points
-         WHERE user_address = $1`,
-        [lower]
-      );
-      const totalPoints = +sumResult.rows[0].total;
+      const totalPoints = userPoints + points;
       await client.query(
         `UPDATE users
          SET points = $1

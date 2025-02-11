@@ -14,6 +14,7 @@ export interface QuestTask {
   tokens: string[];
   minAmountUSD?: number;
   abiFile: string;
+  params?: any;
 }
 
 export interface QuestType {

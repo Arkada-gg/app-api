@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { UserRepository } from './user.repository';
@@ -280,17 +279,11 @@ export class UserService {
 
   async awardCampaignCompletion(address: string, basePoints: number) {
     const user = await this.findByAddress(address);
-    const totalPoints = user.points + basePoints;
-    await this.updatePoints(address, totalPoints, EPointsType.Campaign);
+    await this.updatePoints(address, basePoints, EPointsType.Campaign);
     if (user?.ref_owner) {
       const refUser = await this.findByAddress(user.ref_owner);
       const bonus = Math.floor(basePoints * 0.05);
-      const totalPoints = refUser.points + bonus;
-      await this.updatePoints(
-        user.ref_owner,
-        totalPoints,
-        EPointsType.Referral
-      );
+      await this.updatePoints(user.ref_owner, bonus, EPointsType.Referral);
     }
   }
 

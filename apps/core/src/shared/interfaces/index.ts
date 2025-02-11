@@ -11,6 +11,7 @@ export interface IUser {
   created_at?: Date;
   updated_at?: Date;
   ref_owner: string;
+  referral_code: string;
 }
 
 export interface SessionRequest extends Request {
@@ -323,4 +324,18 @@ export class GetUserResponse {
     required: false,
   })
   campaigns_completed?: number;
+
+  @ApiProperty({
+    example: 'HG5K9',
+    description: 'Реф код',
+    required: false,
+  })
+  referral_code?: string;
+
+  @ApiProperty({
+    example: '0x12345...',
+    description: 'Адрес чью рефералку использовал юзер',
+    required: false,
+  })
+  ref_owner?: string;
 }

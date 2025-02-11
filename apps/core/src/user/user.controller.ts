@@ -12,6 +12,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Put,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -35,6 +36,7 @@ import { SignatureAuthGuard } from '../auth/guard/signature-auth.guard';
 import { BindSocialDto } from './dto/bind-social.dto';
 import { UnbindSocialDto } from './dto/unbind-social.dto';
 import { SocialFieldMap } from './user.constants';
+import { BindRefDto } from './dto/bind-ref.dto';
 
 @UseFilters(MulterExceptionFilter)
 @Controller('user')
@@ -146,6 +148,34 @@ export class UserController {
       quests_completed: questsCompleted,
       campaigns_completed: campaignsCompleted,
     };
+  }
+
+  @Put('/ref/bind')
+  @UseGuards(SignatureAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Привязать рефералку' })
+  @ApiBody({
+    description: 'Параметры для привязки соцсети',
+    schema: {
+      type: 'object',
+      properties: {
+        address: { type: 'string', example: '0xe688b84b...' },
+        signature: { type: 'string', example: '0x7520b00a...' },
+        refCode: {
+          type: 'string',
+          example: '98KJL1',
+        },
+      },
+      required: ['address', 'signature', 'token'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Реферальный код успешно привязан',
+  })
+  async bindReferral(@Body() dto: BindRefDto): Promise<IUser> {
+    const { refCode, address } = dto;
+    return this.userService.bindReferral(refCode, address);
   }
 
   @Post(':platform/bind')

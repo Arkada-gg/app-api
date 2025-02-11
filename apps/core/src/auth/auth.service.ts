@@ -14,18 +14,9 @@ export class AuthService {
 
   async signup(signupDto: SignupDto) {
     try {
-      const { address, refCode } = signupDto;
-      let user = await this.userService.findByAddress(address);
-      if (user) {
-        if (refCode && !user.ref_owner) {
-          user = await this.userService.bindReferral(refCode, address);
-        }
-        return user;
-      }
-      user = await this.userService.createUserIfNotExists(address);
-      if (refCode) {
-        await this.userService.bindReferral(refCode, address);
-      }
+      const user = await this.userService.createUserIfNotExists(
+        signupDto.address
+      );
       return user;
     } catch (error) {
       console.error('Error in AuthService.signup:', error);
