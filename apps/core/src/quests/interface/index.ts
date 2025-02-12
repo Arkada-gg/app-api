@@ -4,6 +4,7 @@ export interface QuestTask {
   chain: string;
   event: string;
   method?: string;
+  method_equals?: string;
   methods?: string[];
   endpoint?: string;
   expression?: string;
@@ -15,6 +16,7 @@ export interface QuestTask {
   minAmountUSD?: number;
   abiFile: string;
   params?: any;
+  input_includes?: string[];
 }
 
 export interface QuestType {

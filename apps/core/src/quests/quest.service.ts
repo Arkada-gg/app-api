@@ -42,8 +42,9 @@ export class QuestService {
   };
 
   private readonly tokenToCoingeckoId: { [token: string]: string } = {
-    ethereum: 'ethereum',
-    astroport: 'astar',
+    '0x4200000000000000000000000000000000000006': 'ethereum',
+    '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441': 'astar',
+    '0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC369': 'usdc',
   };
 
   constructor(
@@ -54,48 +55,44 @@ export class QuestService {
   ) {}
 
   async getAllCompletedQuestsByUser(address: string) {
-    return await this.questRepository.getAllCompletedQuestsByUser(address);
+    return this.questRepository.getAllCompletedQuestsByUser(address);
   }
 
   async getCompletedQuestsByUserInCampaign(
     campaignId: string,
     address: string
   ) {
-    return await this.questRepository.getCompletedQuestsByUserInCampaign(
+    return this.questRepository.getCompletedQuestsByUserInCampaign(
       campaignId,
       address
     );
   }
 
   async checkQuestCompletion(id: string, address: string) {
-    return await this.questRepository.checkQuestCompletion(id, address);
+    return this.questRepository.checkQuestCompletion(id, address);
   }
 
   async getQuestValue(id: string): Promise<any> {
-    const quest: QuestType = await this.questRepository.getQuest(id);
+    const quest = await this.questRepository.getQuest(id);
     return quest.value;
   }
 
   async getQuest(id: string): Promise<QuestType> {
-    const quest: QuestType = await this.questRepository.getQuest(id);
+    const quest = await this.questRepository.getQuest(id);
     return quest;
   }
 
   async hasMintedNft(userAddress: string): Promise<boolean> {
     try {
       const contractAddress = '0x39df84267fda113298d4794948b86026efd47e32';
-
       const minimalAbi = ['function hasMinted(address) view returns (bool)'];
-
       const contract = new ethers.Contract(
         contractAddress,
         minimalAbi,
         soneiumProvider
       );
-
       const minted = await contract.hasMinted(userAddress);
       Logger.debug(`hasMinted(${userAddress}) => ${minted}`);
-
       return minted;
     } catch (error) {
       Logger.error(`Ошибка при вызове hasMinted: ${error.message}`);
@@ -103,44 +100,33 @@ export class QuestService {
     }
   }
 
-  async completeQuestAndAwardPoints(
-    questId: string,
-    userAddress: string
-  ): Promise<void> {
+  async completeQuestAndAwardPoints(questId: string, userAddress: string) {
     const lowerAddress = userAddress.toLowerCase();
     try {
       const quest = await this.questRepository.getQuest(questId);
       const campaignId = quest.campaign_id;
-
       const allCampaignQuests = await this.questRepository.getQuestsByCampaign(
         campaignId
       );
-
       const completedQuests =
         await this.questRepository.getCompletedQuestsByUserInCampaign(
           campaignId,
           lowerAddress
         );
-
       if (completedQuests.length === allCampaignQuests.length) {
         const wasMarked = await this.campaignService.markCampaignAsCompleted(
           campaignId,
           lowerAddress
         );
-
         if (wasMarked) {
           const campaign = await this.campaignService.getCampaignByIdOrSlug(
             campaignId
           );
-          const rewards = campaign.rewards; // [{ "type": "tokens", "value": "100" }, ...]
-
+          const rewards = campaign.rewards;
           let totalPoints = 0;
-          rewards.forEach((reward: any) => {
-            if (reward.type === 'tokens') {
-              totalPoints += parseInt(reward.value, 10);
-            }
+          rewards.forEach((r: any) => {
+            if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
           });
-
           await this.userService.awardCampaignCompletion(
             lowerAddress,
             totalPoints
@@ -156,92 +142,70 @@ export class QuestService {
 
   async completeQuestQuiz(id: string, userAddress: string): Promise<boolean> {
     try {
-      const isCompleted = await this.questRepository.checkQuestCompletion(
+      const alreadyDone = await this.questRepository.checkQuestCompletion(
         id,
         userAddress
       );
-      if (isCompleted) {
-        return true;
-      }
-      const questStored: QuestType = await this.questRepository.getQuest(id);
-
-      const allQuests: QuestType[] =
-        await this.questRepository.getQuestsByCampaign(questStored.campaign_id);
-
-      const currentQuestIndex = allQuests.findIndex(
-        (quest) => quest.id === questStored.id
+      if (alreadyDone) return true;
+      const questStored = await this.questRepository.getQuest(id);
+      const allInCampaign = await this.questRepository.getQuestsByCampaign(
+        questStored.campaign_id
       );
-
-      if (currentQuestIndex === -1) {
+      const idx = allInCampaign.findIndex((q) => q.id === questStored.id);
+      if (idx === -1) {
         throw new NotFoundException(
           `Quest with id ${id} not found in campaign`
         );
       }
-
-      for (let i = 0; i < currentQuestIndex; i++) {
-        const priorQuest = allQuests[i];
-        const isPriorQuestCompleted =
-          await this.questRepository.checkQuestCompletion(
-            priorQuest.id,
-            userAddress
-          );
-        if (!isPriorQuestCompleted) {
+      for (let i = 0; i < idx; i++) {
+        const prior = allInCampaign[i];
+        const done = await this.questRepository.checkQuestCompletion(
+          prior.id,
+          userAddress
+        );
+        if (!done) {
           throw new BadRequestException(
-            `Для выполнения этого квеста нужно сначала пройти: ${priorQuest.name}`
+            `Для выполнения этого квеста нужно сначала пройти: ${prior.name}`
           );
         }
       }
-      const lowerAddress = userAddress.toLowerCase();
-
-      await this.questRepository.completeQuest(id, lowerAddress);
-
+      await this.questRepository.completeQuest(id, userAddress.toLowerCase());
       if (questStored.sequence === 1) {
         await this.campaignService.incrementParticipants(
           questStored.campaign_id
         );
-        Logger.debug(
-          `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
-        );
       }
-
       try {
-        const campaignId = questStored.campaign_id;
-
-        const allCampaignQuests = allQuests;
-
-        const completedQuests =
+        const doneList =
           await this.questRepository.getCompletedQuestsByUserInCampaign(
-            campaignId,
-            lowerAddress
+            questStored.campaign_id,
+            userAddress.toLowerCase()
           );
-        if (completedQuests.length === allCampaignQuests.length) {
+        if (doneList.length === allInCampaign.length) {
           const wasMarked = await this.campaignService.markCampaignAsCompleted(
-            campaignId,
-            lowerAddress
+            questStored.campaign_id,
+            userAddress.toLowerCase()
           );
-
           if (wasMarked) {
-            const campaign = await this.campaignService.getCampaignByIdOrSlug(
-              campaignId
+            const camp = await this.campaignService.getCampaignByIdOrSlug(
+              questStored.campaign_id
             );
-            const rewards = campaign.rewards; // [{ "type": "tokens", "value": "100" }, ...]
-
+            const rewards = camp.rewards || [];
             let totalPoints = 0;
-            rewards.forEach((reward: any) => {
-              if (reward.type === 'tokens') {
-                totalPoints += parseInt(reward.value, 10);
+            rewards.forEach((rw: any) => {
+              if (rw.type === 'tokens') {
+                totalPoints += parseInt(rw.value, 10);
               }
             });
-
             await this.userService.awardCampaignCompletion(
-              lowerAddress,
+              userAddress.toLowerCase(),
               totalPoints
             );
           }
         }
-      } catch (error) {
+      } catch (err) {
         throw new InternalServerErrorException(
-          `Ошибка при завершении квеста и начислении баллов: ${error.message}`
+          `Ошибка при завершении квеста и начислении баллов: ${err.message}`
         );
       }
       return true;
@@ -259,175 +223,129 @@ export class QuestService {
     }
   }
 
-  private createBlockscoutUrl(chain: string, address: string): string {
-    let baseUrl = 'https://soneium.blockscout.com';
-    if (chain === 'Soneium') {
-      baseUrl = 'https://soneium.blockscout.com';
-    } else if (chain === 'Ethereum') {
-      return 'https://soneium.blockscout.com/api?module=account&action=eth_get_balance&address=';
-    } else {
-      throw new Error(`Unsupported chain: ${chain}`);
-    }
-
-    const nowUnix = Math.floor(Date.now() / 1000);
-    const weekAgoUnix = nowUnix - 7 * 24 * 60 * 60;
-
-    const queryParams = new URLSearchParams({
-      module: 'account',
-      action: 'txlist',
-      address: address,
-      start_timestamp: weekAgoUnix.toString(),
-      end_timestamp: nowUnix.toString(),
-      page: '1',
-      offset: '1000',
-      sort: 'asc',
-      // filter_by: 'to',
-    });
-
-    return `${baseUrl}/api?${queryParams.toString()}`;
-  }
-
   async checkQuest(id: string, address: string): Promise<boolean> {
-    const completed = await this.questRepository.checkQuestCompletion(
+    const doneAlready = await this.questRepository.checkQuestCompletion(
       id,
       address
     );
-    if (completed) return true;
-    const quest: QuestType = await this.questRepository.getQuest(id);
-    if (!quest) throw new NotFoundException(`Quest ${id} not found`);
-
-    const allQuests = await this.questRepository.getQuestsByCampaign(
+    if (doneAlready) return true;
+    const quest = await this.questRepository.getQuest(id);
+    if (!quest) {
+      throw new NotFoundException(`Quest ${id} not found`);
+    }
+    const allInCampaign = await this.questRepository.getQuestsByCampaign(
       quest.campaign_id
     );
-    const idx = allQuests.findIndex((q) => q.id === quest.id);
+    const idx = allInCampaign.findIndex((q) => q.id === quest.id);
     if (idx === -1)
       throw new NotFoundException(`Quest ${id} not found in campaign`);
     for (let i = 0; i < idx; i++) {
-      const done = await this.questRepository.checkQuestCompletion(
-        allQuests[i].id,
+      const isDone = await this.questRepository.checkQuestCompletion(
+        allInCampaign[i].id,
         address
       );
-      if (!done)
+      if (!isDone) {
         throw new BadRequestException(
-          `Сначала нужно выполнить квест: ${allQuests[i].name}`
+          `Сначала нужно выполнить квест: ${allInCampaign[i].name}`
         );
+      }
     }
-    console.log('------>', 123999);
     const ok = await this.isQuestFulfilled(quest, address);
     if (!ok) return false;
-
     await this.questRepository.completeQuest(id, address);
     if (quest.sequence === 1) {
       await this.campaignService.incrementParticipants(quest.campaign_id);
     }
-
     const doneList =
       await this.questRepository.getCompletedQuestsByUserInCampaign(
         quest.campaign_id,
         address.toLowerCase()
       );
-    if (doneList.length === allQuests.length) {
-      const marked = await this.campaignService.markCampaignAsCompleted(
+    if (doneList.length === allInCampaign.length) {
+      const wasMarked = await this.campaignService.markCampaignAsCompleted(
         quest.campaign_id,
         address.toLowerCase()
       );
-      if (marked) {
-        const camp = await this.campaignService.getCampaignByIdOrSlug(
+      if (wasMarked) {
+        const c = await this.campaignService.getCampaignByIdOrSlug(
           quest.campaign_id
         );
-        const rewards = camp.rewards || [];
+        const rewards = c.rewards || [];
         let totalPoints = 0;
         rewards.forEach((r: any) => {
           if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
         });
-        await this.userService.updatePoints(address.toLowerCase(), totalPoints);
+        await this.userService.awardCampaignCompletion(
+          address.toLowerCase(),
+          totalPoints
+        );
       }
     }
     return true;
   }
 
-  private buildLinkUrl(
-    endpoint: string,
-    paramsStr: string,
-    address: string
-  ): string {
-    const replaced = paramsStr.replace(/\$\{address\}/g, `"${address}"`);
-    let jsonStr = replaced.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
-    jsonStr = jsonStr.replace(/:\s*(0x[0-9a-fA-F]+)/g, ': "$1"');
-    let paramsObj: Record<string, any>;
-    try {
-      paramsObj = JSON.parse(jsonStr);
-    } catch (err) {
-      throw new Error(
-        `Error parsing params JSON: ${err.message}. JSON: ${jsonStr}`
-      );
-    }
-    if (paramsObj.minOutputAmount) {
-      paramsObj.minOutputAmount = Number(paramsObj.minOutputAmount) * 1000000;
-    }
-    const qs = new URLSearchParams(paramsObj).toString();
-    return `${endpoint}?${qs}`;
-  }
-
-  private async decodeTransaction(
-    txHash: string,
-    questTask: QuestTask,
-    address: string
-  ): Promise<boolean> {
-    const task = questTask;
-    if (quest.quest_type === 'link') {
-      console.log('------>', 1231);
-      const link = task.endpoint.replace('{$address}', address);
-      const resp = await fetch(link);
-      if (!resp.ok) return false;
-      const data = await resp.json();
-      const fn = new Function('data', `return (${task.expression})(data)`);
-      return !!fn(data);
-    }
-    if (task.chain === 'Ethereum') {
-      const balUrl = `https://soneium.blockscout.com/api?module=account&action=eth_get_balance&address=${address}`;
-      const r = await fetch(balUrl);
+  private async isQuestFulfilled(quest: QuestType, userAddr: string) {
+    const task = quest.value;
+    if (quest.type === 'link') {
+      const link = task.endpoint.replace('{$address}', userAddr);
+      const r = await fetch(link);
       if (!r.ok) return false;
       const d = await r.json();
-      if (!d?.result) return false;
-      const bal = ethers.getBigInt(d.result);
+      const fn = new Function('data', `return (${task.expression})(data)`);
+      return !!fn(d);
+    }
+    if (task.chain === 'Ethereum') {
+      const url = `https://soneium.blockscout.com/api?module=account&action=eth_get_balance&address=${userAddr}`;
+      const r = await fetch(url);
+      if (!r.ok) return false;
+      const data = await r.json();
+      if (!data?.result) return false;
+      const bal = ethers.getBigInt(data.result);
       return bal > 0n;
     }
-    const txList = await this.getTxList(task.chain, address);
-    const filtered = txList.filter(
-      (tx) =>
-        tx.from?.toLowerCase() === address.toLowerCase() &&
-        (task.contract1
-          ? [task.contract, task.contract1]
-              .map((c) => c.toLowerCase())
-              .includes(tx.to?.toLowerCase() || '')
-          : tx.to?.toLowerCase() === task.contract.toLowerCase())
-    );
-    if (!filtered.length) return false;
+    if (task.method && task.method_equals) {
+      const ok = await this.checkMethodExecution(task, userAddr);
+      return ok;
+    }
+    const txList = await this.getTxList(task.chain, userAddr);
+    const relevantTxs = txList.filter((tx) => {
+      if (!tx.to) return false;
+      const toAddr = tx.to.toLowerCase();
+      const fromAddr = tx.from?.toLowerCase();
+      if (task.contract1) {
+        return (
+          [task.contract, task.contract1]
+            .map((c) => c.toLowerCase())
+            .includes(toAddr) && fromAddr === userAddr.toLowerCase()
+        );
+      }
+      return (
+        toAddr === task.contract.toLowerCase() &&
+        fromAddr === userAddr.toLowerCase()
+      );
+    });
+    if (!relevantTxs.length) return false;
+    const okTx = await this.checkTxs(task, userAddr, relevantTxs);
+    if (okTx) return true;
+    return false;
+  }
 
-    if (task.abi_to_find?.some((f) => f.includes('function supply'))) {
-      const ok = await this.checkSupplyTxs(filtered, task, address);
-      if (ok) return true;
-      return false;
-    }
-    if (task.abi_to_find?.some((f) => f.includes('function borrow'))) {
-      const ok = await this.checkBorrowTxs(filtered, task, address);
-      if (ok) return true;
-      return false;
-    }
-    if (task.abi_to_find?.some((f) => f.includes('function buy'))) {
-      const ok = await this.checkBuyTxs(filtered, task, address);
-      if (ok) return true;
-      return false;
-    }
-    if (task.abi_to_find?.some((f) => f.includes('function mint'))) {
-      const ok = await this.checkMintTxs(filtered, task, address);
-      if (ok) return true;
-      return false;
-    }
-    for (const tx of filtered) {
-      const ok = await this.decodeAndCheck(tx, task, address);
-      if (ok) return true;
+  private async checkMethodExecution(task: QuestTask, address: string) {
+    try {
+      if (task.method && task.method_equals) {
+        const cAddress = task.contract;
+        const minimalAbi = task.abi_to_find;
+        const contract = new ethers.Contract(
+          cAddress,
+          minimalAbi,
+          soneiumProvider
+        );
+        const minted = await contract.hasMinted(address);
+        Logger.debug(`hasMinted(${address}) => ${minted}`);
+        return minted;
+      }
+    } catch (error) {
+      Logger.debug(`Ошибка проверки hasMinted: ${error.message}`);
     }
     return false;
   }
@@ -435,132 +353,65 @@ export class QuestService {
   private async getTxList(chain: string, addr: string) {
     if (chain !== 'Soneium') return [];
     const now = Math.floor(Date.now() / 1000);
-    const weekAgo = now - 7 * 24 * 60 * 60;
+    const weekAgo = now - 14 * 24 * 60 * 60;
     const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${weekAgo}&end_timestamp=${now}&page=1&offset=1000&sort=asc`;
-    const r = await fetch(url);
-    if (!r.ok) return [];
-    const d = await r.json();
-    if (!Array.isArray(d.result)) return [];
-    return d.result;
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    if (!Array.isArray(data?.result)) return [];
+    return data.result;
   }
 
-  private async decodeAndCheck(tx: any, task: QuestTask, userAddr: string) {
-    const provider = task.chain === 'Soneium' ? soneiumProvider : ethProvider;
-    const realTx = await provider.getTransaction(tx.hash);
-    if (!realTx) return false;
-    const abi = this.contractAbiMap[task.contract.toLowerCase()] || [];
-    let parsed;
+  async checkTxs(task: QuestTask, address: string, txs: any[]) {
     try {
-      const iface = new ethers.Interface(abi);
-      parsed = iface.parseTransaction({
-        data: realTx.data,
-        value: realTx.value,
-      });
-    } catch {
-      return false;
-    }
-    return !!parsed;
-  }
-
-  private async checkSupplyTxs(txs: any[], task: QuestTask, user: string) {
-    for (const t of txs) {
-      try {
-        for (const taskABI in task.abi_to_find) {
-          const abi = [taskABI];
-          const i = new ethers.Interface(abi);
-          const parsed = i.parseTransaction({ data: t.input });
-          const asset = parsed.args[0]?.toLowerCase();
-          const amountBN: bigint = parsed.args[1];
-          if (asset !== '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441') continue;
-          const depositAmount = ethers.formatUnits(amountBN, 18);
-          const depositUSD = await this.getUSDValue('astroport', depositAmount);
-          if (depositUSD >= (task.minAmountUSD || 20)) return true;
+      for (const t of txs) {
+        if (task.abi_to_find && task.abi_equals) {
+          for (const abi of task.abi_to_find) {
+            try {
+              const i = new ethers.Interface([abi]);
+              const parsed = i.parseTransaction({ data: t.input });
+              console.log('parsed------>', parsed);
+              if (!parsed || !parsed.args || parsed.args.length < 2) continue;
+              const asset = parsed.args[0]?.toLowerCase();
+              const amountBN: bigint = parsed.args[1];
+              let amountUSD = 0;
+              console.log('------>', 12312312312);
+              if (task.abi_equals) {
+                const eqLen = task.abi_equals.length;
+                let count = 0;
+                for (const eqArr of task.abi_equals) {
+                  for (const eqVal of eqArr) {
+                    console.log('eqVal------>', eqVal);
+                    if (!asset.includes(eqVal.toLowerCase())) {
+                      continue;
+                    }
+                    count++;
+                    if (count === eqLen) {
+                      const amt = ethers.formatUnits(amountBN, 18);
+                      const coingId =
+                        this.tokenToCoingeckoId[eqVal.toLowerCase()];
+                      if (!coingId) break;
+                      const usd = await this.getUSDValue(
+                        eqVal.toLowerCase(),
+                        amt
+                      );
+                      amountUSD += usd;
+                      if (amountUSD >= (task.minAmountUSD || 20)) {
+                        return true;
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (err) {
+              console.log(`Ошибка парсинга транзакции с ABI ${abi}:`, err);
+            }
+            return false;
+          }
         }
-      } catch (err) {
-        console.log('------>', err);
       }
-    }
-    return false;
-  }
-
-  private async checkBorrowTxs(txs: any[], task: QuestTask, user: string) {
-    for (const t of txs) {
-      try {
-        for (const taskABI in task.abi_to_find) {
-          const abi = [taskABI];
-          const i = new ethers.Interface(abi);
-          const parsed = i.parseTransaction({ data: t.input });
-          const asset = parsed.args[0]?.toLowerCase();
-          const amountBN: bigint = parsed.args[1];
-          if (asset !== '0xba9986d2381edf1d03b0b9c1f8b00dc4aacc369') continue;
-          const borrowAmount = ethers.formatUnits(amountBN, 6);
-          if (parseFloat(borrowAmount) >= (task.minAmountUSD || 0)) return true;
-        }
-      } catch (err) {
-        console.log('------>', err);
-      }
-    }
-    return false;
-  }
-
-  private async checkBuyTxs(txs: any[], task: QuestTask, user: string) {
-    for (const t of txs) {
-      try {
-        if (
-          t.input.startsWith('0xac9650d8') &&
-          t.input
-            .toLowerCase()
-            .includes('2cae934a1e84f693fbb78ca5ed3b0a6893259441')
-        ) {
-          return true;
-        }
-      } catch (err) {
-        console.log('------>', err);
-      }
-    }
-    return false;
-  }
-
-  private async checkMintTxs(txs: any[], task: QuestTask, user: string) {
-    for (const t of txs) {
-      try {
-        const multi = ['function multicall(bytes[] data)'];
-        const iface = new ethers.Interface(multi);
-        const parsed = iface.parseTransaction({ data: t.input });
-        if (!parsed) continue;
-        const callDataArray = parsed.args[0];
-        if (!Array.isArray(callDataArray) || !callDataArray.length) continue;
-        const info = this.parseMintManual(callDataArray[0]);
-        if (!info) continue;
-        const token0 = info.token0.toLowerCase();
-        const token1 = info.token1.toLowerCase();
-        if (
-          token0 !== '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441' &&
-          token1 !== '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441'
-        ) {
-          continue;
-        }
-        const secondAddr = task.abi_equals?.[0]?.[1]?.toLowerCase() || '';
-        const astrBN =
-          token0 === '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441'
-            ? info.amount0Desired
-            : info.amount1Desired;
-        const otherBN =
-          token0 === secondAddr
-            ? info.amount0Desired
-            : token1 === secondAddr
-            ? info.amount1Desired
-            : 0n;
-        const astrAmount = ethers.formatUnits(astrBN, 18);
-        const otherAmount = ethers.formatUnits(otherBN, 18);
-        const astrUSD = await this.getUSDValue('astroport', astrAmount);
-        const otherUSD = await this.getUSDValue('ethereum', otherAmount);
-        if (astrUSD + otherUSD >= (task.minAmountUSD || 20)) {
-          return true;
-        }
-      } catch (err) {
-        console.log('------>', err);
-      }
+    } catch (error) {
+      console.log('Ошибка при checkTxs:', error);
     }
     return false;
   }
@@ -609,7 +460,7 @@ export class QuestService {
   async extractMintAmounts(
     multicallInput: string[]
   ): Promise<{ astrAmount: string } | null> {
-    if (!multicallInput || multicallInput.length === 0) {
+    if (!multicallInput?.length) {
       Logger.error('extractMintAmounts: пустой массив входных данных');
       return null;
     }
@@ -619,229 +470,20 @@ export class QuestService {
       Logger.error('extractMintAmounts: не удалось распарсить mint данные');
       return null;
     }
-
     const ASTR_ADDRESS = '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441';
-
     let astrAmountBN: bigint | null = null;
-
     if (parsed.token0.toLowerCase() === ASTR_ADDRESS) {
       astrAmountBN = parsed.amount0Desired;
     } else if (parsed.token1.toLowerCase() === ASTR_ADDRESS) {
       astrAmountBN = parsed.amount1Desired;
     }
-
     if (!astrAmountBN) {
       Logger.error('extractMintAmounts: не найдено значение для ASTR');
       return null;
     }
-    if (astrAmountBN) {
-      console.log(astrAmountBN, 'parsed---->', parsed);
-    }
     const astrAmount = ethers.formatUnits(astrAmountBN, 18);
-
     Logger.debug(`Извлечены суммы: ASTR = ${astrAmount}`);
     return { astrAmount };
-  }
-
-  private async decodeSingleTransaction(
-    parsedTx: ethers.TransactionDescription,
-    questTask: QuestTask,
-    address?: string
-  ): Promise<boolean> {
-    const isValid = await this.validateAbiEquals(parsedTx, questTask);
-    if (!isValid) {
-      return false;
-    }
-    if (parsedTx.name === 'deposit') {
-      const amountBN: bigint = parsedTx.args[0];
-      const astrAmount = ethers.formatUnits(amountBN, 6);
-      const minBN = questTask.minAmountUSD || '1000000';
-
-      if (+astrAmount < +minBN) {
-        Logger.debug(`Deposit: ${amountBN} < required ${minBN}`);
-        return false;
-      }
-
-      return true;
-    }
-
-    if (parsedTx.name === 'mint') {
-      const params = parsedTx.args[0];
-      if (!params) return false;
-
-      const token0 = params.token0?.toLowerCase();
-      const token1 = params.token1?.toLowerCase();
-
-      const ASTR_ADDRESS = '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441';
-      const SECOND_ADDRESS = questTask.abi_equals[0][1];
-
-      if (token0 !== ASTR_ADDRESS && token1 !== ASTR_ADDRESS) {
-        Logger.debug(`Ни token0, ни token1 не равен ASTR`);
-        return false;
-      }
-
-      const amount0Desired = params.amount0Desired || 0;
-      const amount1Desired = params.amount1Desired || 0;
-
-      let astrAmountBN = null;
-      let ethAmountBN = null;
-
-      if (token0 === ASTR_ADDRESS) {
-        astrAmountBN = amount0Desired;
-      }
-      if (token1 === ASTR_ADDRESS) {
-        astrAmountBN = amount1Desired;
-      }
-      if (token0 === SECOND_ADDRESS) {
-        ethAmountBN = amount0Desired;
-      }
-      if (token1 === SECOND_ADDRESS) {
-        ethAmountBN = amount1Desired;
-      }
-
-      if (!astrAmountBN) {
-        Logger.debug(`Не нашли amount, соответствующий ASTR`);
-        return false;
-      }
-
-      const astrAmount = ethers.formatUnits(astrAmountBN || 0, 18);
-      const ethAmount = ethers.formatUnits(ethAmountBN || 0, 18);
-
-      Logger.debug(`Astr amount: ${astrAmount}, Eth amount: ${ethAmount}`);
-
-      const astrUSDValue = await this.getUSDValue('astroport', astrAmount);
-      const ethUSDValue = await this.getUSDValue('ethereum', ethAmount);
-      Logger.debug(`Astr value: ${astrUSDValue}, Eth value: ${ethUSDValue}`);
-
-      const totalValue = astrUSDValue + ethUSDValue;
-
-      if (totalValue < (questTask.minAmountUSD || 20)) {
-        Logger.debug(
-          `Сумма ASTR в ликвидности (${totalValue} USD) меньше, чем нужно (${questTask.minAmountUSD} USD)`
-        );
-        return false;
-      }
-      return true;
-    }
-
-    if (parsedTx.args?.length > 0) {
-      const firstArg = parsedTx.args[0];
-      if (Array.isArray(firstArg) && firstArg.length > 0) {
-        const pathBytes = firstArg[0];
-        if (typeof pathBytes === 'string' && pathBytes.startsWith('0x')) {
-          const pathAddresses = this.extractAddressesFromPath(pathBytes);
-          Logger.debug(`Path addresses: ${pathAddresses}`);
-        }
-      }
-    }
-
-    if (questTask.minAmountUSD) {
-      const firstArg = parsedTx.args[0];
-      if (Array.isArray(firstArg)) {
-        const amountIn = firstArg[firstArg.length - 2];
-        if (amountIn) {
-          const amountInETH = ethers.formatEther(amountIn);
-          const usdAmount = await this.getUSDValue('ethereum', amountInETH);
-          if (usdAmount < questTask.minAmountUSD) {
-            Logger.debug(
-              `Сумма свапа (${usdAmount}) меньше требуемого минимума (${questTask.minAmountUSD} USD)`
-            );
-            return false;
-          }
-          Logger.debug(
-            `Сумма свапа (${usdAmount}) больше требуемого минимума (${questTask.minAmountUSD} USD)`
-          );
-          return true;
-        }
-      }
-    }
-  }
-
-  private async validateAbiEquals(
-    parsedTx: ethers.TransactionDescription,
-    questTask: QuestTask
-  ): Promise<boolean> {
-    if (!questTask.abi_equals || !Array.isArray(questTask.abi_equals)) {
-      return true;
-    }
-
-    const realArgs = Array.from(parsedTx.args || []);
-
-    for (const conditionArr of questTask.abi_equals) {
-      let isConditionMatched = true;
-      for (let i = 0; i < conditionArr.length; i++) {
-        const expected = conditionArr[i];
-        if (expected === 0 || expected === undefined) {
-          continue;
-        }
-
-        if (typeof expected === 'string') {
-          if (
-            !realArgs[0][i] ||
-            realArgs[0][i].toLowerCase() !== expected.toLowerCase()
-          ) {
-            isConditionMatched = false;
-            break;
-          }
-        } else {
-          if (realArgs[0][i].toString() !== expected.toString()) {
-            isConditionMatched = false;
-            break;
-          }
-        }
-      }
-
-      if (isConditionMatched) {
-        Logger.debug(`Сошлось по условию: ${JSON.stringify(conditionArr)}`);
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  private extractAddressesFromPath(path: string): string[] {
-    const addresses: string[] = [];
-    const pathWithout0x = path.startsWith('0x') ? path.slice(2) : path;
-
-    const addressLength = 40;
-    const feeLength = 6;
-    const stepLength = addressLength + feeLength;
-    const numSteps = Math.floor(pathWithout0x.length / stepLength);
-
-    for (let i = 0; i < numSteps; i++) {
-      const start = i * stepLength;
-      const end = start + addressLength;
-      const address = '0x' + pathWithout0x.slice(start, end);
-      if (ethers.isAddress(address)) {
-        addresses.push(address.toLowerCase());
-      }
-    }
-
-    const lastStart = numSteps * stepLength;
-    if (lastStart + addressLength <= pathWithout0x.length) {
-      const address =
-        '0x' + pathWithout0x.slice(lastStart, lastStart + addressLength);
-      if (ethers.isAddress(address)) {
-        addresses.push(address.toLowerCase());
-      }
-    }
-
-    return addresses;
-  }
-
-  private async validateLogConditions(
-    args: any,
-    questTask: QuestTask
-  ): Promise<boolean> {
-    if (questTask.id === 'quest6') {
-      return true;
-    }
-
-    if (questTask.id === 'quest7') {
-      return true;
-    }
-    return false;
   }
 
   private async getUSDValue(token: string, amount: string): Promise<number> {
@@ -851,28 +493,15 @@ export class QuestService {
         Logger.warn(`No CoinGecko ID found for token: ${token}`);
         return 0;
       }
-
       const price = await this.priceService.getTokenPrice(tokenId);
-
       if (!price) {
         Logger.warn(`No price data found for token: ${tokenId}`);
         return 0;
       }
-
       return parseFloat(amount) * price;
     } catch (error) {
       Logger.error(`Error in getUSDValue: ${error.message}`);
       return 0;
     }
   }
-
-  // async getQuestValue(id: string): Promise<any> {
-  //   const quest: QuestType = await this.questRepository.getQuest(id);
-  //   return quest.value;
-  // }
-
-  // async getQuest(id: string): Promise<QuestType> {
-  //   const quest: QuestType = await this.questRepository.getQuest(id);
-  //   return quest;
-  // }
 }
