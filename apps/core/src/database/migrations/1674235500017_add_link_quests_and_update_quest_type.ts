@@ -1,9 +1,9 @@
 import { Client } from 'pg';
 
-export const name = '1674235500000_add_link_quests_and_update_quest_type';
+export const name = '1674235500017_add_link_quests_and_update_quest_type';
 
 export async function up(client: Client): Promise<void> {
-  await client.query(`ALTER TYPE quest_type ADD VALUE 'link'`);
+  // await client.query(`ALTER TYPE quest_type ADD VALUE 'link'`);
 
   await client.query(
     `

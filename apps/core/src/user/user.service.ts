@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { UserRepository } from './user.repository';
@@ -13,6 +12,7 @@ import { ESocialPlatform, SocialFieldMap } from './user.constants';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { BindSocialDto } from './dto/bind-social.dto';
 import { UnbindSocialDto } from './dto/unbind-social.dto';
+import { EPointsType } from '../quests/interface';
 
 @Injectable()
 export class UserService {
@@ -27,6 +27,36 @@ export class UserService {
 
   async findByEmail(email: string): Promise<IUser | null> {
     return this.userRepository.findByEmail(email);
+  }
+
+  async createUserIfNotExists(address: string): Promise<IUser> {
+    const lower = address.toLowerCase();
+    const existing = await this.findByAddress(lower);
+    if (existing) {
+      return existing;
+    }
+    return this.userRepository.createUserWithReferral(lower);
+  }
+
+  async bindReferral(refCode: string, address: string): Promise<IUser> {
+    const lower = address.toLowerCase();
+    const existingUser = await this.findByAddress(lower);
+    if (!existingUser) {
+      throw new BadRequestException('User not found');
+    }
+    if (existingUser.ref_owner) {
+      throw new BadRequestException('Referral owner is already set');
+    }
+    const owner = await this.userRepository.findByReferralCode(refCode);
+    if (!owner) {
+      throw new BadRequestException('Invalid referral code');
+    }
+    if (owner.address.toLowerCase() === lower) {
+      throw new BadRequestException('Cannot refer yourself');
+    }
+    await this.userRepository.setRefOwner(lower, owner.address);
+    const updatedUser = await this.findByAddress(lower);
+    return updatedUser;
   }
 
   async updateUser(
@@ -247,8 +277,30 @@ export class UserService {
     return { success: true };
   }
 
-  async updatePoints(address: string, points: number) {
-    return this.userRepository.updatePoints(address, points);
+  async awardCampaignCompletion(address: string, basePoints: number) {
+    const user = await this.findByAddress(address);
+    await this.updatePoints(address, basePoints, EPointsType.Campaign);
+    if (user?.ref_owner) {
+      const refUser = await this.findByAddress(user.ref_owner);
+      const bonus = Math.floor(basePoints * 0.05);
+      await this.updatePoints(user.ref_owner, bonus, EPointsType.Referral);
+    }
+  }
+
+  async updatePoints(address: string, points: number, pointType: EPointsType) {
+    await this.userRepository.updatePoints(address, points, pointType);
+  }
+
+  async getPointsDetails(
+    address: string
+  ): Promise<{ total: number; breakdown: Record<string, number> }> {
+    const user = await this.findByAddress(address);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+    const breakdown = await this.userRepository.getTotalPointsByType(address);
+    const total = user.points || 0;
+    return { total, breakdown };
   }
 
   async getCompletedQuestsCount(address: string): Promise<number> {
