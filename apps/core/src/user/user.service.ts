@@ -281,8 +281,8 @@ export class UserService {
     const user = await this.findByAddress(address);
     await this.updatePoints(address, basePoints, EPointsType.Campaign);
     if (user?.ref_owner) {
-      const refUser = await this.findByAddress(user.ref_owner);
-      const bonus = Math.floor(basePoints * 0.05);
+      let bonus = Math.floor(basePoints * 0.05);
+      if (bonus > 0 && bonus < 1) bonus = 1;
       await this.updatePoints(user.ref_owner, bonus, EPointsType.Referral);
     }
   }

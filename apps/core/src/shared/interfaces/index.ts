@@ -2,7 +2,8 @@ export interface IUser {
   address: string;
   name?: string;
   email?: string;
-  points?: number;
+  points?: any;
+  total_points?: any;
   avatar?: string;
   twitter?: string;
   discord?: string;
@@ -26,6 +27,17 @@ export class RewardDto {
 
   @ApiProperty({ example: '100', description: 'Значение награды' })
   value: string;
+}
+
+export class PointsDto {
+  @ApiProperty({ example: '100', description: 'Поинты за реферальную систему' })
+  ref: number;
+
+  @ApiProperty({ example: '100', description: 'Поинты за кампании' })
+  base_campaign: number;
+
+  @ApiProperty({ example: '100', description: 'Всего поинтов' })
+  total: number;
 }
 
 export class QuestTypeDto {
@@ -291,11 +303,9 @@ export class GetUserResponse {
   email?: string;
 
   @ApiProperty({
-    example: '250',
-    description: 'Поинты пользователя',
-    required: false,
+    type: PointsDto,
   })
-  points?: number;
+  points?: PointsDto;
 
   @ApiProperty({
     example: '2025-01-27 06:10:35.315982',
@@ -338,4 +348,11 @@ export class GetUserResponse {
     required: false,
   })
   ref_owner?: string;
+
+  @ApiProperty({
+    example: '10',
+    description: 'Количество рефералов',
+    required: false,
+  })
+  ref_count?: number;
 }

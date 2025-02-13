@@ -219,7 +219,6 @@ export class QuestService {
           campaignId,
           lowerAddress
         );
-
       if (completedQuests.length === allCampaignQuests.length) {
         const wasMarked = await this.campaignService.markCampaignAsCompleted(
           campaignId,
@@ -238,10 +237,9 @@ export class QuestService {
               totalPoints += parseInt(reward.value, 10);
             }
           });
-
           await this.userService.awardCampaignCompletion(
             lowerAddress,
-            totalPoints
+            +totalPoints
           );
         }
       }
@@ -262,18 +260,18 @@ export class QuestService {
     }
 
     const nowUnix = Math.floor(Date.now() / 1000);
-    const weekAgoUnix = nowUnix - 7 * 24 * 60 * 60;
+    const weekAgoUnix = nowUnix - 30 * 24 * 60 * 60;
 
     const queryParams = new URLSearchParams({
       module: 'account',
       action: 'txlist',
       address: address,
       start_timestamp: weekAgoUnix.toString(),
-      end_timestamp: nowUnix.toString(),
-      page: '1',
-      offset: '1000',
-      sort: 'asc',
-      // filter_by: 'to',
+      end_timestamp: nowUnix.toString() + 1000,
+      page: '0',
+      offset: '500',
+      sort: 'desc',
+      // filter_by: 'from',
     });
 
     return `${baseUrl}/api?${queryParams.toString()}`;
@@ -370,6 +368,7 @@ export class QuestService {
               `Error while requesting link endpoint: ${res.statusText}`
             );
           }
+
           const data = await res.json();
           Logger.debug(`Link quest data: ${JSON.stringify(data)}`);
           if (data.verified) {
@@ -407,8 +406,7 @@ export class QuestService {
         );
         const result = exprFn(data);
         Logger.debug(`Link quest expression result: ${result}`);
-
-        if (result === 1) {
+        if (result === 1 || result === true) {
           await this.questRepository.completeQuest(id, address);
           if (questStored.sequence === 1) {
             await this.campaignService.incrementParticipants(
@@ -422,6 +420,46 @@ export class QuestService {
         } else {
           return false;
         }
+      }
+
+      const ifCaseMethod414a = questTask.abi_to_find.filter(
+        (sig) => sig === '0x414a8809'
+      );
+      if (ifCaseMethod414a.length > 0) {
+        const url =
+          'https://soneium.blockscout.com/api?module=token&action=getTokenHolders&contractaddress=0x963c039406F8b10D3a0691328B4d2AE90FA43230&page=1&offset=10000';
+
+        const resTrace = await fetch(url, { method: 'GET' });
+        if (!resTrace.ok) {
+          Logger.error(
+            `Error fetching balance: ${resTrace.status} / ${resTrace.statusText}`
+          );
+          return false;
+        }
+
+        const data = await resTrace.json();
+        console.log('------>', data);
+        if (!data || !data.result) {
+          Logger.error('Invalid balance response');
+          return false;
+        }
+        for (const user of data.result) {
+          try {
+            if (user.address.toLowerCase() === address.toLowerCase()) {
+              await this.questRepository.completeQuest(id, address);
+              if (questStored.sequence === 1) {
+                await this.campaignService.incrementParticipants(
+                  questStored.campaign_id
+                );
+              }
+              return true;
+            }
+          } catch (error) {
+            Logger.error(`Ошибка обработки транзакции: ${error.message}`);
+            continue;
+          }
+        }
+        return false;
       }
 
       const url = this.createBlockscoutUrl(questTask.chain, address);
@@ -623,6 +661,94 @@ export class QuestService {
         }
         return false;
       }
+
+      const ifCaseDeposit = questTask.abi_to_find.filter((el) =>
+        el.includes('createDeposit')
+      );
+      const ifCaseSwap = questTask.abi_to_find.filter((el) =>
+        el.includes('swapExactETHForTokens')
+      );
+
+      if (ifCaseDeposit.length > 0 || ifCaseSwap.length > 0) {
+        for (const tx of userTransactions) {
+          try {
+            for (const abiItem of questTask.abi_to_find) {
+              const iface = new ethers.Interface([abiItem]);
+              const parsed = iface.parseTransaction({ data: tx.input });
+              if (!parsed) continue;
+
+              if (parsed.name === 'swapExactETHForTokens') {
+                const amountOutMinBN = parsed.args[0] as bigint;
+                const path = parsed.args[1] as string[];
+                const outMinASTR = ethers.formatUnits(amountOutMinBN, 18);
+                const usdValue = await this.getUSDValue(
+                  'astroport',
+                  outMinASTR
+                );
+                if (usdValue >= (questTask.minAmountUSD || 5)) {
+                  await this.questRepository.completeQuest(id, address);
+                  if (questStored.sequence === 1) {
+                    await this.campaignService.incrementParticipants(
+                      questStored.campaign_id
+                    );
+                    Logger.debug(
+                      `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
+                    );
+                  }
+                  return true;
+                }
+              } else if (parsed.name === 'createDeposit') {
+                const poolToken = parsed.args[0] as string;
+                const token = (parsed.args[1] as string).toLowerCase();
+                const amountBN = parsed.args[2] as bigint;
+                const deposit = ethers.formatUnits(amountBN, 6);
+                if (token === '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369') {
+                  const usdValue = parseFloat(deposit);
+                  if (usdValue >= (questTask.minAmountUSD || 10)) {
+                    await this.questRepository.completeQuest(id, address);
+                    if (questStored.sequence === 1) {
+                      await this.campaignService.incrementParticipants(
+                        questStored.campaign_id
+                      );
+                      Logger.debug(
+                        `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
+                      );
+                    }
+                    return true;
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            Logger.debug(`Ошибка парсинга: ${err.message}`);
+            continue;
+          }
+        }
+        return false;
+      }
+
+      // const ifCaseMethod414a = questTask.abi_to_find.filter(
+      //   (sig) => sig === '0x414a8809'
+      // );
+      // if (ifCaseMethod414a.length > 0) {
+      //   for (const tx of userTransactions) {
+      //     try {
+      //       if (tx.input.startsWith('0x414a8809')) {
+      //         await this.questRepository.completeQuest(id, address);
+      //         if (questStored.sequence === 1) {
+      //           await this.campaignService.incrementParticipants(
+      //             questStored.campaign_id
+      //           );
+      //         }
+      //         return true;
+      //       }
+      //     } catch (error) {
+      //       Logger.error(`Ошибка обработки транзакции: ${error.message}`);
+      //       continue;
+      //     }
+      //   }
+      //   return false;
+      // }
 
       const ifCaseBuy = questTask.abi_to_find.filter((el) =>
         el.includes('function buy')

@@ -13,6 +13,7 @@ import * as m12 from './1674235300016_recreate_quest_type_enum';
 import * as m13 from './1674235500017_add_link_quests_and_update_quest_type';
 import * as m14 from './1674235500018_add_referral_columns_and_points_history';
 import * as m15 from './1674235500019_assign_ref_codes_to_existing_users';
+import * as m16 from './1674235500020_add_users_reffered_amount';
 
 // import * as s1 from './1674235300005_seed_campaigns_and_quests';
 // import * as s2 from './1674235300006_add_swap_and_add_liquidity_quests';
@@ -35,4 +36,5 @@ export const allMigrations = [
   m13,
   m14,
   m15,
+  m16,
 ];

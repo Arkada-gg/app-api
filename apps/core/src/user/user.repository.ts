@@ -18,15 +18,53 @@ export class UserRepository {
   async findByAddress(address: string): Promise<IUser | null> {
     const client = this.dbService.getClient();
     const lower = address.toLowerCase();
+
     try {
-      const result = await client.query<IUser>(
-        `SELECT * FROM users WHERE address = $1`,
+      const userResult = await client.query<IUser>(
+        `SELECT *, COALESCE(points, 0) AS total_points FROM users WHERE address = $1`,
         [lower]
       );
-      if (result.rows[0]) {
-        result.rows[0].address = result.rows[0].address.toString();
+
+      if (!userResult.rows[0]) {
+        return null;
       }
-      return result.rows[0] || null;
+
+      const user = userResult.rows[0];
+      user.address = user.address.toString();
+
+      const pointsResult = await client.query<{
+        point_type: string;
+        sum: number;
+      }>(
+        `
+        SELECT point_type, COALESCE(SUM(points), 0) AS sum 
+        FROM user_points 
+        WHERE user_address = $1 
+        GROUP BY point_type
+        `,
+        [lower]
+      );
+
+      let refPoints = 0;
+      let baseCampaignPoints = 0;
+
+      for (const row of pointsResult.rows) {
+        if (row.point_type === 'referral') {
+          refPoints = +row.sum;
+        } else if (row.point_type === 'base_campaign') {
+          baseCampaignPoints = row.sum;
+        }
+      }
+
+      user.points = {
+        ref: +refPoints,
+        base_campaign: +baseCampaignPoints,
+        total: +user.total_points,
+      };
+
+      delete user.total_points;
+
+      return user;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
@@ -285,9 +323,8 @@ export class UserRepository {
   ) {
     const lower = address.toLowerCase();
     const user = await this.findByAddress(address);
-    const userPoints = user.points;
+    const userPoints = user.points.total;
     const client = this.dbService.getClient();
-
     try {
       await client.query('BEGIN');
       await client.query(
@@ -347,12 +384,24 @@ export class UserRepository {
     const lowerRef = referredAddress.toLowerCase();
     const lowerOwner = refOwnerAddress.toLowerCase();
     try {
-      await this.dbService.getClient().query(
-        `UPDATE users
-         SET ref_owner = $1
-         WHERE address = $2
-           AND ref_owner IS NULL`,
+      const client = this.dbService.getClient();
+      await client.query(
+        `
+        UPDATE users
+        SET ref_owner = $1
+        WHERE address = $2
+        AND ref_owner IS NULL;
+        `,
         [lowerOwner, lowerRef]
+      );
+
+      await client.query(
+        `
+        UPDATE users
+        SET ref_count = ref_count + 1
+        WHERE address = $1;
+        `,
+        [lowerOwner]
       );
     } catch (error) {
       throw new InternalServerErrorException(error.message);
