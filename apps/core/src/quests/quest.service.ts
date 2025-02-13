@@ -438,7 +438,6 @@ export class QuestService {
         }
 
         const data = await resTrace.json();
-        console.log('------>', data);
         if (!data || !data.result) {
           Logger.error('Invalid balance response');
           return false;
@@ -538,7 +537,7 @@ export class QuestService {
 
       Logger.debug(`Txns found for user: ${userTransactions.length}`);
       const ifCaseSupply = questTask.abi_to_find.filter((el) =>
-        el.includes('function supply')
+        el.includes('function supply(')
       );
 
       if (ifCaseSupply.length > 0) {
@@ -596,6 +595,76 @@ export class QuestService {
             }
           } catch (error) {
             Logger.error(`Ошибка обработки транзакции: ${error.message}`);
+            continue;
+          }
+        }
+        return false;
+      }
+
+      const ifCaseBorrowNew = questTask.abi_to_find.some((abiStr) =>
+        abiStr.includes('function supplyCollateralAndBorrow')
+      );
+
+      if (ifCaseBorrowNew) {
+        for (const tx of userTransactions) {
+          try {
+            for (const abiStr of questTask.abi_to_find) {
+              const iface = new ethers.Interface([abiStr]);
+              let parsed;
+              try {
+                parsed = iface.parseTransaction({ data: tx.input });
+              } catch {
+                continue;
+              }
+              if (!parsed) continue;
+              if (parsed.name === 'supplyCollateralAndBorrow') {
+                const borrowAmountBN = parsed.args[2] as bigint;
+                const tokenAddr = (parsed.args[3] as string).toLowerCase();
+                if (
+                  tokenAddr ===
+                  '0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC369'.toLowerCase()
+                ) {
+                  const borrowAmountDecimal = ethers.formatUnits(
+                    borrowAmountBN,
+                    18
+                  );
+                  const usdValue = await this.getUSDValue(
+                    'astroport',
+                    borrowAmountDecimal
+                  );
+                  if (usdValue >= (questTask.minAmountUSD || 10)) {
+                    await this.questRepository.completeQuest(id, address);
+                    if (questStored.sequence === 1) {
+                      await this.campaignService.incrementParticipants(
+                        questStored.campaign_id
+                      );
+                    }
+                    return true;
+                  }
+                }
+              } else if (parsed.name === 'borrow') {
+                const borrowAmountBN = parsed.args[1] as bigint;
+                const borrowAmountDecimal = ethers.formatUnits(
+                  borrowAmountBN,
+                  18
+                );
+                const usdValue = await this.getUSDValue(
+                  'astroport',
+                  borrowAmountDecimal
+                );
+                if (usdValue >= (questTask.minAmountUSD || 10)) {
+                  await this.questRepository.completeQuest(id, address);
+                  if (questStored.sequence === 1) {
+                    await this.campaignService.incrementParticipants(
+                      questStored.campaign_id
+                    );
+                  }
+                  return true;
+                }
+              }
+            }
+          } catch (error) {
+            Logger.debug(`Borrow parse error: ${error.message}`);
             continue;
           }
         }

@@ -11,7 +11,9 @@ export interface QuestTask {
   abi_equals: any;
   contract: string;
   contract1?: string;
+  contracts?: string[];
   tokens: string[];
+  tokenAddress?: string;
   minAmountUSD?: number;
   abiFile: string;
   params?: any;
