@@ -13,6 +13,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { BindSocialDto } from './dto/bind-social.dto';
 import { UnbindSocialDto } from './dto/unbind-social.dto';
 import { EPointsType } from '../quests/interface';
+import jwt from 'jsonwebtoken';
 
 @Injectable()
 export class UserService {
@@ -145,7 +146,8 @@ export class UserService {
         return this.bindGitHub(dto);
       case ESocialPlatform.Discord:
         return this.bindDiscord(dto);
-      // ... case 'telegram': return this.bindTelegram(dto);
+      case ESocialPlatform.Telegram:
+        return this.bindTelegram(dto);
       default:
         throw new BadRequestException(`Unknown platform: ${platform}`);
     }
@@ -273,6 +275,53 @@ export class UserService {
       lowerAddress,
       'discord',
       discord_username
+    );
+    return { success: true };
+  }
+
+  private async bindTelegram(
+    dto: BindSocialDto
+  ): Promise<{ success: boolean }> {
+    const { address, token } = dto;
+    const lowerAddress = address.toLowerCase();
+
+    let decodedUserData: jwt.JwtPayload;
+    try {
+      const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET!);
+      if (typeof decoded === 'string') {
+        throw new BadRequestException('Invalid token structure.');
+      }
+      decodedUserData = decoded;
+    } catch (error: unknown) {
+      throw new BadRequestException(
+        `Token verification failed: ${(error as Error).message}`
+      );
+    }
+
+    if (!decodedUserData.username) {
+      throw new BadRequestException('No username provided in Telegram token');
+    }
+    if (!decodedUserData.id) {
+      throw new BadRequestException('No user id provided in Telegram token');
+    }
+
+    const telegram_username = decodedUserData.username;
+    const telegram_id = decodedUserData.id;
+
+    const existingUser = await this.userRepository.findByTelegramId(
+      telegram_id
+    );
+    if (existingUser && existingUser.address.toLowerCase() !== lowerAddress) {
+      throw new BadRequestException('Telegram account already taken');
+    }
+
+    await this.userRepository.updateField(
+      lowerAddress,
+      'telegram',
+      JSON.stringify({
+        id: telegram_id,
+        username: telegram_username,
+      })
     );
     return { success: true };
   }

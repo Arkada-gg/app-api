@@ -29,6 +29,7 @@ async function bootstrap() {
       'https://app.arkada.gg',
       'https://api.arkada.gg',
       'http://localhost:3000',
+      'http://localhost:3001',
       'http://127.0.0.1:3000',
       'https://dashboard.galxe.com',
       'https://galxe.com',

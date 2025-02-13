@@ -7,7 +7,7 @@ export interface IUser {
   avatar?: string;
   twitter?: string;
   discord?: string;
-  telegram?: string;
+  telegram?: any;
   github?: string;
   created_at?: Date;
   updated_at?: Date;
@@ -27,6 +27,17 @@ export class RewardDto {
 
   @ApiProperty({ example: '100', description: 'Значение награды' })
   value: string;
+}
+
+export class TelegramDto {
+  @ApiProperty({ example: '560000232', description: 'Айди юзера в телеграм' })
+  id: number;
+
+  @ApiProperty({
+    example: 'some_name123',
+    description: 'Никнейм юзера в телеграм',
+  })
+  username: string;
 }
 
 export class PointsDto {
@@ -275,11 +286,9 @@ export class GetUserResponse {
   twitter?: string;
 
   @ApiProperty({
-    example: 'johndoe',
-    description: 'Имя в Telegram',
-    required: false,
+    type: TelegramDto,
   })
-  telegram?: string;
+  telegram?: TelegramDto;
 
   @ApiProperty({
     example: 'johndoe',
