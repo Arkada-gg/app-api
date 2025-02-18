@@ -45,6 +45,13 @@ export class QuestController {
     if (!quest) {
       throw new BadRequestException(`No quest with id ${id}`);
     }
+    const campaignId = quest.campaign_id;
+    const campaign = await this.questService.getCampaignById(campaignId);
+    if (campaign.status === 'FINISHED' || campaign.finishedAt <= Date.now()) {
+      throw new BadRequestException(
+        'This campaign is finished; cannot proceed.'
+      );
+    }
     if (quest.type === 'quiz') {
       const isCompleted = await this.questService.checkQuestCompletion(
         id,
@@ -80,6 +87,14 @@ export class QuestController {
     if (!quest) {
       throw new BadRequestException(`No quest with id ${id}`);
     }
+    const campaignId = quest.campaign_id;
+    const campaign = await this.questService.getCampaignById(campaignId);
+    if (campaign.status === 'FINISHED' || campaign.finishedAt <= Date.now()) {
+      throw new BadRequestException(
+        'This campaign is finished; cannot proceed.'
+      );
+    }
+
     if (quest.type === 'onchain') {
       throw new BadRequestException('Cant complete qust if it is Onchain');
     }

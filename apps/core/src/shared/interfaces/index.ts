@@ -13,6 +13,7 @@ export interface IUser {
   updated_at?: Date;
   ref_owner: string;
   referral_code: string;
+  twitter_points: number;
 }
 
 export interface SessionRequest extends Request {
@@ -43,6 +44,9 @@ export class TelegramDto {
 export class PointsDto {
   @ApiProperty({ example: '100', description: 'Поинты за реферальную систему' })
   ref: number;
+
+  @ApiProperty({ example: '100', description: 'Поинты за daily начисления' })
+  daily: number;
 
   @ApiProperty({ example: '100', description: 'Поинты за кампании' })
   base_campaign: number;
@@ -195,6 +199,24 @@ export class GetCampaignResponse {
     description: 'Краткое описание',
   })
   short_description: string;
+
+  @ApiProperty({
+    example: 'Наименование проекта',
+    description: 'Краткое описание',
+  })
+  project_name: string;
+
+  @ApiProperty({
+    example: 'Описание проекта',
+    description: 'Краткое описание',
+  })
+  project_description: string;
+
+  @ApiProperty({
+    example: 'IN_PROGRESS',
+    description: 'Статус кампании',
+  })
+  status: string;
 }
 
 export class GetCampaignByIdOrSlugResponse {
@@ -263,6 +285,24 @@ export class GetCampaignByIdOrSlugResponse {
     description: 'Краткое описание',
   })
   short_description: string;
+
+  @ApiProperty({
+    example: 'Наименование проекта',
+    description: 'Краткое описание',
+  })
+  project_name: string;
+
+  @ApiProperty({
+    example: 'Описание проекта',
+    description: 'Краткое описание',
+  })
+  project_description: string;
+
+  @ApiProperty({
+    example: 'IN_PROGRESS',
+    description: 'Статус кампании',
+  })
+  status: string;
 }
 
 export class GetUserResponse {

@@ -38,4 +38,5 @@ export enum EPointsType {
   Campaign = 'base_campaign',
   Quest = 'base_quest',
   Referral = 'referral',
+  Daily = 'daily',
 }

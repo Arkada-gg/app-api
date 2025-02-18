@@ -60,6 +60,20 @@ export class UserService {
     return updatedUser;
   }
 
+  async getLeaderboard(
+    period: 'week' | 'month',
+    includeRef: boolean,
+    last: boolean,
+    userAddress?: string
+  ) {
+    return this.userRepository.getLeaderboard(
+      period,
+      includeRef,
+      last,
+      userAddress
+    );
+  }
+
   async updateUser(
     updateUserDto: UpdateUserDto,
     file: Multer.file
@@ -336,8 +350,25 @@ export class UserService {
     }
   }
 
-  async updatePoints(address: string, points: number, pointType: EPointsType) {
+  async updatePoints(address: string, points: number, pointType: any) {
     await this.userRepository.updatePoints(address, points, pointType);
+  }
+
+  async findUsersWithTwitterChunk(offset: number, batch_size: number) {
+    return await this.userRepository.findUsersWithTwitterChunk(
+      offset,
+      batch_size
+    );
+  }
+
+  async setTwitterScorePoints(userId: string, newPoints: number) {
+    try {
+      await this.userRepository.updateTwitterPoints(userId, newPoints);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `setTwitterScorePoints failed: ${error.message}`
+      );
+    }
   }
 
   async getPointsDetails(

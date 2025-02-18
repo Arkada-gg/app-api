@@ -8,6 +8,7 @@ import { CampaignModule } from '../campaigns/campaign.module';
 import { PriceModule } from '../price/price.module';
 import { NftController } from './nft.controller';
 import { AuthModule } from '../auth/auth.module';
+import { DailyCheckJob } from './jobs/daily-check.job';
 
 @Module({
   imports: [
@@ -18,6 +19,6 @@ import { AuthModule } from '../auth/auth.module';
     AuthModule,
   ],
   controllers: [QuestController, NftController],
-  providers: [QuestService, QuestRepository],
+  providers: [QuestService, QuestRepository, DailyCheckJob],
 })
 export class QuestModule {}

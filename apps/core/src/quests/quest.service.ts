@@ -61,6 +61,10 @@ export class QuestService {
     return await this.questRepository.getAllCompletedQuestsByUser(address);
   }
 
+  async getCampaignById(id: string) {
+    return await this.campaignService.getCampaignByIdOrSlug(id);
+  }
+
   async getCompletedQuestsByUserInCampaign(
     campaignId: string,
     address: string
@@ -260,7 +264,7 @@ export class QuestService {
     }
 
     const nowUnix = Math.floor(Date.now() / 1000);
-    const weekAgoUnix = nowUnix - 30 * 24 * 60 * 60;
+    const weekAgoUnix = nowUnix - 30 * 48 * 60 * 60;
 
     const queryParams = new URLSearchParams({
       module: 'account',
@@ -426,39 +430,90 @@ export class QuestService {
         (sig) => sig === '0x414a8809'
       );
       if (ifCaseMethod414a.length > 0) {
-        const url =
-          'https://soneium.blockscout.com/api?module=token&action=getTokenHolders&contractaddress=0x963c039406F8b10D3a0691328B4d2AE90FA43230&page=1&offset=10000';
-
-        const resTrace = await fetch(url, { method: 'GET' });
-        if (!resTrace.ok) {
-          Logger.error(
-            `Error fetching balance: ${resTrace.status} / ${resTrace.statusText}`
+        const contractAddress = questTask.contract;
+        if (
+          contractAddress.toLowerCase() ===
+          '0xEB255E4669Da7FeEf1F746a5a778b4e08b65a1A7'.toLowerCase()
+        ) {
+          const contractABI = [
+            'function balanceOf(address account, uint256 id) view returns (uint256)',
+          ];
+          const contract = new ethers.Contract(
+            contractAddress,
+            contractABI,
+            soneiumProvider
           );
-          return false;
-        }
 
-        const data = await resTrace.json();
-        if (!data || !data.result) {
-          Logger.error('Invalid balance response');
+          const newBalance = await contract.balanceOf(address, 0);
+
+          if (+newBalance.toString() > 0) {
+            await this.questRepository.completeQuest(id, address);
+            if (questStored.sequence === 1) {
+              await this.campaignService.incrementParticipants(
+                questStored.campaign_id
+              );
+            }
+            return true;
+          }
           return false;
         }
-        for (const user of data.result) {
-          try {
-            if (user.address.toLowerCase() === address.toLowerCase()) {
-              await this.questRepository.completeQuest(id, address);
-              if (questStored.sequence === 1) {
-                await this.campaignService.incrementParticipants(
-                  questStored.campaign_id
-                );
-              }
-              return true;
-            }
-          } catch (error) {
-            Logger.error(`Ошибка обработки транзакции: ${error.message}`);
-            continue;
+        const contractABI = [
+          'function balanceOf(address owner) view returns (uint256)',
+        ];
+
+        const contract = new ethers.Contract(
+          contractAddress,
+          contractABI,
+          soneiumProvider
+        );
+
+        const balance = await contract.balanceOf(address);
+
+        if (+balance.toString() > 0) {
+          await this.questRepository.completeQuest(id, address);
+          if (questStored.sequence === 1) {
+            await this.campaignService.incrementParticipants(
+              questStored.campaign_id
+            );
           }
+          return true;
         }
         return false;
+
+        // const url =
+        //   'https://soneium.blockscout.com/api?module=token&action=getTokenHolders&contractaddress=0x963c039406F8b10D3a0691328B4d2AE90FA43230&page=1';
+
+        // const resTrace = await fetch(url, { method: 'GET' });
+        // if (!resTrace.ok) {
+        //   Logger.error(
+        //     `Error fetching balance: ${resTrace.status} / ${resTrace.statusText}`
+        //   );
+        //   return false;
+        // }
+
+        // const data = await resTrace.json();
+        // console.log('------>', data);
+        // if (!data || !data.result) {
+        //   Logger.error('Invalid balance response');
+        //   return false;
+        // }
+        // for (const user of data.result) {
+        //   try {
+        //     if (user.address.toLowerCase() === address.toLowerCase()) {
+        // await this.questRepository.completeQuest(id, address);
+        // if (questStored.sequence === 1) {
+        //   await this.campaignService.incrementParticipants(
+        //     questStored.campaign_id
+        //   );
+        // }
+        // return true;
+        //     }
+        //   } catch (error) {
+        //     Logger.error(`Ошибка обработки транзакции: ${error.message}`);
+        //     continue;
+        //   }
+        // }
+        // return false;
       }
 
       const url = this.createBlockscoutUrl(questTask.chain, address);
@@ -671,6 +726,94 @@ export class QuestService {
         return false;
       }
 
+      const ifCaseBuyNew = questTask.abi_to_find.filter((el) =>
+        el.includes('function buy(uint256 weth2Eth')
+      );
+
+      if (ifCaseBuyNew.length > 0) {
+        for (const tx of userTransactions) {
+          try {
+            for (const abiStr of ifCaseBuyNew) {
+              const iface = new ethers.Interface([abiStr]);
+              let parsed;
+              try {
+                parsed = iface.parseTransaction({ data: tx.input });
+              } catch (e) {
+                continue;
+              }
+              if (!parsed) continue;
+
+              if (parsed.name === 'buy') {
+                await this.questRepository.completeQuest(id, address);
+                if (questStored.sequence === 1) {
+                  await this.campaignService.incrementParticipants(
+                    questStored.campaign_id
+                  );
+                }
+                return true;
+              }
+            }
+          } catch (error) {
+            Logger.error(`Ошибка обработки транзакции (buy): ${error.message}`);
+            continue;
+          }
+        }
+        return false;
+      }
+
+      const depositDelegateSig = questTask.abi_to_find.find((sig) => {
+        if (
+          sig.includes('swapUnderlyingToLst') ||
+          sig.includes('depositTokenDelegate')
+        ) {
+          return questTask.abi_to_find;
+        }
+      });
+
+      if (depositDelegateSig) {
+        for (const tx of userTransactions) {
+          try {
+            const iface = new ethers.Interface(questTask.abi_to_find);
+
+            let parsed;
+            try {
+              parsed = iface.parseTransaction({ data: tx.input });
+            } catch (err) {
+              continue;
+            }
+
+            if (!parsed) continue;
+
+            if (
+              parsed.name === 'depositTokenDelegate' ||
+              parsed.name === 'swapUnderlyingToLst'
+            ) {
+              const tokenAmountBN = parsed.args[0] as bigint;
+
+              const tokenAmount = tokenAmountBN.toString();
+              const depositAmountDecimal = ethers.formatUnits(tokenAmount, 18);
+              const usdValue = await this.getUSDValue(
+                'astroport',
+                depositAmountDecimal
+              );
+              if (usdValue >= questTask.minAmountUSD) {
+                await this.questRepository.completeQuest(id, address);
+                if (questStored.sequence === 1) {
+                  await this.campaignService.incrementParticipants(
+                    questStored.campaign_id
+                  );
+                }
+                return true;
+              }
+            }
+          } catch (error) {
+            Logger.error(`Ошибка обработки транзакции: ${error.message}`);
+            continue;
+          }
+        }
+        return false;
+      }
+
       const ifCaseBorrow = questTask.abi_to_find.filter((el) =>
         el.includes('function borrow')
       );
@@ -820,7 +963,7 @@ export class QuestService {
       // }
 
       const ifCaseBuy = questTask.abi_to_find.filter((el) =>
-        el.includes('function buy')
+        el.includes('function buy((bytes path,address')
       );
       if (ifCaseBuy.length > 0) {
         for (const tx of userTransactions) {

@@ -8,6 +8,7 @@ import { CampaignModule } from './campaigns/campaign.module';
 import { QuestModule } from './quests/quest.module';
 import { PriceModule } from './price/price.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { LeaderboardModule } from './leaderboard/leaderboard.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     CampaignModule,
     QuestModule,
     PriceModule,
+    LeaderboardModule,
   ],
 })
 export class AppModule {}

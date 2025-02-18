@@ -34,6 +34,8 @@ async function bootstrap() {
       'https://dashboard.galxe.com',
       'https://galxe.com',
       'https://app-galxe.com',
+      'https://app-ui-git-testing-deployment-arkadaminds-projects.vercel.app',
+      'https://3105-2a00-f41-58f2-71fc-91db-a9d7-2ddc-f08b.ngrok-free.app',
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,

@@ -47,17 +47,21 @@ export class UserRepository {
 
       let refPoints = 0;
       let baseCampaignPoints = 0;
+      let dailyPoints = 0;
 
       for (const row of pointsResult.rows) {
         if (row.point_type === 'referral') {
           refPoints = +row.sum;
         } else if (row.point_type === 'base_campaign') {
           baseCampaignPoints = row.sum;
+        } else if (row.point_type === 'daily') {
+          dailyPoints = row.sum;
         }
       }
 
       user.points = {
         ref: +refPoints,
+        daily: +dailyPoints,
         base_campaign: +baseCampaignPoints,
         total: +user.total_points,
       };
@@ -79,6 +83,40 @@ export class UserRepository {
         [lower]
       );
       return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async findUsersWithTwitterChunk(
+    offset: number,
+    limit: number
+  ): Promise<any[]> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        SELECT address AS id, twitter AS twitterHandle
+        FROM users
+        WHERE twitter IS NOT NULL
+        ORDER BY address
+        LIMIT $1 OFFSET $2
+      `;
+      const result = await client.query(query, [limit, offset]);
+      return result.rows;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async updateTwitterPoints(userId: string, points: number): Promise<void> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        UPDATE users
+        SET twitter_points = $1
+        WHERE address = $2
+      `;
+      await client.query(query, [points, userId.toLowerCase()]);
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
@@ -289,6 +327,165 @@ export class UserRepository {
         [refCode]
       );
       return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async getLeaderboard(
+    period: 'week' | 'month',
+    includeRef = true,
+    last = false,
+    userAddress?: string
+  ): Promise<{
+    top: Array<{
+      address: string;
+      name: string | null;
+      avatar: string | null;
+      twitter: string | null;
+      points: number;
+      campaigns_completed: number;
+      rank: number;
+    }>;
+  }> {
+    const client = this.dbService.getClient();
+
+    // 1) Определяем промежуток (startIso, endIso) — тот же код
+    const now = new Date();
+    let startDate: Date;
+    let endDate: Date;
+    if (period === 'week') {
+      const dayOfWeek = (now.getDay() + 6) % 7;
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - dayOfWeek);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+
+      if (last) {
+        startDate.setDate(startDate.getDate() - 7);
+        endDate.setDate(endDate.getDate() - 7);
+      }
+    } else {
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      startDate = new Date(year, month, 1, 0, 0, 0, 0);
+      endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+      if (last) {
+        startDate.setMonth(startDate.getMonth() - 1);
+        endDate = new Date(
+          startDate.getFullYear(),
+          startDate.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999
+        );
+      }
+    }
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+
+    const excludeReferral = includeRef ? '' : `AND up.point_type != 'referral'`;
+
+    const cte = `
+      WITH ranks AS (
+        SELECT 
+          u.address,
+          u.name,
+          u.avatar,
+          u.twitter,
+          COALESCE(SUM(up.points),0) AS total_points,
+          (
+            SELECT COUNT(*) 
+            FROM campaign_completions cc
+            WHERE cc.user_address = u.address
+              AND cc.completed_at >= $1
+              AND cc.completed_at <= $2
+          ) AS campaigns_completed,
+          ROW_NUMBER() OVER (ORDER BY COALESCE(SUM(up.points),0) DESC) AS rank
+        FROM users u
+        LEFT JOIN user_points up
+          ON u.address = up.user_address
+          AND up.created_at >= $1
+          AND up.created_at <= $2
+          ${excludeReferral}
+        GROUP BY u.address, u.name, u.avatar, u.twitter
+        HAVING COALESCE(SUM(up.points),0) > 0
+      )
+    `;
+
+    const top50sql = `
+      ${cte}
+      SELECT address, name, avatar, twitter, total_points, campaigns_completed, rank
+      FROM ranks
+      WHERE rank <= 5
+      ORDER BY rank
+    `;
+
+    if (!userAddress) {
+      const topRes = await client.query(top50sql, [startIso, endIso]);
+      const top = topRes.rows.map((row) => ({
+        address: row.address,
+        name: row.name,
+        avatar: row.avatar,
+        twitter: row.twitter,
+        points: Number(row.total_points),
+        campaigns_completed: Number(row.campaigns_completed),
+        rank: Number(row.rank),
+      }));
+      return { top };
+    }
+
+    const userRankSql = `
+      ${cte}
+      SELECT address, name, avatar, twitter, total_points, campaigns_completed, rank
+      FROM ranks
+      WHERE address = $3
+    `;
+
+    try {
+      const [topRes, userRes] = await Promise.all([
+        client.query(top50sql, [startIso, endIso]),
+        client.query(userRankSql, [
+          startIso,
+          endIso,
+          userAddress.toLowerCase(),
+        ]),
+      ]);
+
+      const top = topRes.rows.map((r) => ({
+        address: r.address,
+        name: r.name,
+        avatar: r.avatar,
+        twitter: r.twitter,
+        points: Number(r.total_points),
+        campaigns_completed: Number(r.campaigns_completed),
+        rank: Number(r.rank),
+      }));
+
+      if (userRes.rows.length === 0) {
+        return { top };
+      }
+
+      const userRow = userRes.rows[0];
+      const userRank = Number(userRow.rank);
+
+      if (userRank > 5) {
+        top.push({
+          address: userRow.address,
+          name: userRow.name,
+          avatar: userRow.avatar,
+          twitter: userRow.twitter,
+          points: Number(userRow.total_points),
+          campaigns_completed: Number(userRow.campaigns_completed),
+          rank: userRank,
+        });
+      }
+
+      return { top };
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
