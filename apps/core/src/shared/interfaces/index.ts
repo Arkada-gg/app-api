@@ -16,6 +16,14 @@ export interface IUser {
   twitter_points: number;
 }
 
+export interface ITransaction {
+  hash: string;
+  event_name: string;
+  block_number: number;
+  args: Record<string, any>; // JSONB can be any key-value object
+  created_at: Date;
+}
+
 export interface SessionRequest extends Request {
   userAddress: { address: string };
 }

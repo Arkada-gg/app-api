@@ -1,6 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import Web3 from 'web3';
 import { UserService } from '../../user/user.service';
+import {
+  NewHeadsSubscription,
+  LogsSubscription,
+} from 'web3/lib/commonjs/eth.exports';
+import { TransactionsService } from '../../transactions/transactions.service';
 
 const dailyCheckABI = [
   {
@@ -79,20 +84,29 @@ export class DailyCheckJob implements OnModuleInit {
   private readonly logger = new Logger(DailyCheckJob.name);
   private web3: Web3;
   private contract: any;
-  private subscription: any;
+  private subscription: LogsSubscription;
+
+  private receiveBlockTimestamp: number;
+  private heartBeatTimer: NodeJS.Timeout | null = null;
+
+  private blocksSubscription: NewHeadsSubscription;
+
   private reconnectTimer: NodeJS.Timeout | null = null;
 
   // private readonly wsUrl = `wss://soneium.rpc.scs.startale.com?apikey=${process.env.STARTALE_API_KEY}`;
   private readonly wsUrl = 'wss://soneium.gateway.tenderly.co';
   private readonly contractAddress = process.env.DAILY_CHECK_ADDRESS;
 
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly transactionsService: TransactionsService
+  ) {}
 
-  onModuleInit() {
+  async onModuleInit() {
     this.connectAndSubscribe();
   }
 
-  private connectAndSubscribe() {
+  private async connectAndSubscribe() {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -109,63 +123,113 @@ export class DailyCheckJob implements OnModuleInit {
         `Trying to subscribe to "DailyCheck" on ${this.contractAddress}...`
       );
 
-      this.subscription = this.contract.events.DailyCheck();
+      this.subscription = await this.contract.events.DailyCheck();
 
       this.subscription.on('connected', (subscriptionId: string) => {
         this.logger.log(
           `DailyCheck subscription connected, ID: ${subscriptionId}`
         );
+        this.startHeartbeat();
       });
 
       this.subscription.on('data', async (event) => {
-        const { caller, streak, timestamp } = event.returnValues as any;
-        this.logger.debug(
-          `DailyCheck fired: caller=${caller}, streak=${streak}, timestamp=${timestamp}`
-        );
-
-        const streakNum = Number(streak);
-        const points = streakNum < 30 ? streakNum : 30;
-
-        try {
-          await this.userService.updatePoints(caller, points, 'daily');
-          this.logger.log(
-            `DailyCheck: user=${caller}, streak=${streakNum}, awarded=${points} daily pts`
-          );
-        } catch (err) {
-          this.logger.error(
-            `Ошибка при начислении очков: ${(err as Error).message}`
-          );
-        }
+        await this.handleDailyCheckEvent(event);
       });
+
       this.subscription.on('error', (err: any) => {
         this.logger.error(`Subscription error: ${err.message}`);
         this.handleCloseOrError();
       });
 
       this.logger.log(`connectAndSubscribe finished (attempt).`);
+      this.fetchPastEvents();
     } catch (error) {
       this.logger.error(`Failed to subscribe: ${error.message}`);
       this.scheduleReconnect();
     }
   }
 
-  private handleCloseOrError() {
+  private async fetchPastEvents() {
+    try {
+      const latestBlock = await this.web3.eth.getBlockNumber();
+      const pastEvents = await this.contract.getPastEvents('DailyCheck', {
+        fromBlock: Number(latestBlock) - 100, // Adjust range based on needs
+        toBlock: 'latest',
+      });
+      const existedTransactions = await Promise.all(
+        pastEvents.map((event) =>
+          this.transactionsService.findByHash(event.transactionHash)
+        )
+      );
+
+      await Promise.all(
+        pastEvents.map(async (event, index) => {
+          if (existedTransactions[index]) return;
+          await this.handleDailyCheckEvent(event);
+        })
+      );
+      this.logger.log(`Fetched ${pastEvents.length} past DailyCheck events.`);
+    } catch (error) {
+      this.logger.error(`Error fetching past events: ${error.message}`);
+    }
+  }
+
+  private async handleDailyCheckEvent(event: any) {
+    try {
+      await this.transactionsService.createTx({
+        hash: event.transactionHash,
+        event_name: event.event,
+        block_number: event.blockNumber,
+        args: event.returnValues,
+      });
+      const { caller, streak, timestamp } = event.returnValues;
+      this.logger.debug(
+        `DailyCheck fired: caller=${caller}, streak=${streak}, timestamp=${timestamp}`
+      );
+      const streakNum = Number(streak);
+      const points = streakNum < 30 ? streakNum : 30;
+      await this.userService.updatePoints(caller, points, 'daily');
+      this.logger.log(
+        `DailyCheck: user=${caller}, streak=${streakNum}, awarded=${points} daily pts`
+      );
+    } catch (err) {
+      this.logger.error(`Error handling event: ${(err as Error).message}`);
+    }
+  }
+
+  private async handleCloseOrError() {
     this.logger.warn('Will try to reconnect in 5 seconds...');
     try {
       if (this.subscription) {
-        this.subscription.unsubscribe((err: any, success: boolean) => {
-          if (success) {
-            this.logger.log('Unsubscribed old subscription successfully.');
-          }
-          if (err) {
-            this.logger.error(`Error unsubscribing: ${err.message}`);
-          }
-        });
+        await this.subscription.unsubscribe();
+      }
+      if (this.blocksSubscription) {
+        await this.blocksSubscription.unsubscribe();
       }
     } catch (e) {
       this.logger.error(`Error during unsubscribing: ${e.message}`);
     }
     this.scheduleReconnect();
+  }
+
+  // Avoid the Websocket connection to go idle by subscribing to ‘newBlockHeaders’
+  private async startHeartbeat() {
+    this.logger.debug('Starting WebSocket heartbeat...');
+    this.blocksSubscription = await this.web3.eth.subscribe('newBlockHeaders');
+    this.logger.debug('WebSocket heartbeat started.');
+    this.blocksSubscription.on('data', () => {
+      this.receiveBlockTimestamp = Date.now();
+    });
+
+    if (this.heartBeatTimer) {
+      clearInterval(this.heartBeatTimer);
+    }
+
+    this.heartBeatTimer = setInterval(() => {
+      if (Date.now() - this.receiveBlockTimestamp > 20000)
+        return this.handleCloseOrError();
+      this.logger.debug('WebSocket heartbeat status: OK');
+    }, 10000);
   }
 
   private scheduleReconnect() {
