@@ -221,13 +221,14 @@ export class DailyCheckJob implements OnModuleInit {
       this.receiveBlockTimestamp = Date.now();
     });
 
-    if (this.heartBeatTimer) {
-      clearInterval(this.heartBeatTimer);
-    }
-
     this.heartBeatTimer = setInterval(() => {
-      if (Date.now() - this.receiveBlockTimestamp > 20000)
+      if (Date.now() - this.receiveBlockTimestamp > 20000) {
+        clearInterval(this.heartBeatTimer);
+        this.heartBeatTimer = null;
+
         return this.handleCloseOrError();
+      }
+
       this.logger.debug('WebSocket heartbeat status: OK');
     }, 10000);
   }
