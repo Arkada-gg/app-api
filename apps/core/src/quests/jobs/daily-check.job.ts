@@ -82,7 +82,8 @@ export class DailyCheckJob implements OnModuleInit {
   private subscription: any;
   private reconnectTimer: NodeJS.Timeout | null = null;
 
-  private readonly wsUrl = `wss://soneium.rpc.scs.startale.com?apikey=${process.env.STARTALE_API_KEY}`;
+  // private readonly wsUrl = `wss://soneium.rpc.scs.startale.com?apikey=${process.env.STARTALE_API_KEY}`;
+  private readonly wsUrl = 'wss://soneium.gateway.tenderly.co';
   private readonly contractAddress = process.env.DAILY_CHECK_ADDRESS;
 
   constructor(private readonly userService: UserService) {}
