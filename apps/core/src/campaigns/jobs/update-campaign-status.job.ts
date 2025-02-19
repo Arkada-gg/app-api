@@ -8,7 +8,7 @@ export class CampaignStatusJob {
 
   constructor(private readonly dbService: DatabaseService) {}
 
-  @Cron('*/1 * * * *')
+  @Cron('*/3 * * * *')
   async handleCampaignFinishStatus() {
     this.logger.log('CampaignStatusJob started: updating FINISHED campaigns.');
 

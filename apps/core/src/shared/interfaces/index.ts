@@ -404,4 +404,11 @@ export class GetUserResponse {
     required: false,
   })
   ref_count?: number;
+
+  @ApiProperty({
+    example: '10',
+    description: 'Твитер скор',
+    required: false,
+  })
+  twitter_points: number;
 }

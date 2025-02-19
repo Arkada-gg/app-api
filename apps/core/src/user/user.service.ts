@@ -74,6 +74,10 @@ export class UserService {
     );
   }
 
+  async getUsersWithPoints(): Promise<{ address: string; points: number }[]> {
+    return this.userRepository.findUsersWithPoints();
+  }
+
   async updateUser(
     updateUserDto: UpdateUserDto,
     file: Multer.file

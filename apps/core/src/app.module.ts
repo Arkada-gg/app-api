@@ -9,6 +9,7 @@ import { QuestModule } from './quests/quest.module';
 import { PriceModule } from './price/price.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
+import { AscModule } from './asc/asc.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { LeaderboardModule } from './leaderboard/leaderboard.module';
     QuestModule,
     PriceModule,
     LeaderboardModule,
+    AscModule,
   ],
 })
 export class AppModule {}

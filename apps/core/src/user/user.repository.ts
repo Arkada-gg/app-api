@@ -527,6 +527,16 @@ export class UserRepository {
       .toUpperCase();
   }
 
+  async findUsersWithPoints(): Promise<{ address: string; points: number }[]> {
+    const client = this.dbService.getClient();
+    const res = await client.query(`
+      SELECT address, points
+      FROM users
+      WHERE points > 0
+    `);
+    return res.rows;
+  }
+
   async updatePoints(
     address: string,
     points: number,
