@@ -18,16 +18,56 @@ interface AcsDistributionItem {
 export class AcsService {
   private readonly logger = new Logger(AcsService.name);
   private readonly API_SECRET = process.env.ACS_API_SECRET;
+  private readonly GRAPHQL_URL = 'https://acs-graphql.astar.network/graphql';
   private readonly DEFI_ID = 28;
-  private readonly ACS_POOL = 100000;
+  private ACS_POOL;
   private readonly ACS_API_URL =
-    'https://test4.xzsean.eu.org/acs/addDiscretionaryPointsBatch';
+    'https://acs-api.astar.network/acs/addDiscretionaryPointsBatch';
   private readonly REPORTS_DIR = path.join(__dirname, '..', '..', 'reports');
-  private readonly BATCH_SIZE = 1000;
+  private readonly BATCH_SIZE = 500;
 
   constructor(private readonly userService: UserService) {
     if (!fs.existsSync(this.REPORTS_DIR)) {
       fs.mkdirSync(this.REPORTS_DIR);
+    }
+  }
+
+  private async updateAcsPoolFromGraphQL(): Promise<void> {
+    try {
+      const query = `
+        query ExampleQuery {
+          getAllDefiRemainPoint {
+            dailyPoints
+            defiId
+            defiName
+            remainingPoints
+            totalReceivedPoints
+          }
+        }
+      `;
+      const resp = await axios.post<{ data: { getAllDefiRemainPoint: any[] } }>(
+        this.GRAPHQL_URL,
+        { query }
+      );
+      const data = resp.data?.data?.getAllDefiRemainPoint ?? [];
+
+      const found = data.find((item) => item.defiId === this.DEFI_ID);
+      if (found) {
+        this.ACS_POOL = found.remainingPoints;
+        this.logger.log(
+          `Успешно обновили значение ACS_POOL из GraphQL: ${this.ACS_POOL}`
+        );
+      } else {
+        this.logger.warn(
+          `Не нашли в GraphQL данных для defiId=${this.DEFI_ID}. Оставляем ACS_POOL=0.`
+        );
+        this.ACS_POOL = 0;
+      }
+    } catch (error) {
+      this.logger.error(
+        `Не удалось получить данные из GraphQL: ${error.message}`
+      );
+      this.ACS_POOL = 0;
     }
   }
 
@@ -40,7 +80,6 @@ export class AcsService {
     timestamp: number,
     nonce: string
   ): string {
-    console.log('------>', items);
     const signStr = items.reduce((acc, item, idx) => {
       const itemStr = Object.keys(item)
         .sort()
@@ -74,6 +113,7 @@ export class AcsService {
   }
 
   async distributeAcs(): Promise<void> {
+    await this.updateAcsPoolFromGraphQL();
     const users = await this.userService.getUsersWithPoints();
     if (users.length === 0) {
       this.logger.warn('Нет пользователей для распределения ACS.');
@@ -88,12 +128,14 @@ export class AcsService {
       return;
     }
 
-    const acsItems: AcsDistributionItem[] = users.map((user) => ({
-      userAddress: Web3.utils.toChecksumAddress(user.address),
-      defiId: this.DEFI_ID,
-      acsAmount: Math.floor((user.points / totalPoints) * this.ACS_POOL),
-      description: 'Arkada ACS allocation',
-    }));
+    const acsItems: AcsDistributionItem[] = users
+      .map((user) => ({
+        userAddress: Web3.utils.toChecksumAddress(user.address),
+        defiId: this.DEFI_ID,
+        acsAmount: Math.floor((user.points / totalPoints) * this.ACS_POOL),
+        description: 'Arkada ACS allocation',
+      }))
+      .filter((item) => item.acsAmount > 0);
 
     const batches = this.chunkArray(acsItems, this.BATCH_SIZE);
     const csvFilePath = this.getCsvFilePath();
@@ -105,22 +147,11 @@ export class AcsService {
     csvStream.pipe(writableStream);
 
     for (const batch of batches) {
-      console.log('-batch----->', batch);
       const timestamp = Date.now();
       const nonce = this.generateNonce();
       const signature = this.generateSignature(batch, timestamp, nonce);
 
       try {
-        console.log(
-          'this.ACS_API_URL------>',
-          this.ACS_API_URL,
-          'x-timestamp--->',
-          timestamp.toString(),
-          '-x-signature-->',
-          signature,
-          'x-nonce---->',
-          nonce
-        );
         const res = await axios.post(this.ACS_API_URL, batch, {
           headers: {
             'x-timestamp': timestamp.toString(),
@@ -129,8 +160,6 @@ export class AcsService {
             'Content-Type': 'application/json',
           },
         });
-
-        console.log('------>', res);
 
         this.logger.log(
           `ACS успешно отправлены для ${batch.length} пользователей.`
@@ -141,7 +170,6 @@ export class AcsService {
         });
       } catch (error) {
         if (error.response) {
-          // Ошибка с сервера ACS API
           this.logger.error(
             `Ошибка при отправке ACS: ${
               error.response.status
@@ -149,7 +177,6 @@ export class AcsService {
           );
           console.error('🔴 Полный ответ ошибки:', error.response.data);
         } else if (error.request) {
-          // Запрос ушел, но не было ответа
           this.logger.error(
             '🔴 Запрос был отправлен, но ответа нет:',
             error.request
@@ -159,7 +186,6 @@ export class AcsService {
             error.request
           );
         } else {
-          // Ошибка в процессе создания запроса
           this.logger.error(`🔴 Ошибка при отправке запроса: ${error.message}`);
           console.error(`🔴 Ошибка при отправке запроса: ${error.message}`);
         }

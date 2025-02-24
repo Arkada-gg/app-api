@@ -8,15 +8,15 @@ export class AcsJob {
 
   constructor(private readonly acsService: AcsService) {}
 
-  @Cron('0 1 * * *')
+  @Cron('0 1,13 * * *')
   async handleAcsDistribution() {
-    this.logger.log('🚀 Запуск джобы распределения ACS...');
+    this.logger.log('Запуск джобы распределения ACS...');
 
     try {
       await this.acsService.distributeAcs();
-      this.logger.log('✅ Распределение ACS завершено.');
+      this.logger.log('Распределение ACS завершено.');
     } catch (error) {
-      this.logger.error(`❌ Ошибка в ACS джобе: ${error.message}`);
+      this.logger.error(`Ошибка в ACS джобе: ${error.message}`);
     }
   }
 }

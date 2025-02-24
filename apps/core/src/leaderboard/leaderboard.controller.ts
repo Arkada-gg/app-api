@@ -7,6 +7,53 @@ import { UserService } from '../user/user.service';
 export class LeaderboardController {
   constructor(private readonly userService: UserService) {}
 
+  @Get('/leaderboard')
+  @ApiQuery({
+    name: 'startAt',
+    required: false,
+    type: String,
+    example: '2025-01-01T00:00:00.000Z',
+  })
+  @ApiQuery({
+    name: 'endAt',
+    required: false,
+    type: String,
+    example: '2025-03-10T12:00:00.000Z',
+  })
+  @ApiQuery({
+    name: 'excludeRef',
+    required: false,
+    type: Boolean,
+    example: false,
+  })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 50 })
+  @ApiQuery({
+    name: 'address',
+    required: false,
+    type: String,
+    example: '0xUser',
+  })
+  async getLeaderboard(
+    @Query('startAt') startAt?: string,
+    @Query('endAt') endAt?: string,
+    @Query('excludeRef') excludeRef = 'false',
+    @Query('limit') limit = '50',
+    @Query('address') userAddr?: string
+  ) {
+    // Парсим excludeRef (строка -> boolean)
+    const doExcludeRef = excludeRef === 'true';
+    // Парсим limit (строка -> number)
+    const limitNum = parseInt(limit, 10) || 50;
+
+    return this.userService.getLeaderboardCustom(
+      startAt,
+      endAt,
+      doExcludeRef,
+      limitNum,
+      userAddr
+    );
+  }
+
   @Get('/weekly-leaderboard')
   @ApiQuery({
     name: 'includeRef',

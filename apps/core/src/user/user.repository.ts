@@ -331,6 +331,164 @@ export class UserRepository {
       throw new InternalServerErrorException(error.message);
     }
   }
+  async getLeaderboardCustom(
+    startAt: string | undefined,
+    endAt: string | undefined,
+    excludeRef: boolean,
+    limit: number,
+    userAddress?: string
+  ): Promise<{
+    top: Array<{
+      address: string;
+      name: string | null;
+      avatar: string | null;
+      twitter: string | null;
+      points: number;
+      campaigns_completed: number;
+      rank: number;
+    }>;
+  }> {
+    const defaultStart = new Date('2025-01-01T00:00:00Z');
+    const startDate = startAt ? new Date(startAt) : defaultStart;
+    const endDate = endAt ? new Date(endAt) : new Date();
+
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+
+    const referralCondition = excludeRef
+      ? `AND up.point_type != 'referral'`
+      : '';
+    console.log('------>', 12321312);
+    const client = this.dbService.getClient();
+
+    const cte = `
+      WITH user_points_aggregated AS (
+        SELECT
+          up.user_address,
+          COALESCE(SUM(up.points), 0) AS total_points
+        FROM user_points up
+        WHERE up.created_at BETWEEN $1 AND $2
+          ${referralCondition}
+        GROUP BY up.user_address
+      ),
+      campaigns_completed_aggregated AS (
+        SELECT
+          cc.user_address,
+          COUNT(*) AS campaigns_completed
+        FROM campaign_completions cc
+        WHERE cc.completed_at BETWEEN $1 AND $2
+        GROUP BY cc.user_address
+      ),
+      ranked_users AS (
+        SELECT
+          u.address,
+          u.name,
+          u.avatar,
+          u.twitter,
+          COALESCE(upa.total_points, 0) AS total_points,
+          COALESCE(cca.campaigns_completed, 0) AS campaigns_completed,
+          ROW_NUMBER() OVER (ORDER BY COALESCE(upa.total_points, 0) DESC) AS rank
+        FROM users u
+        LEFT JOIN user_points_aggregated upa
+          ON u.address = upa.user_address
+        LEFT JOIN campaigns_completed_aggregated cca
+          ON u.address = cca.user_address
+        WHERE COALESCE(upa.total_points, 0) > 0
+      )
+    `;
+
+    const topNsql = `
+      ${cte}
+      SELECT
+        address,
+        name,
+        avatar,
+        twitter,
+        total_points,
+        campaigns_completed,
+        rank
+      FROM ranked_users
+      ORDER BY rank
+      LIMIT $3
+    `;
+
+    if (!userAddress) {
+      try {
+        console.log('------>', limit);
+        const topRes = await client.query(topNsql, [startIso, endIso, +limit]);
+        const top = topRes.rows.map((row) => ({
+          address: row.address,
+          name: row.name,
+          avatar: row.avatar,
+          twitter: row.twitter,
+          points: Number(row.total_points),
+          campaigns_completed: Number(row.campaigns_completed),
+          rank: Number(row.rank),
+        }));
+        return { top };
+      } catch (error) {
+        throw new InternalServerErrorException(error.message);
+      }
+    }
+
+    const userRankSql = `
+      ${cte}
+      SELECT
+        address,
+        name,
+        avatar,
+        twitter,
+        total_points,
+        campaigns_completed,
+        rank
+      FROM ranked_users
+      WHERE address = $3
+    `;
+
+    try {
+      const [topRes, userRes] = await Promise.all([
+        client.query(topNsql, [startIso, endIso, limit]),
+        client.query(userRankSql, [
+          startIso,
+          endIso,
+          userAddress.toLowerCase(),
+        ]),
+      ]);
+      console.log('------>', userRes.rows);
+      const top = topRes.rows.map((r) => ({
+        address: r.address,
+        name: r.name,
+        avatar: r.avatar,
+        twitter: r.twitter,
+        points: Number(r.total_points),
+        campaigns_completed: Number(r.campaigns_completed),
+        rank: Number(r.rank),
+      }));
+
+      if (userRes.rows.length === 0) {
+        return { top };
+      }
+
+      const userRow = userRes.rows[0];
+      const userRank = Number(userRow.rank);
+
+      if (userRank > limit) {
+        top.push({
+          address: userRow.address,
+          name: userRow.name,
+          avatar: userRow.avatar,
+          twitter: userRow.twitter,
+          points: Number(userRow.total_points),
+          campaigns_completed: Number(userRow.campaigns_completed),
+          rank: userRank,
+        });
+      }
+
+      return { top };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
 
   async getLeaderboard(
     period: 'week' | 'month',
@@ -350,7 +508,6 @@ export class UserRepository {
   }> {
     const client = this.dbService.getClient();
 
-    // 1) Определяем промежуток (startIso, endIso) — тот же код
     const now = new Date();
     let startDate: Date;
     let endDate: Date;
@@ -391,37 +548,53 @@ export class UserRepository {
     const excludeReferral = includeRef ? '' : `AND up.point_type != 'referral'`;
 
     const cte = `
-      WITH ranks AS (
-        SELECT 
+      WITH user_points_aggregated AS (
+        SELECT
+          up.user_address,
+          COALESCE(SUM(up.points), 0) AS total_points
+        FROM user_points up
+        WHERE up.created_at BETWEEN $1 AND $2
+          ${excludeReferral}
+        GROUP BY up.user_address
+      ),
+      campaigns_completed_aggregated AS (
+        SELECT
+          cc.user_address,
+          COUNT(*) AS campaigns_completed
+        FROM campaign_completions cc
+        WHERE cc.completed_at BETWEEN $1 AND $2
+        GROUP BY cc.user_address
+      ),
+      ranked_users AS (
+        SELECT
           u.address,
           u.name,
           u.avatar,
           u.twitter,
-          COALESCE(SUM(up.points),0) AS total_points,
-          (
-            SELECT COUNT(*) 
-            FROM campaign_completions cc
-            WHERE cc.user_address = u.address
-              AND cc.completed_at >= $1
-              AND cc.completed_at <= $2
-          ) AS campaigns_completed,
-          ROW_NUMBER() OVER (ORDER BY COALESCE(SUM(up.points),0) DESC) AS rank
+          COALESCE(upa.total_points, 0) AS total_points,
+          COALESCE(cca.campaigns_completed, 0) AS campaigns_completed,
+          ROW_NUMBER() OVER (ORDER BY COALESCE(upa.total_points, 0) DESC) AS rank
         FROM users u
-        LEFT JOIN user_points up
-          ON u.address = up.user_address
-          AND up.created_at >= $1
-          AND up.created_at <= $2
-          ${excludeReferral}
-        GROUP BY u.address, u.name, u.avatar, u.twitter
-        HAVING COALESCE(SUM(up.points),0) > 0
+        LEFT JOIN user_points_aggregated upa
+          ON u.address = upa.user_address
+        LEFT JOIN campaigns_completed_aggregated cca
+          ON u.address = cca.user_address
+        WHERE COALESCE(upa.total_points, 0) > 0
       )
     `;
 
     const top50sql = `
       ${cte}
-      SELECT address, name, avatar, twitter, total_points, campaigns_completed, rank
-      FROM ranks
-      WHERE rank <= 5
+      SELECT 
+        address,
+        name,
+        avatar,
+        twitter,
+        total_points,
+        campaigns_completed,
+        rank
+      FROM ranked_users
+      WHERE rank <= 50
       ORDER BY rank
     `;
 
@@ -441,12 +614,20 @@ export class UserRepository {
 
     const userRankSql = `
       ${cte}
-      SELECT address, name, avatar, twitter, total_points, campaigns_completed, rank
-      FROM ranks
+      SELECT 
+        address,
+        name,
+        avatar,
+        twitter,
+        total_points,
+        campaigns_completed,
+        rank
+      FROM ranked_users
       WHERE address = $3
     `;
 
     try {
+      console.log('------>', userAddress);
       const [topRes, userRes] = await Promise.all([
         client.query(top50sql, [startIso, endIso]),
         client.query(userRankSql, [
@@ -455,7 +636,7 @@ export class UserRepository {
           userAddress.toLowerCase(),
         ]),
       ]);
-
+      console.log('------>', userRes);
       const top = topRes.rows.map((r) => ({
         address: r.address,
         name: r.name,
@@ -473,7 +654,7 @@ export class UserRepository {
       const userRow = userRes.rows[0];
       const userRank = Number(userRow.rank);
 
-      if (userRank > 5) {
+      if (userRank > 50) {
         top.push({
           address: userRow.address,
           name: userRow.name,
@@ -534,6 +715,23 @@ export class UserRepository {
       FROM users
       WHERE points > 0
     `);
+    return res.rows;
+  }
+
+  async findUsersWithPointAfterSpecificAddress(
+    address: string
+  ): Promise<{ address: string; points: number }[]> {
+    const client = this.dbService.getClient();
+    const res = await client.query(
+      `
+        SELECT address, points
+        FROM users
+        WHERE points > 0
+          AND address > $1
+        ORDER BY address;
+    `,
+      [address]
+    );
     return res.rows;
   }
 

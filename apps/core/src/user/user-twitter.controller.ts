@@ -1,20 +1,22 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Controller, Logger, Post } from '@nestjs/common';
+import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import axios from 'axios';
-import { UserService } from '../user.service';
+import { UserService } from '../user/user.service';
 
-@Injectable()
-export class TwitterScoreJob {
-  private readonly logger = new Logger(TwitterScoreJob.name);
-
+@Controller('twitter-score')
+export class TwitterScoreController {
+  private readonly logger = new Logger(TwitterScoreController.name);
   private readonly API_KEY = process.env.TWITTER_SCOUT_API_KEY;
   private readonly BASE_URL = 'https://api.tweetscout.io/v2';
 
   constructor(private readonly userService: UserService) {}
 
-  @Cron('0 0 * * 0')
-  async handleTwitterScoreJob() {
-    this.logger.log('Starting TwitterScoreJob');
+  @Post('update')
+  @ApiOperation({ summary: 'Запустить обновление Twitter Score вручную' })
+  @ApiResponse({ status: 200, description: 'Обновление завершено' })
+  @ApiResponse({ status: 500, description: 'Ошибка обновления' })
+  async updateTwitterScores() {
+    this.logger.log('Запуск обновления Twitter Score...');
 
     try {
       const BATCH_SIZE = 20;
@@ -67,7 +69,7 @@ export class TwitterScoreJob {
 
       this.logger.log('TwitterScore обновлен для всех пользователей.');
     } catch (error) {
-      this.logger.error(`TwitterScoreJob failed: ${error.message}`);
+      this.logger.error(`Ошибка в обновлении TwitterScore: ${error.message}`);
     }
   }
 
@@ -79,7 +81,7 @@ export class TwitterScoreJob {
     const resp = await axios.get(url, {
       headers: {
         Accept: 'application/json',
-        ApiKey: `${this.API_KEY}`,
+        ApiKey: this.API_KEY,
       },
     });
 

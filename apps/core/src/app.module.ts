@@ -10,6 +10,7 @@ import { PriceModule } from './price/price.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { AscModule } from './asc/asc.module';
+import { DiscordModule } from './discord/discord.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AscModule } from './asc/asc.module';
     PriceModule,
     LeaderboardModule,
     AscModule,
+    DiscordModule,
   ],
 })
 export class AppModule {}

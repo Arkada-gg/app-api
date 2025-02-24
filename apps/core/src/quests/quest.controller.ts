@@ -7,6 +7,7 @@ import {
   Param,
   InternalServerErrorException,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { QuestService } from './quest.service';
 import { CheckQuestDto } from './dto/check-quest.dto';
@@ -16,6 +17,7 @@ import {
   ApiResponse,
   ApiBadRequestResponse,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { QuestCompletionDto } from './dto/quest.competion.dto';
 import { UserService } from '../user/user.service';

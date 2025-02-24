@@ -179,13 +179,13 @@ export class GetCampaignResponse {
     example: '2025-01-01T00:00:00Z',
     description: 'Дата начала кампании',
   })
-  startedAt: string;
+  started_at: string;
 
   @ApiProperty({
     example: '2025-02-01T00:00:00Z',
     description: 'Дата окончания кампании',
   })
-  finishedAt: string;
+  finished_at: string;
 
   @ApiProperty({ example: 100, description: 'Количество участников' })
   participants: number;
@@ -200,7 +200,7 @@ export class GetCampaignResponse {
     example: 'medium',
     description: 'easy-medium-hard',
   })
-  difficulty: string;
+  difficulty: 'easy' | 'medium' | 'hard';
 
   @ApiProperty({
     example: 'Краткое описание',
@@ -265,13 +265,13 @@ export class GetCampaignByIdOrSlugResponse {
     example: '2025-01-01T00:00:00Z',
     description: 'Дата начала кампании',
   })
-  startedAt: string;
+  started_at: string;
 
   @ApiProperty({
     example: '2025-02-01T00:00:00Z',
     description: 'Дата окончания кампании',
   })
-  finishedAt: string;
+  finished_at: string;
 
   @ApiProperty({ example: 100, description: 'Количество участников' })
   participants: number;
@@ -286,7 +286,7 @@ export class GetCampaignByIdOrSlugResponse {
     example: 'medium',
     description: 'easy-medium-hard',
   })
-  difficulty: string;
+  difficulty: 'easy' | 'medium' | 'hard';
 
   @ApiProperty({
     example: 'Краткое описание',

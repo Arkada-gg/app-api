@@ -22,7 +22,6 @@ import {
   GetCampaignResponse,
 } from '../shared/interfaces';
 import { CampaignStatusDto } from './dto/campaign-status.dto';
-import { GetCampaignStatusDto } from './dto/get-campaign-status.dto';
 
 @ApiTags('Campaigns')
 @Controller('campaigns')

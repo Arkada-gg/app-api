@@ -60,6 +60,22 @@ export class UserService {
     return updatedUser;
   }
 
+  async getLeaderboardCustom(
+    startAt: string,
+    endAt: string,
+    doExcludeRef: boolean,
+    limitNum: number,
+    userAddress?: string
+  ) {
+    return this.userRepository.getLeaderboardCustom(
+      startAt,
+      endAt,
+      doExcludeRef,
+      limitNum,
+      userAddress
+    );
+  }
+
   async getLeaderboard(
     period: 'week' | 'month',
     includeRef: boolean,
@@ -76,6 +92,12 @@ export class UserService {
 
   async getUsersWithPoints(): Promise<{ address: string; points: number }[]> {
     return this.userRepository.findUsersWithPoints();
+  }
+
+  async getUsersWithPointsAfterSpecificAddress(
+    address: string
+  ): Promise<{ address: string; points: number }[]> {
+    return this.userRepository.findUsersWithPointAfterSpecificAddress(address);
   }
 
   async updateUser(
