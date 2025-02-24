@@ -18,7 +18,7 @@ import { TransactionsModule } from '../transactions/transactions.module';
     CampaignModule,
     PriceModule,
     AuthModule,
-    TransactionsModule
+    TransactionsModule,
   ],
   controllers: [QuestController, NftController],
   providers: [QuestService, QuestRepository, DailyCheckJob],

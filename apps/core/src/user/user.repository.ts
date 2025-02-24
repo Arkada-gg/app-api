@@ -358,7 +358,6 @@ export class UserRepository {
     const referralCondition = excludeRef
       ? `AND up.point_type != 'referral'`
       : '';
-    console.log('------>', 12321312);
     const client = this.dbService.getClient();
 
     const cte = `
@@ -414,7 +413,6 @@ export class UserRepository {
 
     if (!userAddress) {
       try {
-        console.log('------>', limit);
         const topRes = await client.query(topNsql, [startIso, endIso, +limit]);
         const top = topRes.rows.map((row) => ({
           address: row.address,
@@ -627,7 +625,6 @@ export class UserRepository {
     `;
 
     try {
-      console.log('------>', userAddress);
       const [topRes, userRes] = await Promise.all([
         client.query(top50sql, [startIso, endIso]),
         client.query(userRankSql, [

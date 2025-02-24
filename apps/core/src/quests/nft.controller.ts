@@ -1,25 +1,15 @@
 import {
   Controller,
-  Post,
-  Body,
   BadRequestException,
   Get,
   Param,
-  InternalServerErrorException,
   HttpException,
   HttpStatus,
   UseInterceptors,
-  Options,
 } from '@nestjs/common';
 import { QuestService } from './quest.service';
 import { CheckQuestDto } from './dto/check-quest.dto';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBadRequestResponse,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { ethers } from 'ethers';
 import { GalxeCorsInterceptor } from './interceptors/wildcard-cors.interceptor';
 

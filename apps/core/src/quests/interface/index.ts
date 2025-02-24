@@ -8,6 +8,7 @@ export interface QuestTask {
   endpoint?: string;
   expression?: string;
   abi_to_find: string[];
+  method_equals: string;
   abi_equals: any;
   contract: string;
   contract1?: string;
