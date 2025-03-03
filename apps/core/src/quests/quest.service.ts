@@ -78,7 +78,8 @@ export class QuestService {
 
   async hasMintedNft(userAddress: string): Promise<boolean> {
     try {
-      const contractAddress = '0x39df84267fda113298d4794948b86026efd47e32';
+      const contractAddress =
+        '0x181b42ca4856237AE76eE8c67F8FF112491eCB9e'.toLowerCase();
 
       const minimalAbi = ['function hasMinted(address) view returns (bool)'];
 
