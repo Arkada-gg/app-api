@@ -293,6 +293,32 @@ WHERE qc.user_address = $1
     }
   }
 
+  private addPaginationAndOrder(
+    query: string,
+    params: any[],
+    limit: number,
+    offset: number,
+    orderBy: string
+  ): { query: string; params: any[] } {
+    query += ` ORDER BY ${orderBy}`;
+    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(limit, offset);
+    return { query, params };
+  }
+
+  private addTypeFilter(
+    query: string,
+    params: any[],
+    type?: CampaignType,
+    prefix = 'c.'
+  ): { query: string; params: any[] } {
+    if (type) {
+      params.push(type);
+      query += ` AND ${prefix}type = $${params.length}`;
+    }
+    return { query, params };
+  }
+
   async getUserCampaigns(
     userAddress: string,
     status?: UserCampaignStatus,
@@ -307,7 +333,7 @@ WHERE qc.user_address = $1
     try {
       // Handle completed campaigns separately for better ordering by completed_at
       if (status === UserCampaignStatus.COMPLETED) {
-        let completedQuery = `
+        let query = `
           SELECT 
             c.*,
             cc.completed_at,
@@ -317,24 +343,22 @@ WHERE qc.user_address = $1
           WHERE cc.user_address = $1
         `;
 
-        const params: any[] = [lowercaseAddress];
+        let params: any[] = [lowercaseAddress];
 
-        if (type) {
-          params.push(type);
-          completedQuery += ` AND c.type = $${params.length}`;
-        }
+        ({ query, params } = this.addTypeFilter(query, params, type));
+        ({ query, params } = this.addPaginationAndOrder(
+          query,
+          params,
+          limit,
+          offset,
+          'cc.completed_at DESC'
+        ));
 
-        completedQuery += ` ORDER BY cc.completed_at DESC`;
-        completedQuery += ` LIMIT $${params.length + 1} OFFSET $${
-          params.length + 2
-        }`;
-        params.push(limit, offset);
-
-        return (await client.query(completedQuery, params)).rows;
+        return (await client.query(query, params)).rows;
       }
 
-      // Handle active and started campaigns
-      let query = `
+      // Base query for active and started campaigns
+      const baseQuery = `
         WITH campaign_status AS (
           SELECT 
             c.*,
@@ -360,27 +384,22 @@ WHERE qc.user_address = $1
           WHERE c.status = 'IN_PROGRESS'
             AND c.started_at <= NOW()
             AND c.finished_at >= NOW()
-        )`;
+        )
+        SELECT * FROM campaign_status WHERE user_status = $2`;
 
-      const params: any[] = [lowercaseAddress];
+      const targetStatus =
+        status === UserCampaignStatus.STARTED ? 'started' : 'active';
+      let params: any[] = [lowercaseAddress, targetStatus];
 
-      let whereClause = '';
-
-      if (status === UserCampaignStatus.STARTED) {
-        whereClause = ` WHERE user_status = 'started'`;
-      } else {
-        whereClause = ` WHERE user_status = 'active'`;
-      }
-
-      if (type) {
-        params.push(type);
-        whereClause += ` AND type = $${params.length}`;
-      }
-
-      query += ` SELECT * FROM campaign_status${whereClause}`;
-      query += ` ORDER BY started_at DESC`;
-      query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-      params.push(limit, offset);
+      let query = baseQuery;
+      ({ query, params } = this.addTypeFilter(query, params, type, ''));
+      ({ query, params } = this.addPaginationAndOrder(
+        query,
+        params,
+        limit,
+        offset,
+        'started_at DESC'
+      ));
 
       return (await client.query(query, params)).rows;
     } catch (error) {
