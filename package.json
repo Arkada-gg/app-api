@@ -21,6 +21,7 @@
     "@nestjs/schedule": "^5.0.1",
     "@nestjs/swagger": "^11.0.2",
     "@nestjs/throttler": "^6.3.0",
+    "alchemy-sdk": "^3.5.3",
     "axios": "^1.6.0",
     "cookie-parser": "^1.4.7",
     "csv-stringify": "^6.5.2",
