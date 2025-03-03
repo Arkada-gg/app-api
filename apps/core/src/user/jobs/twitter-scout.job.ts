@@ -13,6 +13,9 @@ export class TwitterScoreJob {
   constructor(private readonly userService: UserService) {}
 
   @Cron('0 0 * * 0')
+  // async onModuleInit() {
+  //   await this.handleTwitterScoreJob();
+  // }
   async handleTwitterScoreJob() {
     this.logger.log('Starting TwitterScoreJob');
 
@@ -60,7 +63,7 @@ export class TwitterScoreJob {
           `Батч из ${users.length} пользователей обработан. Ожидание 10 секунд...`
         );
 
-        await this.sleep(5000);
+        await this.sleep(3000);
 
         offset += users.length;
       }

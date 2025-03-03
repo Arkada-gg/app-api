@@ -76,7 +76,7 @@ export class QuestController {
   }
 
   @Post('complete-quest')
-  @UseGuards(SignatureAuthGuard)
+  @UseGuards(ConditionalSignatureAuthGuard)
   @ApiOperation({ summary: 'Выполнить квест NOT ONCHAIN' })
   @ApiResponse({ status: 200, description: 'Задание выполнено' })
   @ApiBadRequestResponse({

@@ -37,12 +37,38 @@ import { BindSocialDto } from './dto/bind-social.dto';
 import { UnbindSocialDto } from './dto/unbind-social.dto';
 import { SocialFieldMap } from './user.constants';
 import { BindRefDto } from './dto/bind-ref.dto';
+import { CreateUserEmailDto } from './dto/create-user-email.dto';
 
 @UseFilters(MulterExceptionFilter)
 @Controller('user')
 @ApiTags('User')
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+  @Post('create-email')
+  @ApiOperation({ summary: 'Создать запись (email + опционально address)' })
+  @ApiBody({
+    description: 'Параметры для привязки соцсети',
+    schema: {
+      type: 'object',
+      properties: {
+        address: { type: 'string', example: '0xe688b84b...' },
+        email: { type: 'string', example: '0x7520b00a...' },
+      },
+      required: ['email'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Запись успешно создана.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Ошибка валидации или нарушение уникальности email/address.',
+  })
+  async create(@Body() createUserEmailDto: CreateUserEmailDto) {
+    return this.userService.createUserEmail(createUserEmailDto);
+  }
 
   @Post('update-user')
   @ApiConsumes('multipart/form-data')

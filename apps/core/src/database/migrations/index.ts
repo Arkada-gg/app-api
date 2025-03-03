@@ -22,6 +22,7 @@ import * as m21 from './1674235500025_add_twitter_points_column';
 import * as m22 from './1674235500026_add_transactions_table';
 import * as m23 from './1674235500027_add_ignore_campaign_start_to_campaigns';
 import * as m24 from './1674235501000_create_discord_guilds_table';
+import * as m25 from './1674235501001_create_email_table';
 
 // import * as s1 from './1674235300005_seed_campaigns_and_quests';
 // import * as s2 from './1674235300006_add_swap_and_add_liquidity_quests';
@@ -53,4 +54,5 @@ export const allMigrations = [
   m22,
   m23,
   m24,
+  m25,
 ];

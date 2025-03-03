@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { AcsService } from '../asc.service';
 
 @Injectable()
@@ -9,6 +9,7 @@ export class AcsJob {
   constructor(private readonly acsService: AcsService) {}
 
   @Cron('0 1,13 * * *')
+  // @Cron(CronExpression.EVERY_30_SECONDS)
   async handleAcsDistribution() {
     this.logger.log('Запуск джобы распределения ACS...');
 

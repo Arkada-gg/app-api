@@ -1,4 +1,5 @@
 export interface QuestTask {
+  methodSignatures?: any;
   id: string;
   type: string;
   chain: string;
@@ -16,8 +17,11 @@ export interface QuestTask {
   tokens: string[];
   tokenAddress?: string;
   minAmountUSD?: number;
+  minAmountToken?: number;
   abiFile: string;
   params?: any;
+  actions?: any;
+  method_signatures?: any;
 }
 
 export interface QuestType {

@@ -4,8 +4,9 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { stringify } from 'csv-stringify';
-import { UserService } from '../user/user.service';
 import Web3 from 'web3';
+import { UserService } from '../user/user.service';
+import { Multicall } from 'ethereum-multicall';
 
 interface AcsDistributionItem {
   userAddress: string;
@@ -20,11 +21,25 @@ export class AcsService {
   private readonly API_SECRET = process.env.ACS_API_SECRET;
   private readonly GRAPHQL_URL = 'https://acs-graphql.astar.network/graphql';
   private readonly DEFI_ID = 28;
-  private ACS_POOL;
+  private ACS_POOL: number;
   private readonly ACS_API_URL =
     'https://acs-api.astar.network/acs/addDiscretionaryPointsBatch';
   private readonly REPORTS_DIR = path.join(__dirname, '..', '..', 'reports');
   private readonly BATCH_SIZE = 500;
+
+  private readonly NFT_MULTIPLIERS = [
+    {
+      address: '0x39dF84267Fda113298d4794948B86026EFD47e32'.toLowerCase(),
+      multiplier: 1.1,
+    },
+    {
+      address: '0x181b42ca4856237AE76eE8c67F8FF112491eCB9e'.toLowerCase(),
+      multiplier: 1.2,
+    },
+  ];
+  private readonly ERC721_ABI = [
+    'function balanceOf(address owner) view returns (uint256)',
+  ];
 
   constructor(private readonly userService: UserService) {
     if (!fs.existsSync(this.REPORTS_DIR)) {
@@ -92,7 +107,7 @@ export class AcsService {
 
     return crypto
       .createHmac('sha256', this.API_SECRET)
-      .update(Buffer.from(finalStr))
+      .update(new TextEncoder().encode(finalStr))
       .digest('hex');
   }
 
@@ -112,6 +127,52 @@ export class AcsService {
     return path.join(this.REPORTS_DIR, fileName);
   }
 
+  private async getUsersNftMultipliers(
+    userAddresses: string[]
+  ): Promise<{ [address: string]: number }> {
+    const multipliers: { [address: string]: number } = {};
+    userAddresses.forEach((addr) => (multipliers[addr] = 1));
+
+    const batches = this.chunkArray(userAddresses, this.BATCH_SIZE);
+    for (const batch of batches) {
+      const multicall = new Multicall({
+        nodeUrl: 'https://rpc.soneium.org/',
+        tryAggregate: true,
+        multicallCustomContractAddress:
+          '0xcA11bde05977b3631167028862bE2a173976CA11',
+      });
+
+      const callContexts = this.NFT_MULTIPLIERS.map((nft) => ({
+        reference: nft.address,
+        contractAddress: nft.address,
+        abi: this.ERC721_ABI,
+        calls: batch.map((address) => ({
+          reference: address,
+          methodName: 'balanceOf',
+          methodParameters: [address],
+        })),
+      }));
+
+      const results = await multicall.call(callContexts);
+
+      for (const nft of this.NFT_MULTIPLIERS) {
+        const contractResult = results.results[nft.address];
+        contractResult.callsReturnContext.forEach((callReturn, index) => {
+          const balance =
+            callReturn.returnValues[callReturn.returnValues.length - 1];
+          if (+balance > 0) {
+            const userAddress = batch[index];
+            multipliers[userAddress] = Math.max(
+              multipliers[userAddress],
+              nft.multiplier
+            );
+          }
+        });
+      }
+    }
+    return multipliers;
+  }
+
   async distributeAcs(): Promise<void> {
     await this.updateAcsPoolFromGraphQL();
     const users = await this.userService.getUsersWithPoints();
@@ -120,23 +181,36 @@ export class AcsService {
       return;
     }
 
-    const totalPoints = users.reduce((sum, user) => sum + user.points, 0);
-    if (totalPoints === 0) {
+    const userAddresses = users.map((user) => user.address);
+    const multipliers = await this.getUsersNftMultipliers(userAddresses);
+
+    const usersWithEffectivePoints = users.map((user) => {
+      const multiplier = multipliers[user.address] || 1;
+      const effectivePoints = user.points * multiplier;
+      return { ...user, effectivePoints };
+    });
+
+    const totalEffectivePoints = usersWithEffectivePoints.reduce(
+      (sum, user) => sum + user.effectivePoints,
+      0
+    );
+    if (totalEffectivePoints === 0) {
       this.logger.warn(
-        'Общее количество поинтов = 0, распределение ACS невозможно.'
+        'Общее количество эффективных поинтов = 0, распределение ACS невозможно.'
       );
       return;
     }
 
-    const acsItems: AcsDistributionItem[] = users
+    const acsItems: AcsDistributionItem[] = usersWithEffectivePoints
       .map((user) => ({
         userAddress: Web3.utils.toChecksumAddress(user.address),
         defiId: this.DEFI_ID,
-        acsAmount: Math.floor((user.points / totalPoints) * this.ACS_POOL),
+        acsAmount: Math.floor(
+          (user.effectivePoints / totalEffectivePoints) * this.ACS_POOL
+        ),
         description: 'Arkada ACS allocation',
       }))
       .filter((item) => item.acsAmount > 0);
-
     const batches = this.chunkArray(acsItems, this.BATCH_SIZE);
     const csvFilePath = this.getCsvFilePath();
     const csvStream = stringify({
@@ -164,7 +238,6 @@ export class AcsService {
         this.logger.log(
           `ACS успешно отправлены для ${batch.length} пользователей.`
         );
-
         batch.forEach((user) => {
           csvStream.write([user.userAddress, user.acsAmount]);
         });
@@ -193,7 +266,6 @@ export class AcsService {
     }
 
     csvStream.end();
-
     this.logger.log(`Распределение ACS завершено. CSV файл: ${csvFilePath}`);
   }
 }

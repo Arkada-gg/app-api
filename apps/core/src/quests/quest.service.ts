@@ -45,6 +45,7 @@ export class QuestService {
     ethereum: 'ethereum',
     astroport: 'astar',
     vastr: 'bifrost-voucher-astr',
+    yayeth: 'yay-stakestone-ether',
   };
 
   constructor(
@@ -639,6 +640,310 @@ export class QuestService {
         return false;
       }
 
+      const ifCaseExecute = questTask.abi_to_find.filter((abiStr) =>
+        abiStr.includes('function execute(bytes commands, bytes[] inputs)')
+      );
+
+      if (ifCaseExecute.length > 0) {
+        for (const tx of userTransactions) {
+          try {
+            if (
+              !tx.to ||
+              tx.to.toLowerCase() !== questTask.contract.toLowerCase()
+            )
+              continue;
+
+            for (const abiStr of ifCaseExecute) {
+              const iface = new ethers.Interface([abiStr]);
+              let parsed;
+              try {
+                parsed = iface.parseTransaction({ data: tx.input });
+              } catch (err) {
+                continue;
+              }
+              if (!parsed) continue;
+
+              if (parsed.name === 'execute') {
+                const inputs = parsed.args[1];
+                if (inputs.length > 2) {
+                  return false;
+                }
+                for (const encodedInput of inputs) {
+                  try {
+                    const data = encodedInput.replace(/^0x/, '').toLowerCase();
+
+                    const chunkSize = 64;
+                    const chunks = data.match(
+                      new RegExp(`.{1,${chunkSize}}`, 'g')
+                    );
+
+                    if (!chunks || chunks.length < 2) {
+                      return null;
+                    }
+
+                    const valueHex = '0x' + chunks[1];
+
+                    const valueWei = BigInt(valueHex);
+
+                    const depositAmount = ethers.formatUnits(valueWei, 18);
+                    Logger.debug(`Deposit amount (raw): ${depositAmount}`);
+
+                    const depositUSDValue = await this.getUSDValue(
+                      'ethereum',
+                      depositAmount
+                    );
+                    const token0 =
+                      '4200000000000000000000000000000000000006'.toLowerCase();
+                    const token1 =
+                      '2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase();
+                    const minLimit = questTask.minAmountUSD;
+                    const dataLC = encodedInput.toLowerCase();
+                    const isPairValid =
+                      encodedInput.toLowerCase().includes(token0) &&
+                      encodedInput.toLowerCase().includes(token1);
+                    const isAmountValid = depositUSDValue >= minLimit;
+                    if (isPairValid && isAmountValid) {
+                      await this.questRepository.completeQuest(id, address);
+                      if (questStored.sequence === 1) {
+                        await this.campaignService.incrementParticipants(
+                          questStored.campaign_id
+                        );
+                      }
+                      return true;
+                    } else {
+                      console.log('❌ Квест не выполнен.');
+                    }
+                  } catch (error) {
+                    continue;
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            Logger.error(
+              `Ошибка обработки транзакции (execute): ${error.message}`
+            );
+            continue;
+          }
+        }
+        return false;
+      }
+
+      const ifCaseStake = questTask.abi_to_find.filter((abiStr) =>
+        abiStr.includes('function stake')
+      );
+
+      if (ifCaseStake.length > 0) {
+        for (const tx of userTransactions) {
+          try {
+            if (
+              !tx.to ||
+              tx.to.toLowerCase() !== questTask.contract.toLowerCase()
+            )
+              continue;
+
+            for (const abiStr of ifCaseStake) {
+              const iface = new ethers.Interface([abiStr]);
+              let parsed;
+              try {
+                parsed = iface.parseTransaction({ data: tx.input });
+              } catch (err) {
+                continue;
+              }
+              if (!parsed) continue;
+
+              if (parsed.name === 'stake') {
+                if (questTask.minAmountUSD) {
+                  const stakeAmountBN = parsed.args[0] as bigint;
+                  const stakeAmountDecimal = ethers.formatUnits(
+                    stakeAmountBN,
+                    18
+                  );
+                  const usdValue = await this.getUSDValue(
+                    'astroport',
+                    stakeAmountDecimal
+                  );
+                  if (+usdValue >= +questTask.minAmountUSD) {
+                    await this.questRepository.completeQuest(id, address);
+                    if (questStored.sequence === 1) {
+                      await this.campaignService.incrementParticipants(
+                        questStored.campaign_id
+                      );
+                    }
+                    return true;
+                  }
+                } else {
+                  await this.questRepository.completeQuest(id, address);
+                  if (questStored.sequence === 1) {
+                    await this.campaignService.incrementParticipants(
+                      questStored.campaign_id
+                    );
+                  }
+                  return true;
+                }
+              }
+            }
+          } catch (error) {
+            Logger.error(
+              `Ошибка обработки транзакции (execute): ${error.message}`
+            );
+            continue;
+          }
+        }
+        return false;
+      }
+
+      const ifCaseEvent = questTask.abi_to_find.filter((abiStr) =>
+        abiStr.includes('event StakeInited')
+      );
+
+      if (ifCaseEvent.length > 0) {
+        for (const tx of userTransactions) {
+          try {
+            if (
+              !tx.to ||
+              tx.to.toLowerCase() !== questTask.contract.toLowerCase()
+            )
+              continue;
+            console.log('------>', tx);
+            for (const abiStr of ifCaseEvent) {
+              const iface = new ethers.Interface([abiStr]);
+              let parsed;
+              try {
+                parsed = iface.parseTransaction({ data: tx.input });
+              } catch (err) {
+                continue;
+              }
+              if (!parsed) continue;
+              console.log('------>', parsed);
+              if (parsed.name === 'stake') {
+                await this.questRepository.completeQuest(id, address);
+                if (questStored.sequence === 1) {
+                  await this.campaignService.incrementParticipants(
+                    questStored.campaign_id
+                  );
+                }
+                return true;
+              }
+            }
+          } catch (error) {
+            Logger.error(
+              `Ошибка обработки транзакции (execute): ${error.message}`
+            );
+            continue;
+          }
+        }
+        return false;
+      }
+
+      const ifCaseDepositX = questTask.abi_to_find.find((sig) => {
+        if (sig.includes('function deposit(')) {
+          return questTask.abi_to_find;
+        }
+      });
+
+      if (ifCaseDepositX) {
+        for (const tx of userTransactions) {
+          try {
+            const iface = new ethers.Interface(questTask.abi_to_find);
+
+            let parsed;
+            try {
+              parsed = iface.parseTransaction({ data: tx.input });
+            } catch (err) {
+              continue;
+            }
+
+            if (!parsed) continue;
+
+            const tokenAmountBN = parsed.args[0] as bigint;
+            const tokenAmount = tokenAmountBN.toString();
+            let depositAmountDecimal;
+            let usdValue;
+            if (
+              questTask.contract.toLowerCase() ===
+              '0x34834F208F149e0269394324c3f19e06dF2ca9cB'.toLowerCase()
+            ) {
+              depositAmountDecimal = ethers.formatUnits(tokenAmount, 6);
+              console.log(
+                '------>',
+                +depositAmountDecimal >= questTask.minAmountUSD
+              );
+              if (+depositAmountDecimal >= questTask.minAmountUSD) {
+                await this.questRepository.completeQuest(id, address);
+                if (questStored.sequence === 1) {
+                  await this.campaignService.incrementParticipants(
+                    questStored.campaign_id
+                  );
+                }
+                return true;
+              }
+            } else {
+              depositAmountDecimal = ethers.formatUnits(tokenAmount, 18);
+              usdValue = await this.getUSDValue('yayeth', depositAmountDecimal);
+              const totalValue = usdValue * 2;
+              if (totalValue >= questTask.minAmountUSD) {
+                await this.questRepository.completeQuest(id, address);
+                if (questStored.sequence === 1) {
+                  await this.campaignService.incrementParticipants(
+                    questStored.campaign_id
+                  );
+                }
+                return true;
+              }
+            }
+            return false;
+          } catch (error) {
+            Logger.error(`Ошибка обработки транзакции: ${error.message}`);
+            continue;
+          }
+        }
+        return false;
+      }
+
+      const ifCaseCheck = questTask.abi_to_find.filter((abiStr) =>
+        abiStr.includes('function checkIn')
+      );
+
+      if (ifCaseCheck.length > 0) {
+        for (const tx of userTransactions) {
+          try {
+            if (
+              !tx.to ||
+              tx.to.toLowerCase() !== questTask.contract.toLowerCase()
+            )
+              continue;
+
+            for (const abiStr of ifCaseCheck) {
+              const iface = new ethers.Interface([abiStr]);
+              let parsed;
+              try {
+                parsed = iface.parseTransaction({ data: tx.input });
+              } catch (err) {
+                continue;
+              }
+              if (!parsed) continue;
+
+              if (parsed.name === 'checkIn') {
+                await this.questRepository.completeQuest(id, address);
+                if (questStored.sequence === 1) {
+                  await this.campaignService.incrementParticipants(
+                    questStored.campaign_id
+                  );
+                }
+                return true;
+              }
+            }
+          } catch (error) {
+            Logger.error(
+              `Ошибка обработки транзакции (execute): ${error.message}`
+            );
+            continue;
+          }
+        }
+        return false;
+      }
+
       const ifCaseBorrowNew = questTask.abi_to_find.some((abiStr) =>
         abiStr.includes('function supplyCollateralAndBorrow')
       );
@@ -821,7 +1126,6 @@ export class QuestService {
           }
         }
 
-        // Если ни одна транза не прошла
         return false;
       }
 
@@ -930,6 +1234,7 @@ export class QuestService {
         }
         return false;
       }
+
       const depositDelegateSig = questTask.abi_to_find.find((sig) => {
         if (
           sig.includes('swapUnderlyingToLst') ||
@@ -2062,5 +2367,36 @@ export class QuestService {
   async getQuest(id: string): Promise<QuestType> {
     const quest: QuestType = await this.questRepository.getQuest(id);
     return quest;
+  }
+
+  private async parseSwapFromInputs(
+    inputsArray: string[],
+    questTask: QuestTask
+  ): Promise<boolean> {
+    const pairArr = questTask.abi_equals[0];
+    // ["0x2cae934a1e84f693fbb78ca5ed3b0a6893259441","0x4200000000000000000000000000000000000006"]
+    const minUsd = questTask.minAmountUSD || 1;
+
+    for (const dataHex of inputsArray) {
+      // Decode, find the tokens, amounts
+      // (Условно) допустим, мы распарсили tokenA, tokenB, amountIn
+      const tokenA = '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441';
+      const tokenB = '0x4200000000000000000000000000000000000006';
+      console.log('------>', dataHex);
+
+      const sumInUsd = 5; // как пример
+
+      if (
+        (tokenA.toLowerCase() === pairArr[0].toLowerCase() &&
+          tokenB.toLowerCase() === pairArr[1].toLowerCase()) ||
+        (tokenA.toLowerCase() === pairArr[1].toLowerCase() &&
+          tokenB.toLowerCase() === pairArr[0].toLowerCase())
+      ) {
+        if (sumInUsd >= minUsd) {
+          return false;
+        }
+      }
+    }
+    return false;
   }
 }
