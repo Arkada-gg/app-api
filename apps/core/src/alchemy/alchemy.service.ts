@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -67,6 +68,7 @@ export class AlchemyWebhooksService {
           break;
         default:
           this.logger.warn(`Unhandled webhook event type: ${event.type}`);
+          throw new BadRequestException('Unhandled webhook event type');
       }
     } catch (error) {
       this.logger.error('Error processing webhook event:', error);
