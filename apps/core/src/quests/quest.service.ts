@@ -150,7 +150,6 @@ export class QuestService {
 
       try {
         const campaignId = questStored.campaign_id;
-
         const allCampaignQuests = allQuests;
 
         const completedQuests =
@@ -158,6 +157,7 @@ export class QuestService {
             campaignId,
             lowerAddress
           );
+
         if (completedQuests.length === allCampaignQuests.length) {
           const wasMarked = await this.campaignService.markCampaignAsCompleted(
             campaignId,
@@ -168,7 +168,7 @@ export class QuestService {
             const campaign = await this.campaignService.getCampaignByIdOrSlug(
               campaignId
             );
-            const rewards = campaign.rewards; // [{ "type": "tokens", "value": "100" }, ...]
+            const rewards = campaign.rewards;
 
             let totalPoints = 0;
             rewards.forEach((reward: any) => {
@@ -177,9 +177,36 @@ export class QuestService {
               }
             });
 
+            const nftConfigs = [
+              {
+                address:
+                  '0x39dF84267Fda113298d4794948B86026EFD47e32'.toLowerCase(),
+                multiplier: 1.1,
+              },
+              {
+                address:
+                  '0x181b42ca4856237AE76eE8c67F8FF112491eCB9e'.toLowerCase(),
+                multiplier: 1.2,
+              },
+            ];
+
+            let userMultiplier = 1;
+            for (const nft of nftConfigs) {
+              const contract = new ethers.Contract(
+                nft.address,
+                ['function balanceOf(address owner) view returns (uint256)'],
+                soneiumProvider
+              );
+              const balance = await contract.balanceOf(lowerAddress);
+              if (balance && +balance.toString() > 0) {
+                userMultiplier = Math.max(userMultiplier, nft.multiplier);
+              }
+            }
+
+            const effectivePoints = totalPoints * userMultiplier;
             await this.userService.awardCampaignCompletion(
               lowerAddress,
-              totalPoints
+              effectivePoints
             );
           }
         }
@@ -188,6 +215,7 @@ export class QuestService {
           `Ошибка при завершении квеста и начислении баллов: ${error.message}`
         );
       }
+
       return true;
     } catch (error) {
       if (
@@ -215,12 +243,12 @@ export class QuestService {
       const allCampaignQuests = await this.questRepository.getQuestsByCampaign(
         campaignId
       );
-
       const completedQuests =
         await this.questRepository.getCompletedQuestsByUserInCampaign(
           campaignId,
           lowerAddress
         );
+
       if (completedQuests.length === allCampaignQuests.length) {
         const wasMarked = await this.campaignService.markCampaignAsCompleted(
           campaignId,
@@ -239,9 +267,37 @@ export class QuestService {
               totalPoints += parseInt(reward.value, 10);
             }
           });
+
+          const nftConfigs = [
+            {
+              address:
+                '0x39dF84267Fda113298d4794948B86026EFD47e32'.toLowerCase(),
+              multiplier: 1.1,
+            },
+            {
+              address:
+                '0x181b42ca4856237AE76eE8c67F8FF112491eCB9e'.toLowerCase(),
+              multiplier: 1.2,
+            },
+          ];
+
+          let userMultiplier = 1;
+          for (const nft of nftConfigs) {
+            const contract = new ethers.Contract(
+              nft.address,
+              ['function balanceOf(address owner) view returns (uint256)'],
+              soneiumProvider
+            );
+            const balance = await contract.balanceOf(lowerAddress);
+            if (balance && +balance.toString() > 0) {
+              userMultiplier = Math.max(userMultiplier, nft.multiplier);
+            }
+          }
+
+          const effectivePoints = totalPoints * userMultiplier;
           await this.userService.awardCampaignCompletion(
             lowerAddress,
-            +totalPoints
+            effectivePoints
           );
         }
       }
