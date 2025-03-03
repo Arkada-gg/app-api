@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CampaignRepository } from './campaign.repository';
 import { CampaignType } from './dto/get-campaigns.dto';
+import { UserCampaignStatus } from './dto/get-user-campaigns.dto';
 
 @Injectable()
 export class CampaignService {
@@ -49,5 +50,21 @@ export class CampaignService {
       userAddress
     );
     return result.rowCount === 1;
+  }
+
+  async getUserCampaigns(
+    userAddress: string,
+    status?: UserCampaignStatus,
+    type?: CampaignType,
+    page = 1,
+    limit = 5
+  ) {
+    return this.campaignRepository.getUserCampaigns(
+      userAddress,
+      status,
+      type,
+      page,
+      limit
+    );
   }
 }

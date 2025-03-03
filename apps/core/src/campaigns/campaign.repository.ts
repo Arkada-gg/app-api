@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CampaignType } from './dto/get-campaigns.dto';
+import { UserCampaignStatus } from './dto/get-user-campaigns.dto';
 
 @Injectable()
 export class CampaignRepository {
@@ -287,6 +288,101 @@ WHERE qc.user_address = $1
       }
 
       return results;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async getUserCampaigns(
+    userAddress: string,
+    status?: UserCampaignStatus,
+    type?: CampaignType,
+    page = 1,
+    limit = 5
+  ) {
+    const client = this.dbService.getClient();
+    const lowercaseAddress = userAddress.toLowerCase();
+    const offset = (page - 1) * limit;
+
+    try {
+      // Handle completed campaigns separately for better ordering by completed_at
+      if (status === UserCampaignStatus.COMPLETED) {
+        let completedQuery = `
+          SELECT 
+            c.*,
+            cc.completed_at,
+            'completed' as user_status
+          FROM campaigns c
+          JOIN campaign_completions cc ON c.id = cc.campaign_id 
+          WHERE cc.user_address = $1
+        `;
+
+        const params: any[] = [lowercaseAddress];
+
+        if (type) {
+          params.push(type);
+          completedQuery += ` AND c.type = $${params.length}`;
+        }
+
+        completedQuery += ` ORDER BY cc.completed_at DESC`;
+        completedQuery += ` LIMIT $${params.length + 1} OFFSET $${
+          params.length + 2
+        }`;
+        params.push(limit, offset);
+
+        return (await client.query(completedQuery, params)).rows;
+      }
+
+      // Handle active and started campaigns
+      let query = `
+        WITH campaign_status AS (
+          SELECT 
+            c.*,
+            CASE 
+              WHEN cc.user_address IS NOT NULL THEN 'completed'
+              WHEN EXISTS (
+                SELECT 1 
+                FROM quests q
+                JOIN quest_completions qc ON q.id = qc.quest_id
+                JOIN (
+                  SELECT campaign_id, MAX(sequence) AS max_seq
+                  FROM quests
+                  GROUP BY campaign_id
+                ) t ON q.campaign_id = t.campaign_id
+                WHERE q.campaign_id = c.id 
+                AND qc.user_address = $1
+                AND q.sequence < t.max_seq
+              ) THEN 'started'
+              ELSE 'active'
+            END as user_status
+          FROM campaigns c
+          LEFT JOIN campaign_completions cc ON c.id = cc.campaign_id AND cc.user_address = $1
+          WHERE c.status = 'IN_PROGRESS'
+            AND c.started_at <= NOW()
+            AND c.finished_at >= NOW()
+        )`;
+
+      const params: any[] = [lowercaseAddress];
+
+      let whereClause = '';
+
+      if (status === UserCampaignStatus.STARTED) {
+        whereClause = ` WHERE user_status = 'started'`;
+      } else {
+        whereClause = ` WHERE user_status = 'active'`;
+      }
+
+      if (type) {
+        params.push(type);
+        whereClause += ` AND type = $${params.length}`;
+      }
+
+      query += ` SELECT * FROM campaign_status${whereClause}`;
+      query += ` ORDER BY started_at DESC`;
+      query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      params.push(limit, offset);
+
+      return (await client.query(query, params)).rows;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
