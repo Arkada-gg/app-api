@@ -43,7 +43,7 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     });
 
     try {
-      await this.discordClient.login(process.env.DISCORD_BOT_TOKEN);
+      await this.discordClient.login(process.env.DISCORD_BOT_TOKEN1);
     } catch (error) {
       this.logger.error(`Discord bot login failed: ${error.message}`);
     }

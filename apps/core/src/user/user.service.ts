@@ -14,6 +14,7 @@ import { BindSocialDto } from './dto/bind-social.dto';
 import { UnbindSocialDto } from './dto/unbind-social.dto';
 import { EPointsType } from '../quests/interface';
 import jwt from 'jsonwebtoken';
+import { CreateUserEmailDto } from './dto/create-user-email.dto';
 
 @Injectable()
 export class UserService {
@@ -24,6 +25,20 @@ export class UserService {
 
   async findByAddress(address: string): Promise<IUser | null> {
     return this.userRepository.findByAddress(address);
+  }
+
+  async createUserEmail(dto: CreateUserEmailDto) {
+    const email = await this.userRepository.findEmail(dto.email);
+    if (email) {
+      throw new BadRequestException('Email already exists');
+    }
+    if (dto.address) {
+      const address = await this.userRepository.findAddress(dto.address);
+      if (address) {
+        throw new BadRequestException('Address already exists');
+      }
+    }
+    return await this.userRepository.createEmail(dto.email, dto.address);
   }
 
   async findByEmail(email: string): Promise<IUser | null> {
@@ -65,14 +80,16 @@ export class UserService {
     endAt: string,
     doExcludeRef: boolean,
     limitNum: number,
-    userAddress?: string
+    userAddress?: string,
+    doIncludeRefWithTwScore?: boolean
   ) {
     return this.userRepository.getLeaderboardCustom(
       startAt,
       endAt,
       doExcludeRef,
       limitNum,
-      userAddress
+      userAddress,
+      doIncludeRefWithTwScore
     );
   }
 
@@ -370,7 +387,7 @@ export class UserService {
     const user = await this.findByAddress(address);
     await this.updatePoints(address, basePoints, EPointsType.Campaign);
     if (user?.ref_owner) {
-      let bonus = Math.floor(basePoints * 0.05);
+      let bonus = Math.floor(basePoints * 0.01);
       if (bonus > 0 && bonus < 1) bonus = 1;
       await this.updatePoints(user.ref_owner, bonus, EPointsType.Referral);
     }

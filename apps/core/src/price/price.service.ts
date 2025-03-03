@@ -12,6 +12,7 @@ export class PriceService {
     ethereum: 'ethereum',
     astroport: 'astar',
     vastr: 'bifrost-voucher-astr',
+    yayeth: 'yay-stakestone-ether',
   };
 
   constructor() {

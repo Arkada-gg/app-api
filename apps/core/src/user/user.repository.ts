@@ -15,6 +15,49 @@ export class UserRepository {
     private readonly questRepository: QuestRepository
   ) {}
 
+  async createEmail(email: string, address?: string) {
+    const client = this.dbService.getClient();
+    const lowerAddress = address ? address.toLowerCase() : null;
+    const lower = email.toLowerCase();
+    const query = `
+      INSERT INTO user_email (email, address)
+      VALUES ($1, $2)
+      RETURNING email, address, created_at, updated_at
+    `;
+    const values = [lower, lowerAddress || null];
+    const result = await client.query(query, values);
+
+    return result.rows[0];
+  }
+
+  async findEmail(email: string) {
+    const client = this.dbService.getClient();
+    const lower = email.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM user_email WHERE email = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async findAddress(address: string) {
+    const client = this.dbService.getClient();
+    const lower = address.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM user_email WHERE address = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
   async findByAddress(address: string): Promise<IUser | null> {
     const client = this.dbService.getClient();
     const lower = address.toLowerCase();
@@ -336,7 +379,8 @@ export class UserRepository {
     endAt: string | undefined,
     excludeRef: boolean,
     limit: number,
-    userAddress?: string
+    userAddress?: string,
+    includeRefWithTwitterScore?: boolean
   ): Promise<{
     top: Array<{
       address: string;
@@ -355,9 +399,6 @@ export class UserRepository {
     const startIso = startDate.toISOString();
     const endIso = endDate.toISOString();
 
-    const referralCondition = excludeRef
-      ? `AND up.point_type != 'referral'`
-      : '';
     const client = this.dbService.getClient();
 
     const cte = `
@@ -366,8 +407,25 @@ export class UserRepository {
           up.user_address,
           COALESCE(SUM(up.points), 0) AS total_points
         FROM user_points up
+        JOIN users u
+          ON u.address = up.user_address
         WHERE up.created_at BETWEEN $1 AND $2
-          ${referralCondition}
+          AND (
+            ${
+              !excludeRef
+                ? 'TRUE'
+                : `
+              (
+                up.point_type != 'referral'
+                OR (
+                  ${includeRefWithTwitterScore ? 'TRUE' : 'FALSE'}
+                  AND COALESCE(u.twitter_score, 0) > 0
+                  AND up.point_type = 'referral'
+                )
+              )
+            `
+            }
+          )
         GROUP BY up.user_address
       ),
       campaigns_completed_aggregated AS (
@@ -413,7 +471,7 @@ export class UserRepository {
 
     if (!userAddress) {
       try {
-        const topRes = await client.query(topNsql, [startIso, endIso, +limit]);
+        const topRes = await client.query(topNsql, [startIso, endIso, limit]);
         const top = topRes.rows.map((row) => ({
           address: row.address,
           name: row.name,
@@ -452,7 +510,7 @@ export class UserRepository {
           userAddress.toLowerCase(),
         ]),
       ]);
-      console.log('------>', userRes.rows);
+
       const top = topRes.rows.map((r) => ({
         address: r.address,
         name: r.name,

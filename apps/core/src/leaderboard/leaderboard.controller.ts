@@ -1,4 +1,4 @@
-import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiQuery } from '@nestjs/swagger';
 import { UserService } from '../user/user.service';
 
@@ -33,24 +33,31 @@ export class LeaderboardController {
     type: String,
     example: '0xUser',
   })
+  @ApiQuery({
+    name: 'includeRefWithTwitterScore',
+    required: false,
+    type: Boolean,
+    example: false,
+  })
   async getLeaderboard(
     @Query('startAt') startAt?: string,
     @Query('endAt') endAt?: string,
     @Query('excludeRef') excludeRef = 'false',
     @Query('limit') limit = '50',
-    @Query('address') userAddr?: string
+    @Query('address') userAddr?: string,
+    @Query('includeRefWithTwitterScore') incRefTwScore = 'false'
   ) {
-    // Парсим excludeRef (строка -> boolean)
     const doExcludeRef = excludeRef === 'true';
-    // Парсим limit (строка -> number)
     const limitNum = parseInt(limit, 10) || 50;
+    const doIncludeRefWithTwScore = incRefTwScore === 'true';
 
     return this.userService.getLeaderboardCustom(
       startAt,
       endAt,
       doExcludeRef,
       limitNum,
-      userAddr
+      userAddr,
+      doIncludeRefWithTwScore
     );
   }
 

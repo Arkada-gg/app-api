@@ -36,6 +36,9 @@ async function bootstrap() {
       'https://app-galxe.com',
       'https://app-ui-git-testing-deployment-arkadaminds-projects.vercel.app',
       'https://3105-2a00-f41-58f2-71fc-91db-a9d7-2ddc-f08b.ngrok-free.app',
+      'https://app-ui-git-viewer-arkadaminds-projects.vercel.app',
+      'https://166b39d2.landing-dev-7nt.pages.dev',
+      'https://www.arkada.gg',
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
@@ -76,13 +79,13 @@ async function bootstrap() {
     })
   );
 
-  app.use(
-    rateLimit({
-      windowMs: 15 * 60 * 1000,
-      max: 50,
-      message: 'Too many requests from this IP, please try again later.',
-    })
-  );
+  // app.use(
+  //   rateLimit({
+  //     windowMs: 15 * 60 * 1000,
+  //     max: 50,
+  //     message: 'Too many requests from this IP, please try again later.',
+  //   })
+  // );
 
   app.useGlobalPipes(
     new ValidationPipe({

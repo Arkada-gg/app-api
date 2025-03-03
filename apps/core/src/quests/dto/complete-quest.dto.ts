@@ -1,4 +1,4 @@
-import { IsUUID, IsString, IsNotEmpty } from 'class-validator';
+import { IsUUID, IsString, IsNotEmpty, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CompleteQuestDto {
@@ -17,5 +17,6 @@ export class CompleteQuestDto {
 
   @ApiProperty({ description: 'Подпись для верификации', example: '0x...' })
   @IsString()
+  @IsOptional()
   signature: string;
 }
