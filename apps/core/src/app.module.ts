@@ -11,7 +11,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { AscModule } from './asc/asc.module';
 import { DiscordModule } from './discord/discord.module';
-
+import { AlchemyModule } from './alchemy/alchemy.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -26,6 +26,7 @@ import { DiscordModule } from './discord/discord.module';
     LeaderboardModule,
     AscModule,
     DiscordModule,
+    AlchemyModule,
   ],
 })
 export class AppModule {}
