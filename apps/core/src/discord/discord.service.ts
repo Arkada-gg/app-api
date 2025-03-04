@@ -4,7 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { Client, GatewayIntentBits, Guild } from 'discord.js';
+import { Client, GatewayIntentBits, Guild, GuildMember } from 'discord.js';
 import { DatabaseService } from '../database/database.service';
 
 @Injectable()
@@ -26,7 +26,6 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.discordClient.on('guildCreate', async (guild: Guild) => {
-      console.log('------>', guild);
       this.logger.log(`Bot added to guild: ${guild.id} (${guild.name})`);
       try {
         const pgClient = await this.dbService.getClient();
@@ -43,7 +42,7 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     });
 
     try {
-      await this.discordClient.login(process.env.DISCORD_BOT_TOKEN1);
+      await this.discordClient.login(process.env.DISCORD_BOT_TOKEN3);
     } catch (error) {
       this.logger.error(`Discord bot login failed: ${error.message}`);
     }
@@ -66,6 +65,45 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
       this.logger.error(
         `Error checking membership for username ${username} in guild ${guildId}: ${error.message}`
       );
+      return false;
+    }
+  }
+
+  async assignRoleToUser(
+    guildId: string,
+    discordId: string,
+    roleName: string
+  ): Promise<boolean> {
+    try {
+      const guild = await this.discordClient.guilds.fetch(guildId);
+      const members = await guild.members.fetch();
+
+      if (!guild) {
+        this.logger.error(`Guild with ID ${guildId} not found`);
+        return false;
+      }
+      const member = members.find((m) => m.user.username === discordId);
+
+      if (!member) {
+        this.logger.error(
+          `Member with ID ${discordId} not found in guild ${guildId}`
+        );
+        return false;
+      }
+
+      const role = guild.roles.cache.find((r) => r.name === roleName);
+      if (!role) {
+        this.logger.error(`Role ${roleName} not found in guild ${guildId}`);
+        return false;
+      }
+
+      await member.roles.add(role);
+      this.logger.log(
+        `Role ${roleName} assigned to user ${discordId} in guild ${guildId}`
+      );
+      return true;
+    } catch (error) {
+      this.logger.error(`assignRoleToUser error: ${error.message}`);
       return false;
     }
   }

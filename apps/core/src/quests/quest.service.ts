@@ -786,6 +786,70 @@ export class QuestService {
         return false;
       }
 
+      const ifCaseSafeTransfer = questTask.abi_to_find.filter((abiStr) =>
+        abiStr.includes('function safeTransferFrom')
+      );
+
+      if (ifCaseSafeTransfer.length > 0) {
+        for (const tx of userTransactions) {
+          try {
+            if (
+              !tx.to ||
+              tx.to.toLowerCase() !== questTask.contract.toLowerCase()
+            )
+              continue;
+
+            for (const abiStr of ifCaseSafeTransfer) {
+              const iface = new ethers.Interface([abiStr]);
+              let parsed;
+              try {
+                parsed = iface.parseTransaction({ data: tx.input });
+              } catch (err) {
+                continue;
+              }
+              if (!parsed) continue;
+
+              if (parsed.name === 'safeTransferFrom') {
+                if (questTask.minAmountUSD) {
+                  const stakeAmountBN = parsed.args[0] as bigint;
+                  const stakeAmountDecimal = ethers.formatUnits(
+                    stakeAmountBN,
+                    18
+                  );
+                  const usdValue = await this.getUSDValue(
+                    'astroport',
+                    stakeAmountDecimal
+                  );
+                  if (+usdValue >= +questTask.minAmountUSD) {
+                    await this.questRepository.completeQuest(id, address);
+                    if (questStored.sequence === 1) {
+                      await this.campaignService.incrementParticipants(
+                        questStored.campaign_id
+                      );
+                    }
+                    return true;
+                  }
+                } else {
+                  await this.questRepository.completeQuest(id, address);
+                  if (questStored.sequence === 1) {
+                    await this.campaignService.incrementParticipants(
+                      questStored.campaign_id
+                    );
+                  }
+                  return true;
+                }
+              }
+            }
+          } catch (error) {
+            Logger.error(
+              `Ошибка обработки транзакции (execute): ${error.message}`
+            );
+            continue;
+          }
+        }
+        return false;
+      }
+
       const ifCaseStake = questTask.abi_to_find.filter((abiStr) =>
         abiStr.includes('function stake')
       );
