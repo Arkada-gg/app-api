@@ -225,6 +225,15 @@ export class GetCampaignResponse {
     description: 'Статус кампании',
   })
   status: string;
+
+  @ApiProperty({
+    example: 'урл лого',
+    description: 'Лого кампании',
+  })
+  project_logo: string;
+
+  @ApiProperty({ example: '["urCategory"]', description: 'Категории кампании' })
+  category: string[];
 }
 
 export class GetCampaignByIdOrSlugResponse {
@@ -311,6 +320,15 @@ export class GetCampaignByIdOrSlugResponse {
     description: 'Статус кампании',
   })
   status: string;
+
+  @ApiProperty({
+    example: 'урл лого',
+    description: 'Лого кампании',
+  })
+  project_logo: string;
+
+  @ApiProperty({ example: '["urCategory"]', description: 'Категории кампании' })
+  category: string[];
 }
 
 export class GetUserResponse {

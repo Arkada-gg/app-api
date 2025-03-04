@@ -105,6 +105,7 @@ export class UserRepository {
       user.points = {
         ref: +refPoints,
         daily: +dailyPoints,
+        twitter: user.twitter_points,
         base_campaign: +baseCampaignPoints,
         total: +user.total_points,
       };

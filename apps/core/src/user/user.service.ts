@@ -225,6 +225,14 @@ export class UserService {
       platform as keyof IUser,
       null
     );
+
+    if (platform === ESocialPlatform.Twitter) {
+      await this.userRepository.updateField(
+        lowerAddress,
+        'twitter_points',
+        null
+      );
+    }
     return { success: true };
   }
 
