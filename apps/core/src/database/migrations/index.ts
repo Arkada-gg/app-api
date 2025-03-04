@@ -39,7 +39,6 @@ export const allMigrations = [
   m7,
   m8,
   m9,
-  s3,
   m10,
   m11,
   m12,
@@ -57,4 +56,7 @@ export const allMigrations = [
   m24,
   m25,
   m26,
+  // s1,
+  // s2,
+  s3,
 ];
