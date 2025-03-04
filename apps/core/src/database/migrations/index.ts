@@ -21,6 +21,7 @@ import * as m20 from './1674235500024_add_campaign_status_column';
 import * as m21 from './1674235500025_add_twitter_points_column';
 import * as m22 from './1674235500026_add_transactions_table';
 import * as m23 from './1674235500027_add_ignore_campaign_start_to_campaigns';
+import * as m26 from './1674235500028_add_project_logo_and_category_to_campaigns';
 import * as m24 from './1674235501000_create_discord_guilds_table';
 import * as m25 from './1674235501001_create_email_table';
 
@@ -38,7 +39,6 @@ export const allMigrations = [
   m7,
   m8,
   m9,
-  s3,
   m10,
   m11,
   m12,
@@ -55,4 +55,8 @@ export const allMigrations = [
   m23,
   m24,
   m25,
+  m26,
+  // s1,
+  // s2,
+  s3,
 ];
