@@ -98,18 +98,16 @@ export class DiscordController {
   async assignOgRole(@Body('address') userAddress: string) {
     const user = await this.userService.findByAddress(userAddress);
     if (!user) {
-      throw new NotFoundException(
-        `Пользователь с адресом ${userAddress} не найден`
-      );
+      throw new NotFoundException(`User with address ${userAddress} not found`);
     }
 
     if (!user.discord) {
-      throw new BadRequestException('Пользователь не привязал Discord');
+      throw new BadRequestException('Discord account not linked');
     }
 
     const hasOgNft = await this.checkOgNft(userAddress);
     if (!hasOgNft) {
-      throw new BadRequestException('У пользователя нет OG NFT');
+      throw new BadRequestException('Missing OG NFT');
     }
 
     try {
@@ -122,13 +120,11 @@ export class DiscordController {
         roleName
       );
       if (!res) {
-        throw new InternalServerErrorException('Не удалось назначить роль OG');
+        throw new BadRequestException('Not subscribed to the Arkada Discord');
       }
-      return { success: true, message: 'OG роль успешно выдана' };
+      return { success: true, message: 'OG role granted' };
     } catch (error) {
-      throw new InternalServerErrorException(
-        `Ошибка при выдаче роли OG: ${error.message}`
-      );
+      throw new BadRequestException(`${error.message}`);
     }
   }
 
