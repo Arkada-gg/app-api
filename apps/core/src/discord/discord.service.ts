@@ -4,28 +4,39 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { Client, GatewayIntentBits, Guild, GuildMember } from 'discord.js';
+import { Client, GatewayIntentBits, Guild } from 'discord.js';
 import { DatabaseService } from '../database/database.service';
 
 @Injectable()
 export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DiscordBotService.name);
-  private discordClient: Client;
+  private discordClientArkada: Client;
+  private discordClientOther: Client;
 
   constructor(private readonly dbService: DatabaseService) {}
 
   async onModuleInit() {
-    this.discordClient = new Client({
+    this.discordClientArkada = new Client({
       intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
     });
 
-    this.discordClient.once('ready', () => {
+    this.discordClientOther = new Client({
+      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+    });
+
+    this.discordClientArkada.once('ready', () => {
       this.logger.log(
-        `Discord bot logged in as ${this.discordClient.user.tag}`
+        `Discord bot logged in as ${this.discordClientArkada.user.tag}`
       );
     });
 
-    this.discordClient.on('guildCreate', async (guild: Guild) => {
+    this.discordClientOther.once('ready', () => {
+      this.logger.log(
+        `Discord bot logged in as ${this.discordClientOther.user.tag}`
+      );
+    });
+
+    this.discordClientOther.on('guildCreate', async (guild: Guild) => {
       this.logger.log(`Bot added to guild: ${guild.id} (${guild.name})`);
       try {
         const pgClient = await this.dbService.getClient();
@@ -42,14 +53,15 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     });
 
     try {
-      await this.discordClient.login(process.env.DISCORD_BOT_TOKEN3);
+      await this.discordClientArkada.login(process.env.DISCORD_BOT_TOKEN3);
+      await this.discordClientOther.login(process.env.DISCORD_BOT_TOKEN4);
     } catch (error) {
       this.logger.error(`Discord bot login failed: ${error.message}`);
     }
   }
 
   async onModuleDestroy() {
-    this.discordClient.destroy();
+    this.discordClientArkada.destroy();
   }
 
   async isUserInGuildByUsername(
@@ -57,8 +69,9 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     username: string
   ): Promise<boolean> {
     try {
-      const guild = await this.discordClient.guilds.fetch(guildId);
+      const guild = await this.discordClientOther.guilds.fetch(guildId);
       const members = await guild.members.fetch();
+
       const member = members.find((m) => m.user.username === username);
       return !!member;
     } catch (error) {
@@ -75,7 +88,7 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     roleName: string
   ): Promise<boolean> {
     try {
-      const guild = await this.discordClient.guilds.fetch(guildId);
+      const guild = await this.discordClientArkada.guilds.fetch(guildId);
       const members = await guild.members.fetch();
 
       if (!guild) {

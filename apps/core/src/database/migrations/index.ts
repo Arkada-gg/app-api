@@ -24,6 +24,7 @@ import * as m23 from './1674235500027_add_ignore_campaign_start_to_campaigns';
 import * as m24 from './1674235501000_create_discord_guilds_table';
 import * as m25 from './1674235501001_create_email_table';
 import * as m26 from './1674235500028_add_project_logo_and_category_to_campaigns';
+import * as m27 from './1674235501002_add_discord_to_quest_type_enum';
 
 // import * as s1 from './1674235300005_seed_campaigns_and_quests';
 // import * as s2 from './1674235300006_add_swap_and_add_liquidity_quests';
@@ -56,6 +57,7 @@ export const allMigrations = [
   m24,
   m25,
   m26,
+  m27,
   // s1,
   // s2,
   s3,

@@ -9,6 +9,7 @@ import { PriceModule } from '../price/price.module';
 import { NftController } from './nft.controller';
 import { AuthModule } from '../auth/auth.module';
 import { TransactionsModule } from '../transactions/transactions.module';
+import { DiscordModule } from '../discord/discord.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { TransactionsModule } from '../transactions/transactions.module';
     PriceModule,
     AuthModule,
     TransactionsModule,
+    DiscordModule,
   ],
   controllers: [QuestController, NftController],
   providers: [QuestService, QuestRepository],

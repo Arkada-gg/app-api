@@ -22,6 +22,7 @@ export interface QuestTask {
   params?: any;
   actions?: any;
   method_signatures?: any;
+  guildId?: string;
 }
 
 export interface QuestType {
