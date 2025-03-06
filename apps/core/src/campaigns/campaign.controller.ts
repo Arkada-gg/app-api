@@ -1,27 +1,27 @@
 import {
+  BadRequestException,
   Controller,
   Get,
-  Query,
   Param,
-  BadRequestException,
-  Post,
-  Body,
+  Query,
 } from '@nestjs/common';
-import { CampaignService } from './campaign.service';
-import { GetCampaignsDto, CampaignType } from './dto/get-campaigns.dto';
-import { GetCampaignDto } from './dto/get-campaign.dto';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
   ApiBadRequestResponse,
+  ApiOperation,
   ApiQuery,
+  ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
 import {
   GetCampaignByIdOrSlugResponse,
   GetCampaignResponse,
+  GetCampaignWithUserStatusResponse,
 } from '../shared/interfaces';
+import { CampaignService } from './campaign.service';
 import { CampaignStatusDto } from './dto/campaign-status.dto';
+import { GetCampaignDto } from './dto/get-campaign.dto';
+import { GetCampaignsDto } from './dto/get-campaigns.dto';
+import { GetUserCampaignsDto } from './dto/get-user-campaigns.dto';
 
 @ApiTags('Campaigns')
 @Controller('campaigns')
@@ -78,6 +78,36 @@ export class CampaignController {
     const campaignIds = campaignIdsStr.split(',').map((s) => s.trim());
 
     return this.campaignService.getCampaignStatuses(campaignIds, userAddress);
+  }
+
+  @Get('user')
+  @ApiOperation({
+    summary: 'Получить кампании пользователя с фильтрацией по статусу',
+    description: `
+      Возвращает список кампаний для пользователя в зависимости от статуса:
+      - active: активные кампании, в которых пользователь еще не участвовал
+      - started: активные кампании, которые пользователь начал, но не завершил
+      - completed: кампании, которые пользователь завершил
+      Если статус не указан, возвращаются все активные кампании
+
+      Поддерживает пагинацию и фильтрацию по типу кампании
+    `,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Список кампаний пользователя',
+    type: [GetCampaignWithUserStatusResponse],
+  })
+  @ApiBadRequestResponse({ description: 'Некорректные параметры запроса' })
+  async getUserCampaigns(@Query() query: GetUserCampaignsDto) {
+    const { userAddress, status, type, page = 1, limit = 5 } = query;
+    return this.campaignService.getUserCampaigns(
+      userAddress,
+      status,
+      type,
+      page,
+      limit
+    );
   }
 
   @Get(':idOrSlug')

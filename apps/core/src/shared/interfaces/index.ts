@@ -236,6 +236,14 @@ export class GetCampaignResponse {
   category: string[];
 }
 
+export class GetCampaignWithUserStatusResponse extends GetCampaignResponse {
+  @ApiProperty({
+    example: 'active | started | completed',
+    description: 'Статус кампании по юзеру',
+  })
+  user_status: string;
+}
+
 export class GetCampaignByIdOrSlugResponse {
   @ApiProperty({ example: '12345', description: 'ID кампании' })
   id: string;
