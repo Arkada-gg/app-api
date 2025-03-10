@@ -1,29 +1,28 @@
 import {
-  Controller,
-  Post,
-  Body,
   BadRequestException,
+  Body,
+  Controller,
   Get,
-  Param,
   InternalServerErrorException,
-  UseGuards,
+  Param,
+  Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-import { QuestService } from './quest.service';
-import { CheckQuestDto } from './dto/check-quest.dto';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
   ApiBadRequestResponse,
+  ApiOperation,
   ApiParam,
-  ApiQuery,
+  ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
-import { QuestCompletionDto } from './dto/quest.competion.dto';
-import { UserService } from '../user/user.service';
-import { CompleteQuestDto } from './dto/complete-quest.dto';
-import { SignatureAuthGuard } from '../auth/guard/signature-auth.guard';
 import { ConditionalSignatureAuthGuard } from '../auth/guard/conditional-auth.guard';
+import { UserService } from '../user/user.service';
+import { CheckQuestDto } from './dto/check-quest.dto';
+import { CompleteQuestDto } from './dto/complete-quest.dto';
+import { GetMintDataDto } from './dto/get-mint-data.dto';
+import { QuestCompletionDto } from './dto/quest.competion.dto';
+import { QuestService } from './quest.service';
 
 @ApiTags('Quests')
 @Controller('quests')
@@ -185,5 +184,24 @@ export class QuestController {
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
+  }
+
+  @Get('mint-data')
+  @ApiOperation({
+    summary: 'Получить подписанные данные для минта пирамиды',
+  })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Детальная информация о кампании',
+  //   type: GetCampaignByIdOrSlugResponse,
+  // })
+  @ApiBadRequestResponse({ description: 'Кампания не найдена' })
+  async getSignedMintData(@Query() query: GetMintDataDto) {
+    const { campaignIdOrSlug, userAddress } = query;
+    const campaign = await this.questService.getSignedMintData(
+      campaignIdOrSlug,
+      userAddress
+    );
+    return campaign;
   }
 }

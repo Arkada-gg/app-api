@@ -1,31 +1,38 @@
 import {
-  Injectable,
   BadRequestException,
+  Injectable,
   InternalServerErrorException,
-  NotFoundException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
-import { ethers } from 'ethers';
+import { ethers, parseEther } from 'ethers';
 import fetch from 'node-fetch';
-import { QuestRepository } from './quest.repository';
-import { UserService } from '../user/user.service';
+import { ConfigService } from '../_config/config.service';
 import { CampaignService } from '../campaigns/campaign.service';
-import { PriceService } from '../price/price.service';
-import { QuestType } from './interface';
-import { soneiumProvider } from '../shared/provider';
-import { SwapRouterABI } from '../shared/abi/swapRouter';
-import { buyABI } from '../shared/abi/newXd';
-import { VaultABI } from '../shared/abi/vault-buy-execution';
-import { MintNewABI } from '../shared/abi/mintNew';
-import { randomABI } from '../shared/abi/idk';
-import { UniswapV3PoolABI } from '../shared/abi/uniswapV3Pool';
-import { newAbi } from '../shared/abi/newAbi';
-import { mintABI } from '../shared/abi/mintABI';
-import { l2BridgeABI } from '../shared/abi/l2BridgeABI';
-import { ArkadaAbi } from '../shared/abi/arkada';
-import { UniswapV3ABI } from '../shared/abi/uniswapV3';
-import { log } from 'node:console';
 import { DiscordBotService } from '../discord/discord.service';
+import { PriceService } from '../price/price.service';
+import { ArkadaAbi } from '../shared/abi/arkada';
+import { randomABI } from '../shared/abi/idk';
+import { l2BridgeABI } from '../shared/abi/l2BridgeABI';
+import { mintABI } from '../shared/abi/mintABI';
+import { MintNewABI } from '../shared/abi/mintNew';
+import { newAbi } from '../shared/abi/newAbi';
+import { buyABI } from '../shared/abi/newXd';
+import { SwapRouterABI } from '../shared/abi/swapRouter';
+import { UniswapV3ABI } from '../shared/abi/uniswapV3';
+import { UniswapV3PoolABI } from '../shared/abi/uniswapV3Pool';
+import { VaultABI } from '../shared/abi/vault-buy-execution';
+import { soneiumProvider } from '../shared/provider';
+import { UserService } from '../user/user.service';
+import { QuestType } from './interface';
+import {
+  IFeeRecipient,
+  IMintPyramidData,
+  IRewardData,
+  ITransactionData,
+  SIGN_TYPES,
+} from './interfaces/sign';
+import { QuestRepository } from './quest.repository';
 
 @Injectable()
 export class QuestService {
@@ -55,7 +62,8 @@ export class QuestService {
     private readonly userService: UserService,
     private readonly campaignService: CampaignService,
     private readonly priceService: PriceService,
-    private readonly discordService: DiscordBotService
+    private readonly discordService: DiscordBotService,
+    private readonly configService: ConfigService
   ) {}
 
   async getAllCompletedQuestsByUser(address: string) {
@@ -882,5 +890,117 @@ export class QuestService {
     const data = await r.json();
     if (!data || !Array.isArray(data.result)) return [];
     return data.result;
+  }
+
+  async getSignedMintData(idOrSlug: string, userAddress: string) {
+    const campaign = await this.campaignService.getCampaignByIdOrSlug(idOrSlug);
+    if (!campaign) {
+      throw new BadRequestException('Campaign not found');
+    }
+
+    console.log('campaign', campaign);
+
+    const chainId = this.configService.getOrThrow('SIGN_DOMAIN_CHAIN_ID');
+
+    const signDomain = {
+      name: this.configService.getOrThrow('SIGN_DOMAIN_NAME'),
+      version: this.configService.getOrThrow('SIGN_DOMAIN_VERSION'),
+      chainId,
+      verifyingContract: this.configService.getOrThrow(
+        'PYRAMID_CONTRACT_ADDRESS'
+      ),
+    };
+
+    const completedQuests =
+      await this.questRepository.getCompletedQuestsByUserInCampaign(
+        campaign.id,
+        userAddress
+      );
+
+    console.log('completedQuests', completedQuests);
+
+    if (!completedQuests.length) {
+      throw new BadRequestException(
+        'No completed quests found for this campaign'
+      );
+    }
+    // if (completedQuests.length !== campaign.quests.length) {
+    //   throw new BadRequestException('All quests must be completed');
+    // }
+
+    const user = await this.userService.findByAddress(userAddress);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const transactions = completedQuests.map<ITransactionData>((quest) => {
+      return {
+        // txHash: quest.tx_hash,
+        txHash:
+          '0x0000000000000000000000000000000000000000000000000000000000000000',
+        networkChainId: chainId,
+      };
+    });
+
+    const recipients: IFeeRecipient[] = user.ref_owner
+      ? [
+          {
+            recipient: user.ref_owner, //ref_owner is the address of the user who referred the user
+            BPS: 100, // 10000 BPS = 100%
+          },
+        ]
+      : [];
+
+    const rewardAmount = parseEther('0.01');
+
+    const reward: IRewardData = {
+      tokenAddress: ethers.ZeroAddress,
+      chainId: parseInt(chainId),
+      amount: rewardAmount,
+      tokenId: 0,
+      tokenType: 0,
+      rakeBps: 0,
+      factoryAddress: ethers.ZeroAddress,
+    };
+
+    const nonce = Math.floor(Date.now() / 1000); // Current timestamp as nonce
+    const MINT_PRICE = parseEther('0.01');
+
+    // // Since we don't store transaction data in quest_completions,
+    // // we'll use dummy values that will be replaced on the frontend
+    const pyramidData: IMintPyramidData = {
+      questId: campaign.id,
+      nonce,
+      price: MINT_PRICE,
+      toAddress: userAddress,
+      walletProvider: 'metamask', // Default wallet provider
+      tokenURI: '',
+      embedOrigin: 'Arkada',
+      transactions,
+      recipients,
+      reward,
+    };
+
+    // // Get the private key for signing
+    const privateKey = this.configService.getOrThrow(
+      'PYRAMID_SIGNER_PRIVATE_KEY'
+    );
+    const wallet = new ethers.Wallet(privateKey);
+
+    // // Sign the data
+    const signature = await wallet.signTypedData(
+      signDomain,
+      SIGN_TYPES,
+      pyramidData
+    );
+
+    console.log('signature', signature);
+
+    // return {
+    //   domain: signDomain,
+    //   types: SIGN_TYPES,
+    //   value: pyramidData,
+    //   signature,
+    // };
   }
 }
