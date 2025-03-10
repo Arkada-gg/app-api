@@ -236,56 +236,51 @@ export class CampaignRepository {
 
   async getCampaignStatuses(campaignIds: string[], userAddress: string) {
     const client = this.dbService.getClient();
+
     const idsList = campaignIds.map((id) => `'${id}'`).join(',');
 
     try {
-      const completedQuery = `
-        SELECT campaign_id 
-        FROM campaign_completions
-        WHERE user_address = $1
-          AND campaign_id IN (${idsList})
+      const query = `
+        SELECT
+          q.campaign_id,
+          COUNT(q.id)::int AS total_quest,
+          COUNT(qc.quest_id)::int AS quest_completed
+        FROM quests q
+        LEFT JOIN quest_completions qc
+          ON q.id = qc.quest_id
+          AND qc.user_address = $1
+        WHERE q.campaign_id IN (${idsList})
+        GROUP BY q.campaign_id
       `;
 
-      const startedQuery = `
-SELECT DISTINCT q.campaign_id
-FROM quests q
-JOIN quest_completions qc ON q.id = qc.quest_id
-JOIN (
-  SELECT campaign_id, MAX(sequence) AS max_seq
-  FROM quests
-  GROUP BY campaign_id
-) t ON q.campaign_id = t.campaign_id
-WHERE qc.user_address = $1
-  AND q.sequence < t.max_seq
-  AND q.campaign_id IN (${idsList})
-      `;
+      const res = await client.query(query, [userAddress.toLowerCase()]);
 
-      const [completedRes, startedRes] = await Promise.all([
-        client.query(completedQuery, [userAddress.toLowerCase()]),
-        client.query(startedQuery, [userAddress.toLowerCase()]),
-      ]);
-
-      const completedSet = new Set<string>(
-        completedRes.rows.map((row) => row.campaign_id)
-      );
-      const startedSet = new Set<string>(
-        startedRes.rows.map((row) => row.campaign_id)
-      );
-
-      const results: {
-        campaignId: string;
-        status: 'completed' | 'started' | 'not_started';
-      }[] = [];
-
-      for (const cid of campaignIds) {
-        if (completedSet.has(cid)) {
-          results.push({ campaignId: cid, status: 'completed' });
-        } else if (startedSet.has(cid)) {
-          results.push({ campaignId: cid, status: 'started' });
-        } else {
-          results.push({ campaignId: cid, status: 'not_started' });
-        }
+      const statsMap = new Map<
+        string,
+        { total_quest: number; quest_completed: number }
+      >();
+      for (const row of res.rows) {
+        statsMap.set(row.campaign_id, {
+          total_quest: row.total_quest,
+          quest_completed: row.quest_completed,
+        });
       }
+
+      const results = campaignIds.map((cid) => {
+        const data = statsMap.get(cid);
+        if (!data) {
+          return {
+            campaignId: cid,
+            total_quest: 0,
+            quest_completed: 0,
+          };
+        }
+        return {
+          campaignId: cid,
+          total_quest: data.total_quest,
+          quest_completed: data.quest_completed,
+        };
+      });
 
       return results;
     } catch (error) {

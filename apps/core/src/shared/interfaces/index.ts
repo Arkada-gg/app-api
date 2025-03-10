@@ -234,6 +234,9 @@ export class GetCampaignResponse {
 
   @ApiProperty({ example: '["urCategory"]', description: 'Категории кампании' })
   category: string[];
+
+  @ApiProperty({ example: 'default', description: 'тип ивента' })
+  event_type: 'default' | 'mystery' | 'special';
 }
 
 export class GetCampaignWithUserStatusResponse extends GetCampaignResponse {
@@ -337,6 +340,9 @@ export class GetCampaignByIdOrSlugResponse {
 
   @ApiProperty({ example: '["urCategory"]', description: 'Категории кампании' })
   category: string[];
+
+  @ApiProperty({ example: 'default', description: 'тип ивента' })
+  event_type: 'default' | 'mystery' | 'special';
 }
 
 export class GetUserResponse {
