@@ -11,17 +11,15 @@ import { ConfigService } from '../_config/config.service';
 import { CampaignService } from '../campaigns/campaign.service';
 import { DiscordBotService } from '../discord/discord.service';
 import { PriceService } from '../price/price.service';
-import { ArkadaAbi } from '../shared/abi/arkada';
-import { randomABI } from '../shared/abi/idk';
-import { l2BridgeABI } from '../shared/abi/l2BridgeABI';
-import { mintABI } from '../shared/abi/mintABI';
-import { MintNewABI } from '../shared/abi/mintNew';
-import { newAbi } from '../shared/abi/newAbi';
-import { buyABI } from '../shared/abi/newXd';
-import { SwapRouterABI } from '../shared/abi/swapRouter';
-import { UniswapV3ABI } from '../shared/abi/uniswapV3';
-import { UniswapV3PoolABI } from '../shared/abi/uniswapV3Pool';
-import { VaultABI } from '../shared/abi/vault-buy-execution';
+import { ArkadaAbi } from '../shared/abi/arkada.abi';
+import { l2BridgeABI } from '../shared/abi/l2Bridge.abi.';
+import { mintABI } from '../shared/abi/mint.abi';
+import { MintNewABI } from '../shared/abi/mintNew.abi';
+import { newAbi } from '../shared/abi/new.abi';
+import { SwapRouterABI } from '../shared/abi/swapRouter.abi';
+import { UniswapV3ABI } from '../shared/abi/uniswapV3.abi';
+import { UniswapV3PoolABI } from '../shared/abi/uniswapV3Pool.abi';
+import { VaultABI } from '../shared/abi/vault-buy-execution.abi';
 import { soneiumProvider } from '../shared/provider';
 import { UserService } from '../user/user.service';
 import { QuestType } from './interface';
@@ -44,10 +42,8 @@ export class QuestService {
     '0x43a91c353620b18070ad70416f1667250a75daed': mintABI,
     '0xae2b32e603d303ed120f45b4bc2ebac314de080b': newAbi,
     '0xe15bd143d36e329567ae9a176682ab9fafc9c3d2': UniswapV3PoolABI,
-    '0x34834f208f149e0269394324c3f19e06df2ca9cb': randomABI,
     '0x39df84267fda113298d4794948b86026efd47e32': MintNewABI,
     '0x580DD7a2CfC523347F15557ad19f736F74D5677c': VaultABI,
-    '0x1c5d80edb12341dca11f4500aa67b4d2238f3220': buyABI,
   };
 
   private readonly tokenToCoingeckoId: { [token: string]: string } = {

@@ -33,6 +33,10 @@ export class AlchemyWebhooksService {
     daylyCheckAbi
   );
 
+  private readonly piramideInterface: Interface = new ethers.Interface(
+    daylyCheckAbi
+  );
+
   constructor(
     private readonly userService: UserService,
     private readonly transactionsService: TransactionsService,
