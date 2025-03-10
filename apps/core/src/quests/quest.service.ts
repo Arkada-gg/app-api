@@ -10,6 +10,7 @@ import fetch from 'node-fetch';
 import { ConfigService } from '../_config/config.service';
 import { CampaignService } from '../campaigns/campaign.service';
 import { DiscordBotService } from '../discord/discord.service';
+import { IpfsService } from '../ipfs/ipfs.service';
 import { PriceService } from '../price/price.service';
 import { ArkadaAbi } from '../shared/abi/arkada.abi';
 import { l2BridgeABI } from '../shared/abi/l2Bridge.abi.';
@@ -59,7 +60,8 @@ export class QuestService {
     private readonly campaignService: CampaignService,
     private readonly priceService: PriceService,
     private readonly discordService: DiscordBotService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly ipfsService: IpfsService
   ) {}
 
   async getAllCompletedQuestsByUser(address: string) {
