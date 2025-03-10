@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { CampaignModule } from '../campaigns/campaign.module';
 import { DatabaseModule } from '../database/database.module';
 import { DiscordModule } from '../discord/discord.module';
+import { IpfsService } from '../ipfs/ipfs.service';
 import { PriceModule } from '../price/price.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { UserModule } from '../user/user.module';
@@ -24,6 +25,6 @@ import { QuestService } from './quest.service';
     _ConfigModule,
   ],
   controllers: [QuestController, NftController],
-  providers: [QuestService, QuestRepository],
+  providers: [QuestService, QuestRepository, IpfsService],
 })
 export class QuestModule {}
