@@ -20,7 +20,7 @@ import { ConditionalSignatureAuthGuard } from '../auth/guard/conditional-auth.gu
 import { UserService } from '../user/user.service';
 import { CheckQuestDto } from './dto/check-quest.dto';
 import { CompleteQuestDto } from './dto/complete-quest.dto';
-import { GetMintDataDto } from './dto/get-mint-data.dto';
+import { GetMintDataDto, GetMintDataResponse } from './dto/get-mint-data.dto';
 import { QuestCompletionDto } from './dto/quest.competion.dto';
 import { QuestService } from './quest.service';
 
@@ -190,18 +190,16 @@ export class QuestController {
   @ApiOperation({
     summary: 'Получить подписанные данные для минта пирамиды',
   })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Детальная информация о кампании',
-  //   type: GetCampaignByIdOrSlugResponse,
-  // })
-  @ApiBadRequestResponse({ description: 'Кампания не найдена' })
+  @ApiResponse({
+    status: 200,
+    description: 'Подписанные данные для минта пирамиды',
+    type: GetMintDataResponse,
+  })
   async getSignedMintData(@Query() query: GetMintDataDto) {
     const { campaignIdOrSlug, userAddress } = query;
-    const campaign = await this.questService.getSignedMintData(
+    return await this.questService.getSignedMintData(
       campaignIdOrSlug,
       userAddress
     );
-    return campaign;
   }
 }

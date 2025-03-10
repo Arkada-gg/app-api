@@ -941,8 +941,6 @@ export class QuestService {
       throw new BadRequestException('Campaign not found');
     }
 
-    console.log('campaign', campaign);
-
     const chainId = this.configService.getOrThrow('SIGN_DOMAIN_CHAIN_ID');
 
     const signDomain = {
@@ -960,13 +958,12 @@ export class QuestService {
         userAddress
       );
 
-    console.log('completedQuests', completedQuests);
-
     if (!completedQuests.length) {
       throw new BadRequestException(
         'No completed quests found for this campaign'
       );
     }
+    // @todo don't forget to uncomment this
     // if (completedQuests.length !== campaign.quests.length) {
     //   throw new BadRequestException('All quests must be completed');
     // }
@@ -985,6 +982,8 @@ export class QuestService {
         };
       });
 
+    console.log('transactions', transactions);
+
     const recipients: IFeeRecipient[] = user.ref_owner
       ? [
           {
@@ -994,12 +993,14 @@ export class QuestService {
         ]
       : [];
 
+    console.log('recipients', recipients);
+
     const rewardAmount = parseEther('0.01');
 
     const reward: IRewardData = {
       tokenAddress: ethers.ZeroAddress,
       chainId: parseInt(chainId),
-      amount: rewardAmount,
+      amount: rewardAmount.toString(),
       tokenId: 0,
       tokenType: 0,
       rakeBps: 0,
@@ -1014,7 +1015,7 @@ export class QuestService {
     const pyramidData: IMintPyramidData = {
       questId: campaign.id,
       nonce,
-      price: MINT_PRICE,
+      price: MINT_PRICE.toString(),
       toAddress: userAddress,
       walletProvider: 'metamask', // Default wallet provider
       tokenURI: '',
@@ -1023,6 +1024,24 @@ export class QuestService {
       recipients,
       reward,
     };
+
+    const metadata = {
+      name: campaign.name,
+      image: '',
+      attributes: [
+        { trait_type: 'Type', value: campaign.type },
+        { trait_type: 'Title', value: campaign.name },
+        { trait_type: 'Transaction Chain', value: 'Soneium' },
+        { trait_type: 'Transaction Count', value: transactions.length },
+        { trait_type: 'Community', value: campaign.project_name },
+        ...(campaign.tags[0]
+          ? [{ trait_type: 'Tag', value: campaign.tags[0] }]
+          : []),
+        { trait_type: 'Difficulty', value: campaign.difficulty },
+      ],
+    };
+
+    console.log('metadata', metadata);
 
     // // Get the private key for signing
     const privateKey = this.configService.getOrThrow(
@@ -1037,30 +1056,9 @@ export class QuestService {
       pyramidData
     );
 
-    console.log('signature', signature);
-
-    // return {
-    //   domain: signDomain,
-    //   types: SIGN_TYPES,
-    //   value: pyramidData,
-    //   signature,
-    // };
-  }
-
-  private generateMetadata() {
-    const metadata = {
-      name: 'Soneium OGs: QuickSwap',
-      image: 'ipfs://QmUjzyxRLWT6H4a6gCLxjjV39GM2kWV8nDkvF217YBYWvg',
-      attributes: [
-        { trait_type: 'Type', value: 'Quest' },
-        { trait_type: 'Title', value: 'Soneium OGs: QuickSwap' },
-        { trait_type: 'Transaction Chain', value: 'Soneium' },
-        { trait_type: 'Transaction Count', value: '1' },
-        { trait_type: 'Community', value: 'QuickSwap' },
-        { trait_type: 'Tag', value: 'DeFi' },
-        { trait_type: 'Difficulty', value: 'BEGINNER' },
-        { trait_type: 'Wallet Provider', value: 'Rabby Wallet' },
-      ],
+    return {
+      data: pyramidData,
+      signature,
     };
   }
 }
