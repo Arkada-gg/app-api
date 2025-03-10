@@ -12,6 +12,7 @@ import { NftController } from './nft.controller';
 import { QuestController } from './quest.controller';
 import { QuestRepository } from './quest.repository';
 import { QuestService } from './quest.service';
+import { IpfsModule } from '../ipfs/ipfs.module';
 
 @Module({
   imports: [
@@ -23,8 +24,9 @@ import { QuestService } from './quest.service';
     TransactionsModule,
     DiscordModule,
     _ConfigModule,
+    IpfsModule,
   ],
   controllers: [QuestController, NftController],
-  providers: [QuestService, QuestRepository, IpfsService],
+  providers: [QuestService, QuestRepository],
 })
 export class QuestModule {}
