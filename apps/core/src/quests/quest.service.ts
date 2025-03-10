@@ -976,14 +976,14 @@ export class QuestService {
       throw new BadRequestException('User not found');
     }
 
-    const transactions = completedQuests.map<ITransactionData>((quest) => {
-      return {
-        // txHash: quest.tx_hash,
-        txHash:
-          '0x0000000000000000000000000000000000000000000000000000000000000000',
-        networkChainId: chainId,
-      };
-    });
+    const transactions = completedQuests
+      .filter((quest) => !!quest.transaction_hash)
+      .map<ITransactionData>((quest) => {
+        return {
+          txHash: quest.transaction_hash,
+          networkChainId: chainId,
+        };
+      });
 
     const recipients: IFeeRecipient[] = user.ref_owner
       ? [
@@ -1045,5 +1045,22 @@ export class QuestService {
     //   value: pyramidData,
     //   signature,
     // };
+  }
+
+  private generateMetadata() {
+    const metadata = {
+      name: 'Soneium OGs: QuickSwap',
+      image: 'ipfs://QmUjzyxRLWT6H4a6gCLxjjV39GM2kWV8nDkvF217YBYWvg',
+      attributes: [
+        { trait_type: 'Type', value: 'Quest' },
+        { trait_type: 'Title', value: 'Soneium OGs: QuickSwap' },
+        { trait_type: 'Transaction Chain', value: 'Soneium' },
+        { trait_type: 'Transaction Count', value: '1' },
+        { trait_type: 'Community', value: 'QuickSwap' },
+        { trait_type: 'Tag', value: 'DeFi' },
+        { trait_type: 'Difficulty', value: 'BEGINNER' },
+        { trait_type: 'Wallet Provider', value: 'Rabby Wallet' },
+      ],
+    };
   }
 }

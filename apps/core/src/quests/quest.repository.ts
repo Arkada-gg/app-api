@@ -4,8 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { QuestTask, QuestType } from './interface';
 import { QuestCompletionDto } from './dto/quest.competion.dto';
+import { QuestTask, QuestType } from './interface';
 
 @Injectable()
 export class QuestRepository {
@@ -108,7 +108,7 @@ export class QuestRepository {
 
       if (this.isUUID(campaignIdOrSlug)) {
         query = `
-          SELECT qc.id, q.name AS quest_name, qc.completed_at
+          SELECT qc.id, q.name AS quest_name, qc.completed_at, qc.transaction_hash
           FROM quest_completions qc
           JOIN quests q ON qc.quest_id = q.id
           WHERE qc.user_address = $1 AND q.campaign_id = $2
@@ -117,7 +117,7 @@ export class QuestRepository {
         params.push(campaignIdOrSlug);
       } else {
         query = `
-          SELECT qc.id, q.name AS quest_name, qc.completed_at
+          SELECT qc.id, q.name AS quest_name, qc.completed_at, qc.transaction_hash
           FROM quest_completions qc
           JOIN quests q ON qc.quest_id = q.id
           JOIN campaigns c ON q.campaign_id = c.id
@@ -133,6 +133,7 @@ export class QuestRepository {
         id: row.id,
         quest_name: row.quest_name,
         completed_at: row.completed_at,
+        transaction_hash: row.transaction_hash,
       }));
     } catch (error) {
       throw new InternalServerErrorException(
@@ -147,7 +148,7 @@ export class QuestRepository {
     const lowerAddress = userAddress.toLowerCase();
     try {
       const query = `
-        SELECT qc.id, q.name AS quest_name, qc.completed_at
+        SELECT qc.id, q.name AS quest_name, qc.completed_at, qc.transaction_hash
         FROM quest_completions qc
         JOIN quests q ON qc.quest_id = q.id
         WHERE qc.user_address = $1
@@ -158,6 +159,7 @@ export class QuestRepository {
         id: row.id,
         quest_name: row.quest_name,
         completed_at: row.completed_at,
+        transaction_hash: row.transaction_hash,
       }));
     } catch (error) {
       throw new InternalServerErrorException(
