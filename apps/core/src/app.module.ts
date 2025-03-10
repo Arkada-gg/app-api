@@ -12,6 +12,7 @@ import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { AscModule } from './asc/asc.module';
 import { DiscordModule } from './discord/discord.module';
 import { AlchemyModule } from './alchemy/alchemy.module';
+import { IpfsModule } from './ipfs/ipfs.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -27,6 +28,7 @@ import { AlchemyModule } from './alchemy/alchemy.module';
     AscModule,
     DiscordModule,
     AlchemyModule,
+    IpfsModule,
   ],
 })
 export class AppModule {}

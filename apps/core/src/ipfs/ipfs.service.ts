@@ -1,24 +1,27 @@
 import { json, type JSON } from '@helia/json';
 import { Injectable } from '@nestjs/common';
-import type { HeliaLibp2p } from 'helia';
-import { createHelia } from 'helia';
+// import type { HeliaLibp2p } from 'helia';
+// import { createHelia } from 'helia';
 
 @Injectable()
 export class IpfsService {
-  private helia?: HeliaLibp2p;
-  private json?: JSON;
+  private helia?: any;
+  private json?: any;
 
-  async getHelia(): Promise<HeliaLibp2p> {
-    if (this.helia == null) {
-      this.helia = await createHelia();
-      this.json = json(this.helia);
+  async getHelia(): Promise<any> {
+    if (!this.helia) {
+      const heliaLib = await import('helia'); // ESM import
+      const heliaJson = await import('@helia/json');
+
+      this.helia = await heliaLib.createHelia();
+      this.json = heliaJson.json(this.helia);
     }
 
     return this.helia;
   }
 
-  async onApplicationShutdown(): Promise<void> {
-    if (this.helia != null) {
+  async onApplicationShutdown() {
+    if (this.helia) {
       await this.helia.stop();
     }
   }
