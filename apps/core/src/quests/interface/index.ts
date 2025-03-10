@@ -23,6 +23,7 @@ export interface QuestTask {
   actions?: any;
   method_signatures?: any;
   guildId?: string;
+  methodToFind: string[];
 }
 
 export interface QuestType {

@@ -305,7 +305,6 @@ export class QuestService {
       );
     }
     if (quest.value.type === 'checkMethod') {
-      console.log('------>', 123123);
       return this.handleCheckMethodQuest(quest, userAddr);
     }
     if (quest.value.type === 'checkOnchainMethod') {
@@ -353,26 +352,40 @@ export class QuestService {
     const abi = quest.value.actions
       ? quest.value.actions[0].methodSignatures
       : quest.value.methodSignatures;
+
     const iface = new ethers.Interface(abi);
-    // const ifaceStr = abi.join(' ');
+
     const transactions = await this.getUserTransactions(
       'Soneium',
       userAddr,
       quest
     );
+
     const contractTransactions = transactions.filter(
       (tx) => tx.to.toLowerCase() === contractAddress
     );
 
+    console.log(`Transactions found for user ${contractTransactions.length}`);
+
     for (const tx of contractTransactions) {
       try {
         const parsed = iface.parseTransaction({ data: tx.input });
+
         if (parsed.name === 'checkIn') {
           return true;
         }
         if (parsed.name === 'safeTransferFrom') {
           return true;
         }
+
+        if (quest.value.methodToFind) {
+          for (let i = 0; i <= quest.value.methodToFind.length; i++) {
+            if (parsed.name === quest.value.methodToFind[i]) {
+              return true;
+            }
+          }
+        }
+
         if (parsed.name === 'execute') {
           const inputs = parsed.args[1];
           if (inputs.length > 2) {
@@ -414,6 +427,7 @@ export class QuestService {
                 return true;
               } else {
                 console.log('❌ Квест не выполнен.');
+                continue;
               }
             } catch (error) {
               continue;
@@ -424,24 +438,25 @@ export class QuestService {
         continue;
       }
     }
+
     return false;
   }
 
   private async handleCheckMethodQuest(quest: QuestType, userAddr: string) {
     const task = quest.value;
-    console.log('------>', task);
     try {
       const contract = new ethers.Contract(
         task.contracts[0],
         task.methodSignatures,
         soneiumProvider
       );
-      console.log('------>', contract);
-      const newBalance =
-        task.contract[0].toLowerCase() ===
-        '0x18fe3dCA03AD7779275E12F0487866431f954B4c'.toLowerCase()
-          ? await contract.balanceOf(userAddr)
-          : await contract.balanceOf(userAddr, 0);
+
+      let newBalance;
+      if (task.methodSignatures[0].includes('uint256 id')) {
+        newBalance = await contract.balanceOf(userAddr, 0);
+      } else {
+        newBalance = await contract.balanceOf(userAddr);
+      }
       return newBalance > 0;
     } catch (e) {
       return false;
@@ -490,6 +505,7 @@ export class QuestService {
         tx.to.toLowerCase() === quest.value.contracts[1]?.toLowerCase() ||
         tx.to.toLowerCase() === quest.value.contracts[2]?.toLowerCase()
     );
+    console.log('------>', txnsToAddress.length);
 
     for (const tx of txnsToAddress) {
       if (!data.minAmountUSD && !data.actions && data.methodSignatures) {
@@ -603,6 +619,7 @@ export class QuestService {
   private async parseOnchainTx(tx: any, actions: any[]): Promise<boolean> {
     const rawInput = tx.input || '';
     if (!rawInput.startsWith('0x')) return false;
+    console.log('------>', tx.hash);
     const ok = await this.parseOnchainData(rawInput, actions, tx);
     return ok;
   }
@@ -646,10 +663,25 @@ export class QuestService {
             continue;
           }
         }
+        if (methodName === 'depositTokenDelegate') {
+          // Проверяем логи
+          const eventOk = await this.parseNeemoDepositEvent(parentTx.hash);
+          if (eventOk) {
+            // Квест выполнен
+            return true;
+          }
+        }
         if (methodName === 'swap') {
           let totalUsdValue = 0;
           const request = parsedTx.args[0];
           const routes = request[3];
+          const lastToken = request[2][0];
+          if (
+            lastToken.toLowerCase() !==
+            '0x2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase()
+          ) {
+            return false;
+          }
 
           for (const route of routes) {
             const tokenAddr = route[0] as string;
@@ -657,28 +689,15 @@ export class QuestService {
               tokenAddr.toLowerCase() !==
               '0x4200000000000000000000000000000000000006'
             ) {
-              return false;
+              continue;
             }
             const amountBN = route[1] as bigint;
-            const tokenAddr2 = route[2][0][0] as string;
-            if (
-              tokenAddr2.toLowerCase() !==
-              '0x2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase()
-            ) {
-              return false;
-            }
-            const amountBN2 = request[request.length - 1][0] as bigint;
-
             const usdValueForRoute = await this.convertToUSD(
               tokenAddr.toLowerCase(),
-              amountBN
+              parentTx.value
             );
 
-            const usdValueForRoute2 = await this.convertToUSD(
-              tokenAddr2.toLowerCase(),
-              amountBN2
-            );
-            totalUsdValue = usdValueForRoute + usdValueForRoute2;
+            totalUsdValue = usdValueForRoute;
           }
 
           Logger.debug(`Total swap USD value: ${totalUsdValue}`);
@@ -703,6 +722,36 @@ export class QuestService {
     return false;
   }
 
+  private async parseNeemoDepositEvent(txHash: string): Promise<boolean> {
+    // 1. Получаем receipt
+    const receipt = await soneiumProvider.getTransactionReceipt(txHash);
+    if (!receipt || !receipt.logs) return false;
+
+    // 2. Определяем ABI события
+    const eventAbi = [
+      'event LogDepositTokenDelegate(address indexed user, address indexed delegateTo, uint256 tokenAmount, uint256 lstAmount)',
+    ];
+    const iface = new ethers.Interface(eventAbi);
+
+    for (const log of receipt.logs) {
+      try {
+        const parsedLog = iface.parseLog(log);
+        if (parsedLog.name === 'LogDepositTokenDelegate') {
+          // parsedLog.args.user
+          // parsedLog.args.delegateTo
+          // parsedLog.args.tokenAmount (BigNumber или bigint)
+          // parsedLog.args.lstAmount
+          // Тут же можно проверить пороговое значение, user = msg.sender и т.д.
+          return true;
+        }
+      } catch (e) {
+        // parseLog бросит ошибку, если топик не совпал — просто игнорируем
+        continue;
+      }
+    }
+    return false;
+  }
+
   private async checkActionTokens(
     action: any,
     parsedTx: ethers.TransactionDescription,
@@ -715,9 +764,12 @@ export class QuestService {
     if (parsedTx.signature.includes('supplyCollateralAndBorrow')) {
       const borrowAmountBN = parsedTx.args[2] as bigint;
       const tokenAddr = (parsedTx.args[3] as string).toLowerCase();
-      if (
-        tokenAddr === '0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC369'.toLowerCase()
-      ) {
+
+      const allowedCollaterals = [
+        '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369'.toLowerCase(),
+        '0x4200000000000000000000000000000000000006'.toLowerCase(),
+      ];
+      if (allowedCollaterals.includes(tokenAddr)) {
         const usdVal = await this.convertToUSD(
           '0x2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase(),
           borrowAmountBN
@@ -725,18 +777,7 @@ export class QuestService {
         return usdVal;
       }
     }
-    if (
-      parsedTx.signature.includes('borrow') &&
-      action.methodSignatures &&
-      action.methodSignatures.length < 3
-    ) {
-      const borrowAmountBN = parsedTx.args[1] as bigint;
-      const usdVal = await this.convertToUSD(
-        '0x2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase(),
-        borrowAmountBN
-      );
-      return usdVal;
-    }
+
     if (!action.tokens && action.minUsdTotal && action.methodSignatures) {
       const tokenAmountBN = parsedTx.args[0] as bigint;
       const usdVal = await this.convertToUSD(
@@ -768,7 +809,10 @@ export class QuestService {
       if (!tokenIdx && !tokenVal) {
         actualTokens.push({ address: tokenDef.address, amount: argVal });
       }
-      if (tokenVal && tokenVal.toLowerCase() !== tokenAddr.toLowerCase())
+      if (
+        tokenVal &&
+        tokenVal.toString().toLowerCase() !== tokenAddr.toLowerCase()
+      )
         continue;
       if (!argVal) continue;
       if (typeof argVal === 'bigint') {
@@ -806,7 +850,6 @@ export class QuestService {
           if (token0Index < token1Index) {
             return 0;
           }
-
           const usdVal = await this.convertToUSD(
             action.tokens[i].address.toLowerCase(),
             actual.amount

@@ -18,7 +18,7 @@ import {
   GetCampaignWithUserStatusResponse,
 } from '../shared/interfaces';
 import { CampaignService } from './campaign.service';
-import { CampaignStatusDto } from './dto/campaign-status.dto';
+import { CampaignStatsDto } from './dto/campaign-status.dto';
 import { GetCampaignDto } from './dto/get-campaign.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { GetUserCampaignsDto } from './dto/get-user-campaigns.dto';
@@ -59,8 +59,9 @@ export class CampaignController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Возвращает статусы для каждой кампании',
-    type: CampaignStatusDto,
+    description:
+      'Возвращает количество квестов и количество выполненных квестов для каждой кампании',
+    type: CampaignStatsDto,
     isArray: true,
   })
   @ApiBadRequestResponse({ description: 'Некорректные параметры запроса' })
