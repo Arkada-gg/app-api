@@ -1027,6 +1027,7 @@ export class QuestService {
       name: campaign.name,
       image: '',
       attributes: [
+        { trait_type: 'Quest ID', value: campaign.id },
         { trait_type: 'Type', value: campaign.type },
         { trait_type: 'Title', value: campaign.name },
         { trait_type: 'Transaction Chain', value: 'Soneium' },
@@ -1038,6 +1039,8 @@ export class QuestService {
         { trait_type: 'Difficulty', value: campaign.difficulty },
       ],
     };
+
+    await this.ipfsService.getHelia();
 
     console.log('metadata', metadata);
 
