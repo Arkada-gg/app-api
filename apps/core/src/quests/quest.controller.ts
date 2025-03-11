@@ -6,7 +6,6 @@ import {
   InternalServerErrorException,
   Param,
   Post,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -186,7 +185,7 @@ export class QuestController {
     }
   }
 
-  @Get('mint-data')
+  @Post('mint-data')
   @ApiOperation({
     summary: 'Получить подписанные данные для минта пирамиды',
   })
@@ -195,8 +194,8 @@ export class QuestController {
     description: 'Подписанные данные для минта пирамиды',
     type: GetMintDataResponse,
   })
-  async getSignedMintData(@Query() query: GetMintDataDto) {
-    const { campaignIdOrSlug, userAddress } = query;
+  async getSignedMintData(@Body() body: GetMintDataDto) {
+    const { campaignIdOrSlug, userAddress } = body;
     return await this.questService.getSignedMintData(
       campaignIdOrSlug,
       userAddress
