@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsNotEmpty, IsString } from 'class-validator';
-import { IMintPyramidData } from '../interfaces/sign';
+import { IMintPyramidData } from '../interface/sign';
 
 export class GetMintDataDto {
   @ApiProperty({ description: 'Адрес пользователя', example: '0x84fsdjf...' })
