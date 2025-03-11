@@ -998,15 +998,15 @@ export class QuestService {
         userAddress
       );
 
-    // if (!completedQuests.length) {
-    //   throw new BadRequestException(
-    //     'No completed quests found for this campaign'
-    //   );
-    // }
-    // // @todo don't forget to uncomment this
-    // if (completedQuests.length !== campaign.quests.length) {
-    //   throw new BadRequestException('All quests must be completed');
-    // }
+    if (!completedQuests.length) {
+      throw new BadRequestException(
+        'No completed quests found for this campaign'
+      );
+    }
+
+    if (completedQuests.length !== campaign.quests.length) {
+      throw new BadRequestException('All quests must be completed');
+    }
 
     const user = await this.userService.findByAddress(userAddress);
     if (!user) {
