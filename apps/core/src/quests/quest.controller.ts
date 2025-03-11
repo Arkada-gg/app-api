@@ -186,6 +186,7 @@ export class QuestController {
   }
 
   @Post('mint-data')
+  @UseGuards(ConditionalSignatureAuthGuard)
   @ApiOperation({
     summary: 'Получить подписанные данные для минта пирамиды',
   })

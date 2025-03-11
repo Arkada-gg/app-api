@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { IMintPyramidData } from '../interface/sign';
 
 export class GetMintDataDto {
@@ -15,6 +15,11 @@ export class GetMintDataDto {
   @IsString()
   @IsNotEmpty()
   campaignIdOrSlug: string;
+
+  @ApiProperty({ description: 'Подпись для верификации', example: '0x...' })
+  @IsString()
+  @IsOptional()
+  signature: string;
 }
 
 export class GetMintDataResponse {
