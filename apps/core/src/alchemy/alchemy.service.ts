@@ -31,13 +31,6 @@ export interface IEventComb {
 export class AlchemyWebhooksService {
   private readonly logger = new Logger(AlchemyWebhooksService.name);
 
-  private readonly dailyCheckInterface: Interface = new ethers.Interface(
-    daylyCheckAbi
-  );
-  private readonly pyramidInterface: Interface = new ethers.Interface(
-    pyramidAbi
-  );
-
   constructor(
     private readonly userService: UserService,
     private readonly transactionsService: TransactionsService,
@@ -96,12 +89,14 @@ export class AlchemyWebhooksService {
     }
   }
 
-  private getInterfaceByEventSignature(eventSignature: EventSignature) {
+  private getInterfaceByEventSignature(
+    eventSignature: EventSignature
+  ): Interface {
     switch (eventSignature) {
       case EventSignature.DAILY_CHECK:
-        return this.dailyCheckInterface;
+        return new ethers.Interface(daylyCheckAbi);
       case EventSignature.PYRAMID_CLAIM:
-        return this.pyramidInterface;
+        return new ethers.Interface(pyramidAbi);
       default:
         throw new BadRequestException('Unsupported event signature');
     }
