@@ -4,12 +4,14 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-import { UserService } from '../user/user.service';
-import { TransactionsService } from '../transactions/transactions.service';
-import { ConfigService } from '../_config/config.service';
 import * as crypto from 'crypto';
-import { LogDescription, Interface, ethers } from 'ethers';
+import { Interface, LogDescription, ethers } from 'ethers';
+import { ConfigService } from '../_config/config.service';
+import { QuestService } from '../quests/quest.service';
+import { TransactionsService } from '../transactions/transactions.service';
+import { UserService } from '../user/user.service';
 import daylyCheckAbi from './abis/daily-check-abi.json';
+import pyramidAbi from './abis/pyramid-abi.json';
 import { EventSignature } from './config/signatures';
 
 export interface AlchemyWebhookEvent {
@@ -32,23 +34,37 @@ export class AlchemyWebhooksService {
   private readonly dailyCheckInterface: Interface = new ethers.Interface(
     daylyCheckAbi
   );
-
-  private readonly piramideInterface: Interface = new ethers.Interface(
-    daylyCheckAbi
+  private readonly pyramidInterface: Interface = new ethers.Interface(
+    pyramidAbi
   );
 
   constructor(
     private readonly userService: UserService,
     private readonly transactionsService: TransactionsService,
+    private readonly questService: QuestService,
     private readonly configService: ConfigService
   ) {}
 
+  private getSigningKeyByEventSignature(eventSignature: EventSignature) {
+    switch (eventSignature) {
+      case EventSignature.DAILY_CHECK:
+        return this.configService.getOrThrow('ALCHEMY_SIGNING_KEY_DAILY_CHECK');
+      case EventSignature.PYRAMID_CLAIM:
+        return this.configService.getOrThrow(
+          'ALCHEMY_SIGNING_KEY_PYRAMID_CLAIM'
+        );
+      default:
+        throw new BadRequestException('Unsupported event signature');
+    }
+  }
+
   async verifyWebhookSignature(
     signature: string,
-    rawBody: string
+    rawBody: string,
+    eventSignature: EventSignature
   ): Promise<boolean> {
     try {
-      const signingKey = this.configService.getOrThrow('ALCHEMY_SIGNING_KEY');
+      const signingKey = this.getSigningKeyByEventSignature(eventSignature);
 
       const hmac = crypto.createHmac('sha256', signingKey);
       const computedSignature = hmac.update(rawBody).digest('hex');
@@ -61,14 +77,14 @@ export class AlchemyWebhooksService {
 
   async handleWebhookEvent(
     event: AlchemyWebhookEvent,
-    signatures: EventSignature[]
+    signature: EventSignature
   ): Promise<void> {
     this.logger.log(`Processing webhook event id: ${event.id}`);
 
     try {
       switch (event.type) {
         case 'GRAPHQL':
-          await this.handleGraphQl(event.event, signatures);
+          await this.handleGraphQl(event.event, signature);
           break;
         default:
           this.logger.warn(`Unhandled webhook event type: ${event.type}`);
@@ -80,20 +96,30 @@ export class AlchemyWebhooksService {
     }
   }
 
+  private getInterfaceByEventSignature(eventSignature: EventSignature) {
+    switch (eventSignature) {
+      case EventSignature.DAILY_CHECK:
+        return this.dailyCheckInterface;
+      case EventSignature.PYRAMID_CLAIM:
+        return this.pyramidInterface;
+      default:
+        throw new BadRequestException('Unsupported event signature');
+    }
+  }
+
   private async handleGraphQl(
     event: any,
-    signature: EventSignature[]
+    signature: EventSignature
   ): Promise<string> {
     const decodedLogs = this.validateAndDecodeLogs(
       event.data.block.logs,
-      this.dailyCheckInterface,
+      this.getInterfaceByEventSignature(signature),
       event.data.block.number
     );
 
-    const supportedEvents = this.filterEventsBySupported(
-      decodedLogs,
-      signature
-    );
+    const supportedEvents = this.filterEventsBySupported(decodedLogs, [
+      signature,
+    ]);
 
     if (supportedEvents.length === 0)
       throw new InternalServerErrorException('No supported events');
@@ -103,7 +129,9 @@ export class AlchemyWebhooksService {
     );
 
     const updatingRes = await Promise.allSettled(
-      filteredEvents.map((event) => this.handleDailyCheckEvent(event))
+      filteredEvents.map((event) =>
+        this.operateEventDependsOnSignature(event, signature)
+      )
     );
 
     const rejectedRes = updatingRes.filter(
@@ -112,7 +140,7 @@ export class AlchemyWebhooksService {
 
     if (rejectedRes.length > 0) {
       this.logger.error('Error handling event:', rejectedRes);
-      throw new InternalServerErrorException('Some points not updated');
+      throw new InternalServerErrorException('Some events not operated');
     }
     return 'OK';
   }
@@ -166,6 +194,20 @@ export class AlchemyWebhooksService {
     });
   }
 
+  private async operateEventDependsOnSignature(
+    event: IEventComb,
+    signature: EventSignature
+  ) {
+    switch (signature) {
+      case EventSignature.DAILY_CHECK:
+        return this.handleDailyCheckEvent(event);
+      case EventSignature.PYRAMID_CLAIM:
+        return this.handlePyramidClaimEvent(event);
+      default:
+        throw new BadRequestException('Unsupported event signature');
+    }
+  }
+
   private async checkAndRecordTransactions(events: IEventComb[]) {
     const res = await Promise.allSettled(
       events.map(async (eventComb) => {
@@ -204,6 +246,22 @@ export class AlchemyWebhooksService {
       return event;
     } catch (error) {
       this.logger.error('Error handling daily check event:', error);
+      throw new InternalServerErrorException(error);
+    }
+  }
+
+  private async handlePyramidClaimEvent(event: IEventComb) {
+    try {
+      const { questId: campaignId, claimer: userAddress } = event.event.args;
+
+      await this.questService.completeCampaignAndAwardPoints(
+        campaignId,
+        userAddress
+      );
+
+      return event;
+    } catch (error) {
+      this.logger.error('Error handling pyramid claim event:', error);
       throw new InternalServerErrorException(error);
     }
   }

@@ -59,16 +59,12 @@ export class QuestController {
       );
       if (!isCompleted) {
         throw new BadRequestException('Quest not completed');
-      } else {
-        await this.questService.completeQuestAndAwardPoints(id, address);
       }
       return { id, address, isCompleted };
     }
     const isCompleted = await this.questService.checkQuest(id, address);
     if (!isCompleted) {
       throw new BadRequestException('Quest not completed');
-    } else {
-      await this.questService.completeQuestAndAwardPoints(id, address);
     }
     return { id, address, isCompleted };
   }

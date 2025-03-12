@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
-import { AlchemyWebhooksService } from './alchemy.service';
-import { AlchemyWebhooksController } from './alchemy.controller';
-import { UserModule } from '../user/user.module';
-import { TransactionsModule } from '../transactions/transactions.module';
 import { _ConfigModule } from '../_config/config.module';
+import { QuestModule } from '../quests/quest.module';
+import { TransactionsModule } from '../transactions/transactions.module';
+import { UserModule } from '../user/user.module';
+import { AlchemyWebhooksController } from './alchemy.controller';
+import { AlchemyWebhooksService } from './alchemy.service';
 
 @Module({
-  imports: [UserModule, TransactionsModule, _ConfigModule],
+  imports: [UserModule, TransactionsModule, QuestModule, _ConfigModule],
   controllers: [AlchemyWebhooksController],
   providers: [AlchemyWebhooksService],
   exports: [AlchemyWebhooksService],
