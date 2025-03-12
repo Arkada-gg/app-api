@@ -9,4 +9,7 @@ export class QuestCompletionDto {
 
   @ApiProperty({ description: 'Дата и время выполнения квеста' })
   completed_at: Date;
+
+  @ApiProperty({ description: 'Хеш транзакции выполнения квеста' })
+  transaction_hash: string;
 }
