@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ethers, parseEther } from 'ethers';
+import { ethers } from 'ethers';
 import fetch from 'node-fetch';
 import { ConfigService } from '../_config/config.service';
 import { CampaignService } from '../campaigns/campaign.service';
@@ -16,13 +16,26 @@ import { ArkadaAbi } from '../shared/abi/arkada.abi';
 import { l2BridgeABI } from '../shared/abi/l2Bridge.abi.';
 import { mintABI } from '../shared/abi/mint.abi';
 import { MintNewABI } from '../shared/abi/mintNew.abi';
+import { MulticallAbi } from '../shared/abi/multicall.abi';
 import { newAbi } from '../shared/abi/new.abi';
 import { SwapRouterABI } from '../shared/abi/swapRouter.abi';
 import { UniswapV3ABI } from '../shared/abi/uniswapV3.abi';
 import { UniswapV3PoolABI } from '../shared/abi/uniswapV3Pool.abi';
 import { VaultABI } from '../shared/abi/vault-buy-execution.abi';
+import {
+  ARKADA_NFTS,
+  SONEIUM_MULTICALL_ADDRESS,
+} from '../shared/constants/addresses';
 import { soneiumProvider } from '../shared/provider';
 import { UserService } from '../user/user.service';
+import {
+  ARKADA_NFTS_MULTIPLIER_BPS,
+  BASIC_QUEST_MINT_PRICE,
+  MAX_BPS,
+  PREMIUM_QUEST_MINT_PRICE,
+  REF_OWNER_BPS,
+  USER_REWARD_BPS,
+} from './constants/mint';
 import { QuestType } from './interface';
 import {
   IFeeRecipient,
@@ -30,7 +43,7 @@ import {
   IRewardData,
   ITransactionData,
   SIGN_TYPES,
-} from './interfaces/sign';
+} from './interface/sign';
 import { QuestRepository } from './quest.repository';
 
 @Injectable()
@@ -96,22 +109,51 @@ export class QuestService {
     return quest;
   }
 
-  async hasMintedNft(userAddress: string): Promise<boolean> {
+  async hasMintedNfts(
+    userAddress: string,
+    nftAddresses: ARKADA_NFTS[]
+  ): Promise<Record<ARKADA_NFTS, boolean>> {
     try {
-      const contractAddress =
-        '0x181b42ca4856237AE76eE8c67F8FF112491eCB9e'.toLowerCase();
       const minimalAbi = ['function hasMinted(address) view returns (bool)'];
-      const contract = new ethers.Contract(
-        contractAddress,
-        minimalAbi,
+      const iface = new ethers.Interface(minimalAbi);
+
+      // Prepare multicall data
+      const calls = nftAddresses.map((address) => ({
+        target: address.toLowerCase(),
+        callData: iface.encodeFunctionData('hasMinted', [userAddress]),
+      }));
+
+      // Create multicall contract instance
+      const multicallContract = new ethers.Contract(
+        SONEIUM_MULTICALL_ADDRESS,
+        MulticallAbi,
         soneiumProvider
       );
-      const minted = await contract.hasMinted(userAddress);
-      Logger.debug(`hasMinted(${userAddress}) => ${minted}`);
-      return minted;
+
+      // Execute multicall
+      const { returnData } = await multicallContract.aggregate.staticCall(
+        calls
+      );
+
+      return nftAddresses.reduce((acc, address, index) => {
+        try {
+          const decoded = iface.decodeFunctionResult(
+            'hasMinted',
+            returnData[index]
+          );
+          return { ...acc, [address]: decoded[0] };
+        } catch (error) {
+          Logger.error(
+            `Error decoding result for ${address}: ${error.message}`
+          );
+          return { ...acc, [address]: false };
+        }
+      }, {} as Record<ARKADA_NFTS, boolean>);
     } catch (error) {
-      Logger.error(`Ошибка при вызове hasMinted: ${error.message}`);
-      return false;
+      Logger.error(`Error in hasMintedNfts: ${error.message}`);
+      throw new InternalServerErrorException(
+        `Error in hasMintedNfts: ${error.message}`
+      );
     }
   }
 
@@ -966,10 +1008,10 @@ export class QuestService {
         'No completed quests found for this campaign'
       );
     }
-    // @todo don't forget to uncomment this
-    // if (completedQuests.length !== campaign.quests.length) {
-    //   throw new BadRequestException('All quests must be completed');
-    // }
+
+    if (completedQuests.length !== campaign.quests.length) {
+      throw new BadRequestException('All quests must be completed');
+    }
 
     const user = await this.userService.findByAddress(userAddress);
     if (!user) {
@@ -985,53 +1027,20 @@ export class QuestService {
         };
       });
 
-    console.log('transactions', transactions);
-
     const recipients: IFeeRecipient[] = user.ref_owner
       ? [
           {
             recipient: user.ref_owner, //ref_owner is the address of the user who referred the user
-            BPS: 100, // 10000 BPS = 100%
+            BPS: REF_OWNER_BPS,
           },
         ]
       : [];
-
-    console.log('recipients', recipients);
-
-    const rewardAmount = parseEther('0.01');
-
-    const reward: IRewardData = {
-      tokenAddress: ethers.ZeroAddress,
-      chainId: parseInt(chainId),
-      amount: rewardAmount.toString(),
-      tokenId: 0,
-      tokenType: 0,
-      rakeBps: 0,
-      factoryAddress: ethers.ZeroAddress,
-    };
-
-    const nonce = Math.floor(Date.now() / 1000); // Current timestamp as nonce
-    const MINT_PRICE = parseEther('0.01');
-
-    // // Since we don't store transaction data in quest_completions,
-    // // we'll use dummy values that will be replaced on the frontend
-    const pyramidData: IMintPyramidData = {
-      questId: campaign.id,
-      nonce,
-      price: MINT_PRICE.toString(),
-      toAddress: userAddress,
-      walletProvider: 'metamask', // Default wallet provider
-      tokenURI: '',
-      embedOrigin: 'Arkada',
-      transactions,
-      recipients,
-      reward,
-    };
 
     const metadata = {
       name: campaign.name,
       image: '',
       attributes: [
+        { trait_type: 'Quest ID', value: campaign.id },
         { trait_type: 'Type', value: campaign.type },
         { trait_type: 'Title', value: campaign.name },
         { trait_type: 'Transaction Chain', value: 'Soneium' },
@@ -1044,7 +1053,75 @@ export class QuestService {
       ],
     };
 
-    console.log('metadata', metadata);
+    const fileName = `${
+      campaign.id
+    }-${userAddress.toLowerCase()}-metadata.json`;
+    const keyvalues = {
+      campaignId: campaign.id,
+      userAddress: userAddress.toLowerCase(),
+    };
+
+    const metadataURI = await this.ipfsService.uploadJson(
+      metadata,
+      fileName,
+      keyvalues
+    );
+
+    const hasMintedNfts = await this.hasMintedNfts(
+      userAddress,
+      Object.values(ARKADA_NFTS)
+    );
+
+    const highestNftMultiplierBPS = Object.values(ARKADA_NFTS).reduce(
+      (acc, nft) => {
+        // Only consider multiplier if NFT is minted
+        if (hasMintedNfts[nft]) {
+          return Math.max(acc, ARKADA_NFTS_MULTIPLIER_BPS[nft]);
+        }
+        return acc;
+      },
+      0
+    );
+
+    // mint price depends on campaign type
+    const mintPrice =
+      campaign.type === 'basic'
+        ? BASIC_QUEST_MINT_PRICE
+        : PREMIUM_QUEST_MINT_PRICE;
+
+    // reward amount is 20% of mint price
+    const rewardAmountBase =
+      (mintPrice * BigInt(USER_REWARD_BPS)) / BigInt(MAX_BPS);
+
+    // reward amount is 20% of mint price + some BPS of base rewards depending on highest NFT multiplier
+    const rewardAmount =
+      rewardAmountBase +
+      (rewardAmountBase * BigInt(highestNftMultiplierBPS)) / BigInt(MAX_BPS);
+
+    const reward: IRewardData = {
+      tokenAddress: ethers.ZeroAddress,
+      chainId: parseInt(chainId),
+      amount: rewardAmount.toString(),
+      tokenId: 0,
+      tokenType: 0,
+      rakeBps: 0,
+      factoryAddress: ethers.ZeroAddress,
+    };
+
+    const nonce = Math.floor(Date.now() / 1000); // Current timestamp as nonce
+
+    const pyramidData: IMintPyramidData = {
+      questId: campaign.id,
+      nonce,
+      price: mintPrice.toString(),
+      toAddress: userAddress,
+      walletProvider: 'metamask', // Default wallet provider
+      tokenURI: metadataURI,
+      embedOrigin: 'Arkada',
+      transactions,
+      recipients,
+      reward,
+    };
 
     // // Get the private key for signing
     const privateKey = this.configService.getOrThrow(

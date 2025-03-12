@@ -1,28 +1,33 @@
-import { json, type JSON } from '@helia/json';
 import { Injectable } from '@nestjs/common';
-// import type { HeliaLibp2p } from 'helia';
-// import { createHelia } from 'helia';
+import { PinataSDK } from 'pinata';
+import { ConfigService } from '../_config/config.service';
 
 @Injectable()
 export class IpfsService {
-  private helia?: any;
-  private json?: any;
+  private pinata?: PinataSDK;
 
-  async getHelia(): Promise<any> {
-    if (!this.helia) {
-      const heliaLib = await import('helia'); // ESM import
-      const heliaJson = await import('@helia/json');
+  constructor(private configService: ConfigService) {}
 
-      this.helia = await heliaLib.createHelia();
-      this.json = heliaJson.json(this.helia);
+  async getPinata(): Promise<PinataSDK> {
+    if (!this.pinata) {
+      this.pinata = new PinataSDK({
+        pinataJwt: this.configService.get('PINATA_JWT'),
+        pinataGateway: this.configService.get('GATEWAY_URL'),
+      });
     }
 
-    return this.helia;
+    return this.pinata;
   }
 
-  async onApplicationShutdown() {
-    if (this.helia) {
-      await this.helia.stop();
-    }
+  async uploadJson(json: any, name: string, keyvalues: Record<string, string>) {
+    const pinata = await this.getPinata();
+    const result = await pinata.upload.public
+      .json(json)
+      .name(name)
+      .keyvalues(keyvalues);
+    return new URL(
+      `/ipfs/${result.cid}`,
+      `https://${this.configService.get('GATEWAY_URL')}`
+    ).toString();
   }
 }
