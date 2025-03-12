@@ -313,6 +313,9 @@ export class QuestService {
     if (quest.value.type === 'checkMethod') {
       return this.handleCheckMethodQuest(quest, userAddr);
     }
+    if (quest.value.type === 'onchainCheckAmountOfTxns') {
+      return this.handleOnchainCheckAmountOfTxns(quest, userAddr);
+    }
     if (quest.value.type === 'checkOnchainMethod') {
       return this.handleCheckOnchainMethodQuest(quest, userAddr);
     }
@@ -350,6 +353,16 @@ export class QuestService {
     return false;
   }
 
+  private async handleOnchainCheckAmountOfTxns(
+    quest: QuestType,
+    userAddr: string
+  ): Promise<boolean> {
+    const minTxns = quest.value.minTxns || 0;
+    const chain = quest.value.chain || 'Soneium';
+    const txs = await this.getUserTransactions(chain, userAddr, quest);
+    return txs.length >= minTxns;
+  }
+
   private async handleCheckOnchainMethodQuest(
     quest: QuestType,
     userAddr: string
@@ -360,20 +373,21 @@ export class QuestService {
       : quest.value.methodSignatures;
 
     const iface = new ethers.Interface(abi);
+    const c = await this.getCampaignById(quest.campaign_id);
 
-    const transactions = await this.getUserTransactions(
-      'Soneium',
-      userAddr,
-      quest
-    );
+    const transactions = await this.getUserTransactions('Soneium', userAddr, c);
 
     const contractTransactions = transactions.filter(
-      (tx) => tx.to.toLowerCase() === contractAddress
+      (tx) =>
+        tx.to.toLowerCase() === quest.value.contracts[0]?.toLowerCase() ||
+        tx.to.toLowerCase() === quest.value.contracts[1]?.toLowerCase() ||
+        tx.to.toLowerCase() === quest.value.contracts[2]?.toLowerCase()
     );
 
     console.log(`Transactions found for user ${contractTransactions.length}`);
 
     for (const tx of contractTransactions) {
+      console.log('------>', tx.hash);
       try {
         const parsed = iface.parseTransaction({ data: tx.input });
 
@@ -625,7 +639,6 @@ export class QuestService {
   private async parseOnchainTx(tx: any, actions: any[]): Promise<boolean> {
     const rawInput = tx.input || '';
     if (!rawInput.startsWith('0x')) return false;
-    console.log('------>', tx.hash);
     const ok = await this.parseOnchainData(rawInput, actions, tx);
     return ok;
   }
@@ -729,11 +742,9 @@ export class QuestService {
   }
 
   private async parseNeemoDepositEvent(txHash: string): Promise<boolean> {
-    // 1. Получаем receipt
     const receipt = await soneiumProvider.getTransactionReceipt(txHash);
     if (!receipt || !receipt.logs) return false;
 
-    // 2. Определяем ABI события
     const eventAbi = [
       'event LogDepositTokenDelegate(address indexed user, address indexed delegateTo, uint256 tokenAmount, uint256 lstAmount)',
     ];
@@ -743,15 +754,9 @@ export class QuestService {
       try {
         const parsedLog = iface.parseLog(log);
         if (parsedLog.name === 'LogDepositTokenDelegate') {
-          // parsedLog.args.user
-          // parsedLog.args.delegateTo
-          // parsedLog.args.tokenAmount (BigNumber или bigint)
-          // parsedLog.args.lstAmount
-          // Тут же можно проверить пороговое значение, user = msg.sender и т.д.
           return true;
         }
       } catch (e) {
-        // parseLog бросит ошибку, если топик не совпал — просто игнорируем
         continue;
       }
     }

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CampaignRepository } from './campaign.repository';
 import { CampaignType } from './dto/get-campaigns.dto';
 import { UserCampaignStatus } from './dto/get-user-campaigns.dto';
+import { CategoryItemDto } from './dto/category-item.dto';
 
 @Injectable()
 export class CampaignService {
@@ -10,9 +11,15 @@ export class CampaignService {
   async getActiveCampaigns(
     page: number,
     limit: number,
-    type?: CampaignType
+    type?: CampaignType,
+    category?: CategoryItemDto[]
   ): Promise<any[]> {
-    return this.campaignRepository.findActiveCampaigns(page, limit, type);
+    return this.campaignRepository.findActiveCampaigns(
+      page,
+      limit,
+      type,
+      category
+    );
   }
 
   async getCampaignByIdOrSlug(idOrSlug: string): Promise<any> {

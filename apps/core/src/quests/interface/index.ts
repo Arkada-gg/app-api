@@ -24,6 +24,7 @@ export interface QuestTask {
   method_signatures?: any;
   guildId?: string;
   methodToFind: string[];
+  minTxns?: number;
 }
 
 export interface QuestType {

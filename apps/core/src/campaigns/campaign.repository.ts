@@ -8,6 +8,7 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { CampaignType } from './dto/get-campaigns.dto';
 import { UserCampaignStatus } from './dto/get-user-campaigns.dto';
+import { CategoryItemDto } from './dto/category-item.dto';
 
 @Injectable()
 export class CampaignRepository {
@@ -57,15 +58,17 @@ export class CampaignRepository {
   }
 
   async findActiveCampaigns(
-    page = 1,
-    limit = 5,
-    type?: CampaignType
+    page: number,
+    limit: number,
+    type?: CampaignType,
+    categoryDto?: CategoryItemDto[]
   ): Promise<any[]> {
     const client = this.dbService.getClient();
     try {
       const offset = (page - 1) * limit;
       let query = `
-        SELECT * FROM campaigns
+        SELECT *
+        FROM campaigns
         WHERE started_at <= NOW()
           AND finished_at >= NOW()
       `;
@@ -76,7 +79,16 @@ export class CampaignRepository {
         query += ` AND type = $${params.length}`;
       }
 
-      params.push(limit, offset);
+      if (categoryDto !== undefined) {
+        const slugs = categoryDto.map((c) => c.slug);
+        if (slugs.length > 0) {
+          params.push(slugs);
+          query += ` AND slug = ANY($${params.length}::varchar[])`;
+        }
+      }
+
+      params.push(limit);
+      params.push(offset);
       query += ` ORDER BY started_at DESC LIMIT $${params.length - 1} OFFSET $${
         params.length
       }`;
@@ -84,7 +96,6 @@ export class CampaignRepository {
       const result = await client.query(query, params);
       return result.rows;
     } catch (error) {
-      console.error('Error in findActiveCampaigns:', error);
       throw new InternalServerErrorException(error.message);
     }
   }
