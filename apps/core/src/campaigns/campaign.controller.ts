@@ -29,18 +29,15 @@ export class CampaignController {
   constructor(private readonly campaignService: CampaignService) {}
 
   @Get()
-  @ApiOperation({
-    summary: 'Получить активные кампании с фильтрацией по типу и пагинацией',
-  })
+  @ApiOperation({ summary: 'Получить активные кампании с фильтрами' })
   @ApiResponse({
     status: 200,
     description: 'Список кампаний',
     type: [GetCampaignResponse],
   })
-  @ApiBadRequestResponse({ description: 'Некорректные параметры запроса' })
   async getCampaigns(@Query() query: GetCampaignsDto) {
-    const { type, page = 1, limit = 5 } = query;
-    return this.campaignService.getActiveCampaigns(page, limit, type);
+    const { type, page = 1, limit = 5, category } = query;
+    return this.campaignService.getActiveCampaigns(page, limit, type, category);
   }
 
   @Get('status')

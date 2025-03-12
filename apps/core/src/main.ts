@@ -17,7 +17,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
       transform: true,
     })
   );
@@ -86,14 +86,6 @@ async function bootstrap() {
   //     message: 'Too many requests from this IP, please try again later.',
   //   })
   // );
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    })
-  );
 
   await app.listen(process.env.CORE_PORT, () => {
     Logger.log(`Core Service is running on port ${process.env.CORE_PORT}`);

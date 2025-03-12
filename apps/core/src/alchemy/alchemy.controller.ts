@@ -40,4 +40,28 @@ export class AlchemyWebhooksController {
 
     return { message: 'Webhook processed successfully' };
   }
+
+  @Post('pyramid-mint--check')
+  @HttpCode(200)
+  async handleWebhookMint(
+    @Headers('x-alchemy-signature') signature: string,
+    @Body() webhookEvent: any
+  ) {
+    // Verify the webhook signature
+    const isValid = await this.alchemyWebhooksService.verifyWebhookSignature(
+      signature,
+      JSON.stringify(webhookEvent)
+    );
+
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
+
+    // Process the webhook event
+    await this.alchemyWebhooksService.handleWebhookEvent(webhookEvent, [
+      EventSignature.MINT,
+    ]);
+
+    return { message: 'Webhook processed successfully' };
+  }
 }
