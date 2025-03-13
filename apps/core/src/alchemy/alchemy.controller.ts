@@ -1,11 +1,9 @@
 import {
-  Controller,
-  Get,
-  Query,
-  Post,
   Body,
+  Controller,
   Headers,
   HttpCode,
+  Post,
   UnauthorizedException,
 } from '@nestjs/common';
 import { AlchemyWebhooksService } from './alchemy.service';
@@ -26,7 +24,8 @@ export class AlchemyWebhooksController {
     // Verify the webhook signature
     const isValid = await this.alchemyWebhooksService.verifyWebhookSignature(
       signature,
-      JSON.stringify(webhookEvent)
+      JSON.stringify(webhookEvent),
+      EventSignature.DAILY_CHECK
     );
 
     if (!isValid) {
@@ -34,14 +33,15 @@ export class AlchemyWebhooksController {
     }
 
     // Process the webhook event
-    await this.alchemyWebhooksService.handleWebhookEvent(webhookEvent, [
-      EventSignature.DAILY_CHECK,
-    ]);
+    await this.alchemyWebhooksService.handleWebhookEvent(
+      webhookEvent,
+      EventSignature.DAILY_CHECK
+    );
 
     return { message: 'Webhook processed successfully' };
   }
 
-  @Post('pyramid-mint--check')
+  @Post('pyramid-claim')
   @HttpCode(200)
   async handleWebhookMint(
     @Headers('x-alchemy-signature') signature: string,
@@ -50,7 +50,8 @@ export class AlchemyWebhooksController {
     // Verify the webhook signature
     const isValid = await this.alchemyWebhooksService.verifyWebhookSignature(
       signature,
-      JSON.stringify(webhookEvent)
+      JSON.stringify(webhookEvent),
+      EventSignature.PYRAMID_CLAIM
     );
 
     if (!isValid) {
@@ -58,9 +59,10 @@ export class AlchemyWebhooksController {
     }
 
     // Process the webhook event
-    await this.alchemyWebhooksService.handleWebhookEvent(webhookEvent, [
-      EventSignature.MINT,
-    ]);
+    await this.alchemyWebhooksService.handleWebhookEvent(
+      webhookEvent,
+      EventSignature.PYRAMID_CLAIM
+    );
 
     return { message: 'Webhook processed successfully' };
   }
