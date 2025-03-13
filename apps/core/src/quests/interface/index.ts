@@ -28,6 +28,7 @@ export interface QuestTask {
   methodChecks?: any;
   methodToExecute?: string;
   methodToEqual?: any;
+  url?: string;
 }
 
 export interface QuestType {

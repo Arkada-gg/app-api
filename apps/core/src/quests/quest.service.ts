@@ -322,6 +322,30 @@ export class QuestService {
         return false;
       }
     }
+    if (task.url) {
+      const c = await this.campaignService.getCampaignByIdOrSlug(
+        quest.campaign_id
+      );
+      const finalUrl = task.url.replace('{$address}', userAddr);
+      const res = await fetch(finalUrl);
+      const responseJson = await res.json();
+
+      const campaignStart = new Date(c.started_at);
+      const matchingCount = responseJson.data.filter((item: any) => {
+        const createdAt = new Date(item.createdAt);
+        return createdAt > campaignStart;
+      }).length;
+
+      console.log(
+        `Найдено записей после начала кампании: ${matchingCount} (требуется: ${task.minTxns})`
+      );
+
+      if (matchingCount >= task.minTxns) {
+        return true;
+      }
+      return false;
+    }
+
     if (task.endpoint) {
       let finalUrl = task.endpoint.replace('{$address}', userAddr);
       if (task.params)
@@ -342,6 +366,9 @@ export class QuestService {
     quest: QuestType,
     userAddr: string
   ): Promise<boolean> {
+    if (quest.value.url) {
+      return this.handleLinkQuest(quest, userAddr);
+    }
     if (quest.value.methodToExecute) {
       try {
         const contractAddress =
@@ -357,10 +384,6 @@ export class QuestService {
           iface.fragments,
           soneiumProvider
         );
-        // let result
-        // if(quest.value.methodToExecute.includes('balanceOf')){
-
-        // }
         const result = quest.value.methodToExecute.includes('balanceOf')
           ? await contract.balanceOf(userAddr)
           : await contract.checkDatas(userAddr);
