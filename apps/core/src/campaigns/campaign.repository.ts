@@ -428,7 +428,7 @@ export class CampaignRepository {
                 ) t ON q.campaign_id = t.campaign_id
                 WHERE q.campaign_id = c.id 
                 AND qc.user_address = $1
-                AND q.sequence < t.max_seq
+                AND q.sequence <= t.max_seq
               ) THEN 'started'
               ELSE 'active'
             END as user_status
