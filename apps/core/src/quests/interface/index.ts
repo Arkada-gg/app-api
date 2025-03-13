@@ -25,6 +25,9 @@ export interface QuestTask {
   guildId?: string;
   methodToFind: string[];
   minTxns?: number;
+  methodChecks?: any;
+  methodToExecute?: string;
+  methodToEqual?: any;
 }
 
 export interface QuestType {

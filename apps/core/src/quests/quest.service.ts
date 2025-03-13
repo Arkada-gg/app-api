@@ -399,10 +399,116 @@ export class QuestService {
     quest: QuestType,
     userAddr: string
   ): Promise<boolean> {
-    const minTxns = quest.value.minTxns || 0;
+    if (quest.value.methodToExecute) {
+      try {
+        const contractAddress =
+          quest.value.contract ||
+          (quest.value.contracts && quest.value.contracts[0]);
+        if (!contractAddress) {
+          console.error('Контракт не задан в квесте');
+          return false;
+        }
+        const iface = new ethers.Interface([quest.value.methodToExecute]);
+        const contract = new ethers.Contract(
+          contractAddress,
+          iface.fragments,
+          soneiumProvider
+        );
+        // let result
+        // if(quest.value.methodToExecute.includes('balanceOf')){
+
+        // }
+        const result = quest.value.methodToExecute.includes('balanceOf')
+          ? await contract.balanceOf(userAddr)
+          : await contract.checkDatas(userAddr);
+        const streak = ethers.toBigInt(result) ? result : result.streak;
+        console.log(
+          `checkDatas returned streak = ${streak.toString()} (требуется: ${
+            quest.value.methodToEqual
+          })`
+        );
+        if (streak < quest.value.methodToEqual) {
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.error('Ошибка при вызове checkDatas:', err);
+        return false;
+      }
+    }
+
     const chain = quest.value.chain || 'Soneium';
-    const txs = await this.getUserTransactions(chain, userAddr, quest);
-    return txs.length >= minTxns;
+    const c = await this.getCampaignById(quest.campaign_id);
+    const txs = await this.getUserTransactions(chain, userAddr, c);
+    if (quest.value.methodChecks && Array.isArray(quest.value.methodChecks)) {
+      for (const checkItem of quest.value.methodChecks) {
+        if (Array.isArray(checkItem)) {
+          let groupCount = 0;
+          const groupThreshold = checkItem[0].minTxns || 0;
+          for (const check of checkItem) {
+            try {
+              const iface = new ethers.Interface([check.signature]);
+              const count = txs.reduce((acc, tx) => {
+                try {
+                  const parsed = iface.parseTransaction({ data: tx.input });
+                  return parsed &&
+                    parsed.name ===
+                      (iface.fragments[0] as ethers.FunctionFragment).name
+                    ? acc + 1
+                    : acc;
+                } catch (err) {
+                  return acc;
+                }
+              }, 0);
+              groupCount += count;
+            } catch (err) {
+              continue;
+            }
+          }
+          console.log(
+            `Альтернативная группа: ${groupCount} транзакций (требуется: ${groupThreshold})`
+          );
+          if (groupCount < groupThreshold) {
+            return false;
+          }
+        } else {
+          try {
+            const iface = new ethers.Interface([checkItem.signature]);
+            const count = txs.reduce((acc, tx) => {
+              try {
+                const parsed = iface.parseTransaction({ data: tx.input });
+                return parsed &&
+                  parsed.name ===
+                    (iface.fragments[0] as ethers.FunctionFragment).name
+                  ? acc + 1
+                  : acc;
+              } catch (err) {
+                return acc;
+              }
+            }, 0);
+            console.log(
+              `Метод ${
+                (iface.fragments[0] as ethers.FunctionFragment).name
+              }: ${count} транзакций (требуется: ${checkItem.minTxns})`
+            );
+            if (count < checkItem.minTxns) {
+              return false;
+            }
+          } catch (err) {
+            return false;
+          }
+        }
+      }
+      return true;
+    } else {
+      const minTxns = quest.value.minTxns || 0;
+      const contractTxs = txs.filter((tx) =>
+        quest.value.contracts.some(
+          (addr: string) => tx.to.toLowerCase() === addr.toLowerCase()
+        )
+      );
+      return contractTxs.length >= minTxns;
+    }
   }
 
   private async handleCheckOnchainMethodQuest(
@@ -429,7 +535,6 @@ export class QuestService {
     console.log(`Transactions found for user ${contractTransactions.length}`);
 
     for (const tx of contractTransactions) {
-      console.log('------>', tx.hash);
       try {
         const parsed = iface.parseTransaction({ data: tx.input });
 
@@ -567,7 +672,6 @@ export class QuestService {
         tx.to.toLowerCase() === quest.value.contracts[1]?.toLowerCase() ||
         tx.to.toLowerCase() === quest.value.contracts[2]?.toLowerCase()
     );
-    console.log('------>', txnsToAddress.length);
 
     for (const tx of txnsToAddress) {
       if (!data.minAmountUSD && !data.actions && data.methodSignatures) {
@@ -961,12 +1065,8 @@ export class QuestService {
     return floatAmount * price;
   }
 
-  private async getUserTransactions(
-    chain: string,
-    addr: string,
-    campaign: any
-  ) {
-    if (chain !== 'Soneium') return [];
+  private async getUserTransactions(chain: any, addr: string, campaign: any) {
+    if (chain !== 'Soneium' && chain !== 1868) return [];
     const now = Math.floor(Date.now() / 1000);
     const startedAt = Math.floor(campaign.started_at / 1000);
     const ignoreStart = campaign.ignore_campaign_start;

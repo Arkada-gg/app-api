@@ -232,7 +232,10 @@ export class GetCampaignResponse {
   })
   project_logo: string;
 
-  @ApiProperty({ example: '["urCategory"]', description: 'Категории кампании' })
+  @ApiProperty({
+    example: '["sluggg"]',
+    description: 'Категории кампании',
+  })
   category: string[];
 
   @ApiProperty({ example: 'default', description: 'тип ивента' })

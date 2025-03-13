@@ -12,7 +12,7 @@ export class CampaignService {
     page: number,
     limit: number,
     type?: CampaignType,
-    category?: CategoryItemDto[]
+    category?: string[]
   ): Promise<any[]> {
     return this.campaignRepository.findActiveCampaigns(
       page,
