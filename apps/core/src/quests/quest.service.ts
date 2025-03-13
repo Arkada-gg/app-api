@@ -157,11 +157,12 @@ export class QuestService {
     }
   }
 
-  async completeQuestAndAwardPoints(questId: string, userAddress: string) {
+  async completeCampaignAndAwardPoints(
+    campaignId: string,
+    userAddress: string
+  ) {
     const lowerAddress = userAddress.toLowerCase();
     try {
-      const quest = await this.questRepository.getQuest(questId);
-      const campaignId = quest.campaign_id;
       const allCampaignQuests = await this.questRepository.getQuestsByCampaign(
         campaignId
       );
@@ -232,39 +233,6 @@ export class QuestService {
           questStored.campaign_id
         );
       }
-      try {
-        const doneList =
-          await this.questRepository.getCompletedQuestsByUserInCampaign(
-            questStored.campaign_id,
-            userAddress.toLowerCase()
-          );
-        if (doneList.length === allInCampaign.length) {
-          const wasMarked = await this.campaignService.markCampaignAsCompleted(
-            questStored.campaign_id,
-            userAddress.toLowerCase()
-          );
-          if (wasMarked) {
-            const camp = await this.campaignService.getCampaignByIdOrSlug(
-              questStored.campaign_id
-            );
-            const rewards = camp.rewards || [];
-            let totalPoints = 0;
-            rewards.forEach((rw: any) => {
-              if (rw.type === 'tokens') {
-                totalPoints += parseInt(rw.value, 10);
-              }
-            });
-            await this.userService.awardCampaignCompletion(
-              userAddress.toLowerCase(),
-              totalPoints
-            );
-          }
-        }
-      } catch (err) {
-        throw new InternalServerErrorException(
-          `Ошибка при завершении квеста и начислении баллов: ${err.message}`
-        );
-      }
       return true;
     } catch (error) {
       if (
@@ -310,31 +278,6 @@ export class QuestService {
       await this.campaignService.incrementParticipants(quest.campaign_id);
     }
 
-    const allDone = await this.getCompletedQuestsByUserInCampaign(
-      quest.campaign_id,
-      address.toLowerCase()
-    );
-    if (allDone.length === campaignQuests.length) {
-      const wasMarked = await this.campaignService.markCampaignAsCompleted(
-        quest.campaign_id,
-        address.toLowerCase()
-      );
-      if (wasMarked) {
-        const c = await this.campaignService.getCampaignByIdOrSlug(
-          quest.campaign_id
-        );
-        let totalPoints = 0;
-        for (const r of c.rewards || []) {
-          if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
-        }
-        if (totalPoints > 0) {
-          await this.userService.awardCampaignCompletion(
-            address.toLowerCase(),
-            totalPoints
-          );
-        }
-      }
-    }
     return true;
   }
 
@@ -1084,6 +1027,13 @@ export class QuestService {
     const campaign = await this.campaignService.getCampaignByIdOrSlug(idOrSlug);
     if (!campaign) {
       throw new BadRequestException('Campaign not found');
+    }
+    const campaignStatus = await this.campaignService.getCampaignStatus(
+      campaign.id,
+      userAddress
+    );
+    if (campaignStatus.status === 'completed') {
+      throw new BadRequestException('Campaign already completed');
     }
 
     const chainId = this.configService.getOrThrow('SIGN_DOMAIN_CHAIN_ID');

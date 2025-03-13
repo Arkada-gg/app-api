@@ -1,5 +1,5 @@
-import { IsString, IsNotEmpty, IsNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
 
 export class CampaignStatsDto {
   @ApiProperty({
@@ -23,4 +23,11 @@ export class CampaignStatsDto {
   })
   @IsNumber()
   quest_completed: number;
+
+  @ApiProperty({
+    description: 'Сколько квестов юзер выполнил',
+    example: 'completed | incomplete',
+  })
+  @IsString()
+  status: string;
 }

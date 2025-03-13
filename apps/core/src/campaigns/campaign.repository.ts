@@ -6,9 +6,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { CategoryItemDto } from './dto/category-item.dto';
 import { CampaignType } from './dto/get-campaigns.dto';
 import { UserCampaignStatus } from './dto/get-user-campaigns.dto';
-import { CategoryItemDto } from './dto/category-item.dto';
 
 @Injectable()
 export class CampaignRepository {
@@ -34,6 +34,29 @@ export class CampaignRepository {
       throw new InternalServerErrorException(
         `Error incrementing participants: ${error.message}`
       );
+    }
+  }
+
+  async getCampaignStatus(id: string, address: string) {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        SELECT 
+          c.*,
+          CASE 
+            WHEN EXISTS (
+              SELECT 1 FROM campaign_completions cc
+              WHERE cc.campaign_id = c.id
+              AND cc.user_address = $2
+            ) THEN 'completed' ELSE 'incomplete' END AS status
+        FROM campaigns c
+        WHERE c.id = $1
+        LIMIT 1;
+      `;
+      const result = await client.query(query, [id, address.toLowerCase()]);
+      return result.rows[0];
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
     }
   }
 
@@ -271,7 +294,12 @@ export class CampaignRepository {
         SELECT
           q.campaign_id,
           COUNT(q.id)::int AS total_quest,
-          COUNT(qc.quest_id)::int AS quest_completed
+          COUNT(qc.quest_id)::int AS quest_completed,
+          CASE WHEN EXISTS (
+            SELECT 1 FROM campaign_completions cc
+            WHERE cc.campaign_id = q.campaign_id
+            AND cc.user_address = $1
+          ) THEN 'completed' ELSE 'incomplete' END AS status
         FROM quests q
         LEFT JOIN quest_completions qc
           ON q.id = qc.quest_id
@@ -284,12 +312,13 @@ export class CampaignRepository {
 
       const statsMap = new Map<
         string,
-        { total_quest: number; quest_completed: number }
+        { total_quest: number; quest_completed: number; status: string }
       >();
       for (const row of res.rows) {
         statsMap.set(row.campaign_id, {
           total_quest: row.total_quest,
           quest_completed: row.quest_completed,
+          status: row.status,
         });
       }
 
@@ -300,12 +329,14 @@ export class CampaignRepository {
             campaignId: cid,
             total_quest: 0,
             quest_completed: 0,
+            status: 'incomplete',
           };
         }
         return {
           campaignId: cid,
           total_quest: data.total_quest,
           quest_completed: data.quest_completed,
+          status: data.status,
         };
       });
 
