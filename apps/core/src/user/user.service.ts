@@ -448,4 +448,22 @@ export class UserService {
 
     return completions;
   }
+
+  async findUsersWithWalletChunk(offset: number, batchSize: number): Promise<{ id: string; walletAddress: string }[]> {
+    try {
+      return await this.userRepository.findUsersWithWalletChunk(offset, batchSize);
+    } catch (error) {
+      throw new InternalServerErrorException(`findUsersWithWalletChunk failed: ${error.message}`);
+    }
+  }
+
+  async setWalletScorePoints(userId: string, basePoints: number, additionalPoints: number): Promise<void> {
+    try {
+      await this.userRepository.updateWalletPoints(userId, basePoints);
+      await this.userRepository.updateWalletAdditionalPoints(userId, additionalPoints);
+    } catch (error) {
+      throw new InternalServerErrorException(`setWalletScorePoints failed: ${error.message}`);
+    }
+  }
+
 }

@@ -107,6 +107,8 @@ export class UserRepository {
         daily: +dailyPoints,
         twitter: user.twitter_points,
         base_campaign: +baseCampaignPoints,
+        wallet: user.wallet_points || 0, 
+        wallet_additional: user.wallet_additional_points || 0, 
         total: +user.total_points,
       };
 
@@ -882,4 +884,53 @@ export class UserRepository {
       throw new InternalServerErrorException(error.message);
     }
   }
+
+  async findUsersWithWalletChunk(
+    offset: number,
+    limit: number
+  ): Promise<{ id: string; walletAddress: string }[]> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        SELECT address AS id, address AS walletAddress
+        FROM users
+        WHERE address IS NOT NULL
+        ORDER BY address
+        LIMIT $1 OFFSET $2
+      `;
+      const result = await client.query(query, [limit, offset]);
+      return result.rows;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async updateWalletPoints(userId: string, points: number): Promise<void> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        UPDATE users
+        SET wallet_points = $1
+        WHERE address = $2
+      `;
+      await client.query(query, [points, userId.toLowerCase()]);
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+  
+  async updateWalletAdditionalPoints(userId: string, points: number): Promise<void> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        UPDATE users
+        SET wallet_additional_points = $1
+        WHERE address = $2
+      `;
+      await client.query(query, [points, userId.toLowerCase()]);
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
 }
