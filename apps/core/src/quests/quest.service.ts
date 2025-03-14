@@ -156,13 +156,52 @@ export class QuestService {
       );
     }
   }
-
   async completeCampaignAndAwardPoints(
     campaignId: string,
     userAddress: string
   ) {
     const lowerAddress = userAddress.toLowerCase();
     try {
+      const allCampaignQuests = await this.questRepository.getQuestsByCampaign(
+        campaignId
+      );
+      const completedQuests =
+        await this.questRepository.getCompletedQuestsByUserInCampaign(
+          campaignId,
+          lowerAddress
+        );
+      if (completedQuests.length === allCampaignQuests.length) {
+        const wasMarked = await this.campaignService.markCampaignAsCompleted(
+          campaignId,
+          lowerAddress
+        );
+        if (wasMarked) {
+          const campaign = await this.campaignService.getCampaignByIdOrSlug(
+            campaignId
+          );
+          const rewards = campaign.rewards;
+          let totalPoints = 0;
+          rewards.forEach((r: any) => {
+            if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
+          });
+          await this.userService.awardCampaignCompletion(
+            lowerAddress,
+            totalPoints
+          );
+        }
+      }
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Ошибка при завершении квеста и начислении баллов: ${error.message}`
+      );
+    }
+  }
+
+  async completeQuestAndAwardPoints(questId: string, userAddress: string) {
+    const lowerAddress = userAddress.toLowerCase();
+    try {
+      const quest = await this.questRepository.getQuest(questId);
+      const campaignId = quest.campaign_id;
       const allCampaignQuests = await this.questRepository.getQuestsByCampaign(
         campaignId
       );
@@ -233,6 +272,42 @@ export class QuestService {
           questStored.campaign_id
         );
       }
+      try {
+        if (this.configService.get('ENV') === 'prod') {
+          const doneList =
+            await this.questRepository.getCompletedQuestsByUserInCampaign(
+              questStored.campaign_id,
+              userAddress.toLowerCase()
+            );
+          if (doneList.length === allInCampaign.length) {
+            const wasMarked =
+              await this.campaignService.markCampaignAsCompleted(
+                questStored.campaign_id,
+                userAddress.toLowerCase()
+              );
+            if (wasMarked) {
+              const camp = await this.campaignService.getCampaignByIdOrSlug(
+                questStored.campaign_id
+              );
+              const rewards = camp.rewards || [];
+              let totalPoints = 0;
+              rewards.forEach((rw: any) => {
+                if (rw.type === 'tokens') {
+                  totalPoints += parseInt(rw.value, 10);
+                }
+              });
+              await this.userService.awardCampaignCompletion(
+                userAddress.toLowerCase(),
+                totalPoints
+              );
+            }
+          }
+        }
+      } catch (err) {
+        throw new InternalServerErrorException(
+          `Ошибка при завершении квеста и начислении баллов: ${err.message}`
+        );
+      }
       return true;
     } catch (error) {
       if (
@@ -276,6 +351,33 @@ export class QuestService {
 
     if (quest.sequence === 1) {
       await this.campaignService.incrementParticipants(quest.campaign_id);
+    }
+    if (this.configService.get('ENV') === 'prod') {
+      const allDone = await this.getCompletedQuestsByUserInCampaign(
+        quest.campaign_id,
+        address.toLowerCase()
+      );
+      if (allDone.length === campaignQuests.length) {
+        const wasMarked = await this.campaignService.markCampaignAsCompleted(
+          quest.campaign_id,
+          address.toLowerCase()
+        );
+        if (wasMarked) {
+          const c = await this.campaignService.getCampaignByIdOrSlug(
+            quest.campaign_id
+          );
+          let totalPoints = 0;
+          for (const r of c.rewards || []) {
+            if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
+          }
+          if (totalPoints > 0) {
+            await this.userService.awardCampaignCompletion(
+              address.toLowerCase(),
+              totalPoints
+            );
+          }
+        }
+      }
     }
 
     return true;
@@ -322,6 +424,30 @@ export class QuestService {
         return false;
       }
     }
+    if (task.url) {
+      const c = await this.campaignService.getCampaignByIdOrSlug(
+        quest.campaign_id
+      );
+      const finalUrl = task.url.replace('{$address}', userAddr);
+      const res = await fetch(finalUrl);
+      const responseJson = await res.json();
+
+      const campaignStart = new Date(c.started_at);
+      const matchingCount = responseJson.data.filter((item: any) => {
+        const createdAt = new Date(item.createdAt);
+        return createdAt > campaignStart;
+      }).length;
+
+      console.log(
+        `Найдено записей после начала кампании: ${matchingCount} (требуется: ${task.minTxns})`
+      );
+
+      if (matchingCount >= task.minTxns) {
+        return true;
+      }
+      return false;
+    }
+
     if (task.endpoint) {
       let finalUrl = task.endpoint.replace('{$address}', userAddr);
       if (task.params)
@@ -342,10 +468,116 @@ export class QuestService {
     quest: QuestType,
     userAddr: string
   ): Promise<boolean> {
-    const minTxns = quest.value.minTxns || 0;
+    if (quest.value.url) {
+      return this.handleLinkQuest(quest, userAddr);
+    }
+    if (quest.value.methodToExecute) {
+      try {
+        const contractAddress =
+          quest.value.contract ||
+          (quest.value.contracts && quest.value.contracts[0]);
+        if (!contractAddress) {
+          console.error('Контракт не задан в квесте');
+          return false;
+        }
+        const iface = new ethers.Interface([quest.value.methodToExecute]);
+        const contract = new ethers.Contract(
+          contractAddress,
+          iface.fragments,
+          soneiumProvider
+        );
+        const result = quest.value.methodToExecute.includes('balanceOf')
+          ? await contract.balanceOf(userAddr)
+          : await contract.checkDatas(userAddr);
+        const streak = ethers.toBigInt(result) ? result : result.streak;
+        console.log(
+          `checkDatas returned streak = ${streak.toString()} (требуется: ${
+            quest.value.methodToEqual
+          })`
+        );
+        if (streak < quest.value.methodToEqual) {
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.error('Ошибка при вызове checkDatas:', err);
+        return false;
+      }
+    }
+
     const chain = quest.value.chain || 'Soneium';
-    const txs = await this.getUserTransactions(chain, userAddr, quest);
-    return txs.length >= minTxns;
+    const c = await this.getCampaignById(quest.campaign_id);
+    const txs = await this.getUserTransactions(chain, userAddr, c);
+    if (quest.value.methodChecks && Array.isArray(quest.value.methodChecks)) {
+      for (const checkItem of quest.value.methodChecks) {
+        if (Array.isArray(checkItem)) {
+          let groupCount = 0;
+          const groupThreshold = checkItem[0].minTxns || 0;
+          for (const check of checkItem) {
+            try {
+              const iface = new ethers.Interface([check.signature]);
+              const count = txs.reduce((acc, tx) => {
+                try {
+                  const parsed = iface.parseTransaction({ data: tx.input });
+                  return parsed &&
+                    parsed.name ===
+                      (iface.fragments[0] as ethers.FunctionFragment).name
+                    ? acc + 1
+                    : acc;
+                } catch (err) {
+                  return acc;
+                }
+              }, 0);
+              groupCount += count;
+            } catch (err) {
+              continue;
+            }
+          }
+          console.log(
+            `Альтернативная группа: ${groupCount} транзакций (требуется: ${groupThreshold})`
+          );
+          if (groupCount < groupThreshold) {
+            return false;
+          }
+        } else {
+          try {
+            const iface = new ethers.Interface([checkItem.signature]);
+            const count = txs.reduce((acc, tx) => {
+              try {
+                const parsed = iface.parseTransaction({ data: tx.input });
+                return parsed &&
+                  parsed.name ===
+                    (iface.fragments[0] as ethers.FunctionFragment).name
+                  ? acc + 1
+                  : acc;
+              } catch (err) {
+                return acc;
+              }
+            }, 0);
+            console.log(
+              `Метод ${
+                (iface.fragments[0] as ethers.FunctionFragment).name
+              }: ${count} транзакций (требуется: ${checkItem.minTxns})`
+            );
+            if (count < checkItem.minTxns) {
+              return false;
+            }
+          } catch (err) {
+            return false;
+          }
+        }
+      }
+      return true;
+    } else {
+      const minTxns = quest.value.minTxns || 0;
+      const contractTxs = txs.filter((tx) =>
+        quest.value.contracts.some(
+          (addr: string) => tx.to.toLowerCase() === addr.toLowerCase()
+        )
+      );
+      console.log('------>', contractTxs);
+      return contractTxs.length >= minTxns;
+    }
   }
 
   private async handleCheckOnchainMethodQuest(
@@ -372,7 +604,6 @@ export class QuestService {
     console.log(`Transactions found for user ${contractTransactions.length}`);
 
     for (const tx of contractTransactions) {
-      console.log('------>', tx.hash);
       try {
         const parsed = iface.parseTransaction({ data: tx.input });
 
@@ -510,7 +741,6 @@ export class QuestService {
         tx.to.toLowerCase() === quest.value.contracts[1]?.toLowerCase() ||
         tx.to.toLowerCase() === quest.value.contracts[2]?.toLowerCase()
     );
-    console.log('------>', txnsToAddress.length);
 
     for (const tx of txnsToAddress) {
       if (!data.minAmountUSD && !data.actions && data.methodSignatures) {
@@ -904,18 +1134,16 @@ export class QuestService {
     return floatAmount * price;
   }
 
-  private async getUserTransactions(
-    chain: string,
-    addr: string,
-    campaign: any
-  ) {
-    if (chain !== 'Soneium') return [];
+  private async getUserTransactions(chain: any, addr: string, campaign: any) {
+    if (chain !== 'Soneium' && chain !== 1868) return [];
     const now = Math.floor(Date.now() / 1000);
     const startedAt = Math.floor(campaign.started_at / 1000);
     const ignoreStart = campaign.ignore_campaign_start;
     let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
     if (startTs < 0) startTs = 0;
+    console.log('------>', startTs);
     const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=500&sort=desc`;
+    console.log('------>', url);
     const r = await fetch(url);
     if (!r.ok) return [];
     const data = await r.json();

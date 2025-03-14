@@ -84,7 +84,7 @@ export class CampaignRepository {
     page: number,
     limit: number,
     type?: CampaignType,
-    categoryDto?: CategoryItemDto[]
+    categoryDto?: string[]
   ): Promise<any[]> {
     const client = this.dbService.getClient();
     try {
@@ -103,10 +103,26 @@ export class CampaignRepository {
       }
 
       if (categoryDto !== undefined) {
-        const slugs = categoryDto.map((c) => c.slug);
-        if (slugs.length > 0) {
+        let slugs: string[] = [];
+        if (categoryDto.length > 0) {
+          if (
+            typeof categoryDto[0] === 'string' &&
+            categoryDto[0].trim().startsWith('[')
+          ) {
+            try {
+              slugs = JSON.parse(categoryDto[0]);
+            } catch (e) {
+              slugs = [];
+            }
+          } else {
+            slugs = categoryDto;
+          }
+        }
+        if (slugs.length === 0) {
+          query += ` AND category IS NOT NULL AND category <> '[]' `;
+        } else {
           params.push(slugs);
-          query += ` AND slug = ANY($${params.length}::varchar[])`;
+          query += ` AND category::jsonb ?| $${params.length}::text[]`;
         }
       }
 
