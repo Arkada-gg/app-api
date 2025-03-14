@@ -254,6 +254,12 @@ export class AlchemyWebhooksService {
         userAddress
       );
 
+      const campaign = await this.questService.getCampaignById(campaignId);
+
+      if (!campaign) throw new Error('Campaign not found');
+
+      const campaignType = campaign.type;
+
       return event;
     } catch (error) {
       this.logger.error('Error handling pyramid claim event:', error);
