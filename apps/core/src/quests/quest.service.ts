@@ -156,13 +156,52 @@ export class QuestService {
       );
     }
   }
-
   async completeCampaignAndAwardPoints(
     campaignId: string,
     userAddress: string
   ) {
     const lowerAddress = userAddress.toLowerCase();
     try {
+      const allCampaignQuests = await this.questRepository.getQuestsByCampaign(
+        campaignId
+      );
+      const completedQuests =
+        await this.questRepository.getCompletedQuestsByUserInCampaign(
+          campaignId,
+          lowerAddress
+        );
+      if (completedQuests.length === allCampaignQuests.length) {
+        const wasMarked = await this.campaignService.markCampaignAsCompleted(
+          campaignId,
+          lowerAddress
+        );
+        if (wasMarked) {
+          const campaign = await this.campaignService.getCampaignByIdOrSlug(
+            campaignId
+          );
+          const rewards = campaign.rewards;
+          let totalPoints = 0;
+          rewards.forEach((r: any) => {
+            if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
+          });
+          await this.userService.awardCampaignCompletion(
+            lowerAddress,
+            totalPoints
+          );
+        }
+      }
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Ошибка при завершении квеста и начислении баллов: ${error.message}`
+      );
+    }
+  }
+
+  async completeQuestAndAwardPoints(questId: string, userAddress: string) {
+    const lowerAddress = userAddress.toLowerCase();
+    try {
+      const quest = await this.questRepository.getQuest(questId);
+      const campaignId = quest.campaign_id;
       const allCampaignQuests = await this.questRepository.getQuestsByCampaign(
         campaignId
       );
@@ -233,6 +272,42 @@ export class QuestService {
           questStored.campaign_id
         );
       }
+      try {
+        if (this.configService.get('ENV') === 'prod') {
+          const doneList =
+            await this.questRepository.getCompletedQuestsByUserInCampaign(
+              questStored.campaign_id,
+              userAddress.toLowerCase()
+            );
+          if (doneList.length === allInCampaign.length) {
+            const wasMarked =
+              await this.campaignService.markCampaignAsCompleted(
+                questStored.campaign_id,
+                userAddress.toLowerCase()
+              );
+            if (wasMarked) {
+              const camp = await this.campaignService.getCampaignByIdOrSlug(
+                questStored.campaign_id
+              );
+              const rewards = camp.rewards || [];
+              let totalPoints = 0;
+              rewards.forEach((rw: any) => {
+                if (rw.type === 'tokens') {
+                  totalPoints += parseInt(rw.value, 10);
+                }
+              });
+              await this.userService.awardCampaignCompletion(
+                userAddress.toLowerCase(),
+                totalPoints
+              );
+            }
+          }
+        }
+      } catch (err) {
+        throw new InternalServerErrorException(
+          `Ошибка при завершении квеста и начислении баллов: ${err.message}`
+        );
+      }
       return true;
     } catch (error) {
       if (
@@ -276,6 +351,33 @@ export class QuestService {
 
     if (quest.sequence === 1) {
       await this.campaignService.incrementParticipants(quest.campaign_id);
+    }
+    if (this.configService.get('ENV') === 'prod') {
+      const allDone = await this.getCompletedQuestsByUserInCampaign(
+        quest.campaign_id,
+        address.toLowerCase()
+      );
+      if (allDone.length === campaignQuests.length) {
+        const wasMarked = await this.campaignService.markCampaignAsCompleted(
+          quest.campaign_id,
+          address.toLowerCase()
+        );
+        if (wasMarked) {
+          const c = await this.campaignService.getCampaignByIdOrSlug(
+            quest.campaign_id
+          );
+          let totalPoints = 0;
+          for (const r of c.rewards || []) {
+            if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
+          }
+          if (totalPoints > 0) {
+            await this.userService.awardCampaignCompletion(
+              address.toLowerCase(),
+              totalPoints
+            );
+          }
+        }
+      }
     }
 
     return true;
@@ -473,6 +575,7 @@ export class QuestService {
           (addr: string) => tx.to.toLowerCase() === addr.toLowerCase()
         )
       );
+      console.log('------>', contractTxs);
       return contractTxs.length >= minTxns;
     }
   }
@@ -1038,7 +1141,9 @@ export class QuestService {
     const ignoreStart = campaign.ignore_campaign_start;
     let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
     if (startTs < 0) startTs = 0;
+    console.log('------>', startTs);
     const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=500&sort=desc`;
+    console.log('------>', url);
     const r = await fetch(url);
     if (!r.ok) return [];
     const data = await r.json();
