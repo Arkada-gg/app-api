@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { CampaignRepository } from './campaign.repository';
-import { CategoryItemDto } from './dto/category-item.dto';
 import { CampaignType } from './dto/get-campaigns.dto';
 import { UserCampaignStatus } from './dto/get-user-campaigns.dto';
 

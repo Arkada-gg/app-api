@@ -4,17 +4,17 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { UserRepository } from './user.repository';
-import { S3Service } from '../s3/s3.service';
-import { Multer } from 'multer';
-import { IUser } from '../shared/interfaces';
-import { ESocialPlatform, SocialFieldMap } from './user.constants';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { BindSocialDto } from './dto/bind-social.dto';
-import { UnbindSocialDto } from './dto/unbind-social.dto';
-import { EPointsType } from '../quests/interface';
 import jwt from 'jsonwebtoken';
+import { Multer } from 'multer';
+import { EPointsType } from '../quests/interface';
+import { S3Service } from '../s3/s3.service';
+import { IUser, PyramidType } from '../shared/interfaces';
+import { BindSocialDto } from './dto/bind-social.dto';
 import { CreateUserEmailDto } from './dto/create-user-email.dto';
+import { UnbindSocialDto } from './dto/unbind-social.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { ESocialPlatform, SocialFieldMap } from './user.constants';
+import { UserRepository } from './user.repository';
 
 @Injectable()
 export class UserService {
@@ -39,6 +39,10 @@ export class UserService {
       }
     }
     return await this.userRepository.createEmail(dto.email, dto.address);
+  }
+
+  async incrementPyramid(address: string, type: PyramidType, chainId: number) {
+    await this.userRepository.incrementPyramid(address, type, chainId);
   }
 
   async findByEmail(email: string): Promise<IUser | null> {

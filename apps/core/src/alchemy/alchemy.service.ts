@@ -8,6 +8,7 @@ import * as crypto from 'crypto';
 import { Interface, LogDescription, ethers } from 'ethers';
 import { ConfigService } from '../_config/config.service';
 import { QuestService } from '../quests/quest.service';
+import { PyramidType } from '../shared/interfaces';
 import { TransactionsService } from '../transactions/transactions.service';
 import { UserService } from '../user/user.service';
 import daylyCheckAbi from './abis/daily-check-abi.json';
@@ -249,16 +250,16 @@ export class AlchemyWebhooksService {
     try {
       const { questId: campaignId, claimer: userAddress } = event.event.args;
 
-      await this.questService.completeCampaignAndAwardPoints(
+      const campaign = await this.questService.completeCampaignAndAwardPoints(
         campaignId,
-        userAddress
+        userAddress,
+        true
       );
 
-      const campaign = await this.questService.getCampaignById(campaignId);
+      const campaignType =
+        campaign.type === 'basic' ? PyramidType.BASIC : PyramidType.GOLD;
 
-      if (!campaign) throw new Error('Campaign not found');
-
-      const campaignType = campaign.type;
+      await this.userService.incrementPyramid(userAddress, campaignType, 1868);
 
       return event;
     } catch (error) {

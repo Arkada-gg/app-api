@@ -6,7 +6,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { CategoryItemDto } from './dto/category-item.dto';
 import { CampaignType } from './dto/get-campaigns.dto';
 import { UserCampaignStatus } from './dto/get-user-campaigns.dto';
 
@@ -175,11 +174,13 @@ export class CampaignRepository {
       }
 
       const result = await client.query(query, [idOrSlug]);
+
       if (result.rows.length === 0) {
         throw new NotFoundException('Campaign not found');
       }
       return result.rows[0];
     } catch (error) {
+      Logger.error(`Error in findCampaignByIdOrSlug: ${error.message}`);
       throw new InternalServerErrorException(error.message);
     }
   }

@@ -4,9 +4,9 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { IUser } from '../shared/interfaces';
-import { UpdateUserDto } from './dto/update-user.dto';
 import { QuestRepository } from '../quests/quest.repository';
+import { IUser, PyramidType } from '../shared/interfaces';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UserRepository {
@@ -881,5 +881,25 @@ export class UserRepository {
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
+  }
+
+  async incrementPyramid(address: string, type: PyramidType, chainId: number) {
+    const lower = address.toLowerCase();
+    const client = this.dbService.getClient();
+
+    await client.query(
+      `
+      UPDATE users 
+      SET pyramids_info = COALESCE(pyramids_info, '{}') || 
+        jsonb_build_object($2, 
+          jsonb_build_object(
+            $3, 
+            COALESCE((pyramids_info->$2->$3)::int, 0) + 1
+          )
+        )
+      WHERE address = $1
+      `,
+      [lower, chainId, type.toLowerCase()]
+    );
   }
 }
