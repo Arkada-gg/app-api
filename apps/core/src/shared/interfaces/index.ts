@@ -16,6 +16,7 @@ export interface IUser {
   twitter_points: number;
   wallet_points: number;
   wallet_additional_points: number;
+  last_wallet_score_update?: Date;
 }
 
 export interface ITransaction {

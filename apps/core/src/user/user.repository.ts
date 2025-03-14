@@ -13,7 +13,7 @@ export class UserRepository {
   constructor(
     private readonly dbService: DatabaseService,
     private readonly questRepository: QuestRepository
-  ) {}
+  ) { }
 
   async createEmail(email: string, address?: string) {
     const client = this.dbService.getClient();
@@ -64,7 +64,7 @@ export class UserRepository {
 
     try {
       const userResult = await client.query<IUser>(
-        `SELECT *, COALESCE(points, 0) AS total_points FROM users WHERE address = $1`,
+        `SELECT *, COALESCE(points, 0) AS total_points, last_wallet_score_update FROM users WHERE address = $1`,
         [lower]
       );
 
@@ -107,8 +107,8 @@ export class UserRepository {
         daily: +dailyPoints,
         twitter: user.twitter_points,
         base_campaign: +baseCampaignPoints,
-        wallet: user.wallet_points || 0, 
-        wallet_additional: user.wallet_additional_points || 0, 
+        wallet: user.wallet_points || 0,
+        wallet_additional: user.wallet_additional_points || 0,
         total: +user.total_points,
       };
 
@@ -414,10 +414,9 @@ export class UserRepository {
           ON u.address = up.user_address
         WHERE up.created_at BETWEEN $1 AND $2
           AND (
-            ${
-              !excludeRef
-                ? 'TRUE'
-                : `
+            ${!excludeRef
+        ? 'TRUE'
+        : `
               (
                 up.point_type != 'referral'
                 OR (
@@ -427,7 +426,7 @@ export class UserRepository {
                 )
               )
             `
-            }
+      }
           )
         GROUP BY up.user_address
       ),
@@ -918,7 +917,7 @@ export class UserRepository {
       throw new InternalServerErrorException(error.message);
     }
   }
-  
+
   async updateWalletAdditionalPoints(userId: string, points: number): Promise<void> {
     const client = this.dbService.getClient();
     try {
@@ -928,6 +927,20 @@ export class UserRepository {
         WHERE address = $2
       `;
       await client.query(query, [points, userId.toLowerCase()]);
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async updateLastWalletScoreUpdate(userId: string, timestamp: Date): Promise<void> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        UPDATE users
+        SET last_wallet_score_update = $1
+        WHERE address = $2
+      `;
+      await client.query(query, [timestamp, userId.toLowerCase()]);
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
