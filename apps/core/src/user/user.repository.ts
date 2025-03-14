@@ -891,10 +891,10 @@ export class UserRepository {
       `
       UPDATE users 
       SET pyramids_info = COALESCE(pyramids_info, '{}') || 
-        jsonb_build_object($2, 
+        jsonb_build_object($2::text, 
           jsonb_build_object(
-            $3, 
-            COALESCE((pyramids_info->$2->$3)::int, 0) + 1
+            $3::text, 
+            COALESCE((pyramids_info->($2::text)->($3::text))::int, 0) + 1
           )
         )
       WHERE address = $1
