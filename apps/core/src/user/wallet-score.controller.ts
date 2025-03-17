@@ -1,8 +1,18 @@
-import { Controller, Logger, Post, UnauthorizedException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Controller,
+  Logger,
+  Post,
+  UnauthorizedException,
+  BadRequestException,
+  InternalServerErrorException,
+  UseGuards,
+  Query
+} from '@nestjs/common';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import axios, { AxiosResponse } from 'axios';
 import { UserService } from './user.service';
-import { GetUserId } from '../auth/user.decorator';
+import { SignatureAuthGuard } from '../auth/guard/signature-auth.guard';
+import { GetUserAddress } from '../auth/user.decorator';
 
 interface DeBankBalanceResponse {
   total_usd_value: number;
@@ -35,28 +45,33 @@ export class WalletScoreController {
     'avax',
     'matic',
     'op',
-    'mantle',
+    'mantle'
     // 'tron'
   ];
 
-  constructor(private readonly userService: UserService) { }
+  constructor(private readonly userService: UserService) {
+  }
 
+  @UseGuards(SignatureAuthGuard)
   @Post('update')
   @ApiOperation({ summary: 'Обновить Wallet Score для текущего пользователя' })
   @ApiResponse({ status: 200, description: 'Обновление завершено' })
   @ApiResponse({ status: 401, description: 'Не аутентифицирован' })
-  @ApiResponse({ status: 400, description: 'Запрос возможен только раз в день' })
+  @ApiResponse({
+    status: 400,
+    description: 'Запрос возможен только раз в день'
+  })
   @ApiResponse({ status: 500, description: 'Ошибка обновления' })
-  async updateWalletScore(@GetUserId() userId: string) {
+  async updateWalletScore(@GetUserAddress() userAddress: string) {
     this.logger.log('Запуск обновления Wallet Score для пользователя...');
 
-    if (!userId) {
-      throw new UnauthorizedException('Не аутентифицирован');
-    }
+    // if (!userId) {
+    //   throw new UnauthorizedException('Не аутентифицирован');
+    // }
 
-    const user = await this.userService.findByAddress(userId);
+    const user = await this.userService.findByAddress(userAddress);
     if (!user) {
-      throw new UnauthorizedException('Пользователь не найден');
+      throw new UnauthorizedException('Not authenticated');
     }
 
     const now = new Date();
@@ -75,21 +90,38 @@ export class WalletScoreController {
       const totalBalance = this.calculateTotalBalance(balanceData);
       const points = this.calculatePoints(totalBalance);
 
-      await this.userService.setWalletScorePoints(user.address, points.basePoints, points.additionalPoints);
+      await this.userService.setWalletScorePoints(
+        user.address,
+        points.basePoints,
+        points.additionalPoints
+      );
       await this.userService.updateLastWalletScoreUpdate(user.address, now);
 
       this.logger.log(
-        `✅ User ${user.address} (${walletAddress}): balance=$${totalBalance.toFixed(2)}, basePoints=${points.basePoints}, additionalPoints=${points.additionalPoints}`
+        `✅ User ${user.address
+        } (${walletAddress}): balance=$${totalBalance.toFixed(2)}, basePoints=${points.basePoints
+        }, additionalPoints=${points.additionalPoints}`
       );
 
-      return { message: 'Wallet Score обновлен', balance: totalBalance.toFixed(2), basePoints: points.basePoints, additionalPoints: points.additionalPoints };
+      return {
+        message: 'Wallet Score обновлен',
+        balance: totalBalance.toFixed(2),
+        basePoints: points.basePoints,
+        additionalPoints: points.additionalPoints
+      };
     } catch (error) {
-      this.logger.error(`Ошибка в обновлении WalletScore: ${(error as Error).message}`);
-      throw new InternalServerErrorException(`Ошибка обновления: ${(error as Error).message}`);
+      this.logger.error(
+        `Ошибка в обновлении WalletScore: ${(error as Error).message}`
+      );
+      throw new InternalServerErrorException(
+        `Ошибка обновления: ${(error as Error).message}`
+      );
     }
   }
 
-  private async fetchWalletBalance(walletAddress: string): Promise<DeBankBalanceResponse> {
+  private async fetchWalletBalance(
+    walletAddress: string
+  ): Promise<DeBankBalanceResponse> {
     const url = `${this.BASE_URL}/user/total_balance`;
 
     const resp: AxiosResponse<DeBankBalanceResponse> = await axios.get(url, {
@@ -97,8 +129,8 @@ export class WalletScoreController {
         id: walletAddress
       },
       headers: {
-        'accept': 'application/json',
-        'AccessKey': this.API_KEY
+        accept: 'application/json',
+        AccessKey: this.API_KEY
       }
     });
 
@@ -106,11 +138,16 @@ export class WalletScoreController {
   }
 
   private calculateTotalBalance(data: DeBankBalanceResponse): number {
-    const filteredChains = data.chain_list.filter(chain => this.targetChains.includes(chain.id));
+    const filteredChains = data.chain_list.filter((chain) =>
+      this.targetChains.includes(chain.id)
+    );
     return filteredChains.reduce((sum, chain) => sum + chain.usd_value, 0);
   }
 
-  private calculatePoints(balance: number): { basePoints: number; additionalPoints: number } {
+  private calculatePoints(balance: number): {
+    basePoints: number;
+    additionalPoints: number;
+  } {
     let basePoints = 0;
     let additionalPoints = 0;
 
