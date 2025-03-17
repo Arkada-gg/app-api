@@ -27,6 +27,8 @@ import * as m26 from './1674235500028_add_project_logo_and_category_to_campaigns
 import * as m27 from './1674235501002_add_discord_to_quest_type_enum';
 import * as m28 from './1674235501003_add_event_type_to_campaigns';
 import * as m29 from './1674235501004_add_hash_to_quest_completions';
+import * as m30 from './1674235600025_add_wallet_points_columns'
+import * as m31 from './1674235700025_add_last_wallet_score_update_column'
 
 // import * as s1 from './1674235300005_seed_campaigns_and_quests';
 // import * as s2 from './1674235300006_add_swap_and_add_liquidity_quests';
@@ -62,6 +64,8 @@ export const allMigrations = [
   m27,
   m28,
   m29,
+  m30,
+  m31,
   // s1,
   // s2,
   s3,
