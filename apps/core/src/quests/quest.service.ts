@@ -26,13 +26,14 @@ import {
   ARKADA_NFTS,
   SONEIUM_MULTICALL_ADDRESS,
 } from '../shared/constants/addresses';
+import { PyramidType } from '../shared/interfaces';
 import { soneiumProvider } from '../shared/provider';
 import { UserService } from '../user/user.service';
 import {
   ARKADA_NFTS_MULTIPLIER_BPS,
-  BASIC_QUEST_MINT_PRICE,
   MAX_BPS,
-  PREMIUM_QUEST_MINT_PRICE,
+  MINT_PRICE,
+  PYRAMID_IMAGE_URI,
   REF_OWNER_BPS,
   USER_REWARD_BPS,
 } from './constants/mint';
@@ -160,67 +161,32 @@ export class QuestService {
   }
   async completeCampaignAndAwardPoints(
     campaignId: string,
-    userAddress: string
+    userAddress: string,
+    completeAnyway: boolean,
+    campaignTotalQuests?: number
   ) {
     const lowerAddress = userAddress.toLowerCase();
     try {
-      const allCampaignQuests = await this.questRepository.getQuestsByCampaign(
+      const campaign = await this.campaignService.getCampaignByIdOrSlug(
         campaignId
       );
-      const completedQuests =
-        await this.questRepository.getCompletedQuestsByUserInCampaign(
-          campaignId,
-          lowerAddress
-        );
-      if (completedQuests.length === allCampaignQuests.length) {
-        const wasMarked = await this.campaignService.markCampaignAsCompleted(
-          campaignId,
-          lowerAddress
-        );
-        if (wasMarked) {
-          const campaign = await this.campaignService.getCampaignByIdOrSlug(
-            campaignId
-          );
-          const rewards = campaign.rewards;
-          let totalPoints = 0;
-          rewards.forEach((r: any) => {
-            if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
-          });
-          await this.userService.awardCampaignCompletion(
-            lowerAddress,
-            totalPoints
-          );
-        }
-      }
-    } catch (error) {
-      throw new InternalServerErrorException(
-        `Ошибка при завершении квеста и начислении баллов: ${error.message}`
-      );
-    }
-  }
+      // if PYRAMID mint required and we call method from not webhook, then we don't need to mark campaign as completed
+      if (campaign.pyramid_required && !completeAnyway) return;
 
-  async completeQuestAndAwardPoints(questId: string, userAddress: string) {
-    const lowerAddress = userAddress.toLowerCase();
-    try {
-      const quest = await this.questRepository.getQuest(questId);
-      const campaignId = quest.campaign_id;
-      const allCampaignQuests = await this.questRepository.getQuestsByCampaign(
-        campaignId
-      );
+      const allCampaignQuests =
+        campaignTotalQuests ??
+        (await this.questRepository.getQuestsByCampaign(campaignId)).length;
       const completedQuests =
         await this.questRepository.getCompletedQuestsByUserInCampaign(
           campaignId,
           lowerAddress
         );
-      if (completedQuests.length === allCampaignQuests.length) {
+      if (completedQuests.length === allCampaignQuests) {
         const wasMarked = await this.campaignService.markCampaignAsCompleted(
           campaignId,
           lowerAddress
         );
         if (wasMarked) {
-          const campaign = await this.campaignService.getCampaignByIdOrSlug(
-            campaignId
-          );
           const rewards = campaign.rewards;
           let totalPoints = 0;
           rewards.forEach((r: any) => {
@@ -232,6 +198,8 @@ export class QuestService {
           );
         }
       }
+
+      return campaign;
     } catch (error) {
       throw new InternalServerErrorException(
         `Ошибка при завершении квеста и начислении баллов: ${error.message}`
@@ -274,42 +242,14 @@ export class QuestService {
           questStored.campaign_id
         );
       }
-      try {
-        if (this.configService.get('ENV') === 'prod') {
-          const doneList =
-            await this.questRepository.getCompletedQuestsByUserInCampaign(
-              questStored.campaign_id,
-              userAddress.toLowerCase()
-            );
-          if (doneList.length === allInCampaign.length) {
-            const wasMarked =
-              await this.campaignService.markCampaignAsCompleted(
-                questStored.campaign_id,
-                userAddress.toLowerCase()
-              );
-            if (wasMarked) {
-              const camp = await this.campaignService.getCampaignByIdOrSlug(
-                questStored.campaign_id
-              );
-              const rewards = camp.rewards || [];
-              let totalPoints = 0;
-              rewards.forEach((rw: any) => {
-                if (rw.type === 'tokens') {
-                  totalPoints += parseInt(rw.value, 10);
-                }
-              });
-              await this.userService.awardCampaignCompletion(
-                userAddress.toLowerCase(),
-                totalPoints
-              );
-            }
-          }
-        }
-      } catch (err) {
-        throw new InternalServerErrorException(
-          `Ошибка при завершении квеста и начислении баллов: ${err.message}`
-        );
-      }
+
+      await this.completeCampaignAndAwardPoints(
+        questStored.campaign_id,
+        userAddress,
+        false,
+        allInCampaign.length
+      );
+
       return true;
     } catch (error) {
       if (
@@ -354,33 +294,13 @@ export class QuestService {
     if (quest.sequence === 1) {
       await this.campaignService.incrementParticipants(quest.campaign_id);
     }
-    if (this.configService.get('ENV') === 'prod') {
-      const allDone = await this.getCompletedQuestsByUserInCampaign(
-        quest.campaign_id,
-        address.toLowerCase()
-      );
-      if (allDone.length === campaignQuests.length) {
-        const wasMarked = await this.campaignService.markCampaignAsCompleted(
-          quest.campaign_id,
-          address.toLowerCase()
-        );
-        if (wasMarked) {
-          const c = await this.campaignService.getCampaignByIdOrSlug(
-            quest.campaign_id
-          );
-          let totalPoints = 0;
-          for (const r of c.rewards || []) {
-            if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
-          }
-          if (totalPoints > 0) {
-            await this.userService.awardCampaignCompletion(
-              address.toLowerCase(),
-              totalPoints
-            );
-          }
-        }
-      }
-    }
+
+    await this.completeCampaignAndAwardPoints(
+      quest.campaign_id,
+      address,
+      false,
+      campaignQuests.length
+    );
 
     return true;
   }
@@ -1279,6 +1199,11 @@ export class QuestService {
     if (!campaign) {
       throw new BadRequestException('Campaign not found');
     }
+    if (!campaign.pyramid_required) {
+      throw new BadRequestException(
+        'Campaign does not require minting Pyramid'
+      );
+    }
     const campaignStatus = await this.campaignService.getCampaignStatus(
       campaign.id,
       userAddress
@@ -1337,9 +1262,12 @@ export class QuestService {
         ]
       : [];
 
+    const pyramidType =
+      campaign.type === 'premium' ? PyramidType.GOLD : PyramidType.BASIC;
+
     const metadata = {
       name: campaign.name,
-      image: '',
+      image: PYRAMID_IMAGE_URI[pyramidType],
       attributes: [
         { trait_type: 'Quest ID', value: campaign.id },
         { trait_type: 'Type', value: campaign.type },
@@ -1385,10 +1313,7 @@ export class QuestService {
     );
 
     // mint price depends on campaign type
-    const mintPrice =
-      campaign.type === 'basic'
-        ? BASIC_QUEST_MINT_PRICE
-        : PREMIUM_QUEST_MINT_PRICE;
+    const mintPrice = MINT_PRICE[pyramidType];
 
     // reward amount is 20% of mint price
     const rewardAmountBase =

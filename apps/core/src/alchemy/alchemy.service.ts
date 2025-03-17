@@ -8,10 +8,12 @@ import * as crypto from 'crypto';
 import { Interface, LogDescription, ethers } from 'ethers';
 import { ConfigService } from '../_config/config.service';
 import { QuestService } from '../quests/quest.service';
+import { PyramidType } from '../shared/interfaces';
 import { TransactionsService } from '../transactions/transactions.service';
 import { UserService } from '../user/user.service';
 import daylyCheckAbi from './abis/daily-check-abi.json';
 import pyramidAbi from './abis/pyramid-abi.json';
+import { CHAIN_ID_BY_ALCHEMY_CHAIN } from './config/chain';
 import { EventSignature } from './config/signatures';
 
 export interface AlchemyWebhookEvent {
@@ -106,6 +108,8 @@ export class AlchemyWebhooksService {
     event: any,
     signature: EventSignature
   ): Promise<string> {
+    const chainId = CHAIN_ID_BY_ALCHEMY_CHAIN[event.network];
+
     const decodedLogs = this.validateAndDecodeLogs(
       event.data.block.logs,
       this.getInterfaceByEventSignature(signature),
@@ -125,7 +129,7 @@ export class AlchemyWebhooksService {
 
     const updatingRes = await Promise.allSettled(
       filteredEvents.map((event) =>
-        this.operateEventDependsOnSignature(event, signature)
+        this.operateEventDependsOnSignature(event, signature, chainId)
       )
     );
 
@@ -191,13 +195,14 @@ export class AlchemyWebhooksService {
 
   private async operateEventDependsOnSignature(
     event: IEventComb,
-    signature: EventSignature
+    signature: EventSignature,
+    chainId: number
   ) {
     switch (signature) {
       case EventSignature.DAILY_CHECK:
         return this.handleDailyCheckEvent(event);
       case EventSignature.PYRAMID_CLAIM:
-        return this.handlePyramidClaimEvent(event);
+        return this.handlePyramidClaimEvent(event, chainId);
       default:
         throw new BadRequestException('Unsupported event signature');
     }
@@ -245,13 +250,23 @@ export class AlchemyWebhooksService {
     }
   }
 
-  private async handlePyramidClaimEvent(event: IEventComb) {
+  private async handlePyramidClaimEvent(event: IEventComb, chainId: number) {
     try {
       const { questId: campaignId, claimer: userAddress } = event.event.args;
 
-      await this.questService.completeCampaignAndAwardPoints(
+      const campaign = await this.questService.completeCampaignAndAwardPoints(
         campaignId,
-        userAddress
+        userAddress,
+        true
+      );
+
+      const campaignType =
+        campaign.type === 'basic' ? PyramidType.BASIC : PyramidType.GOLD;
+
+      await this.userService.incrementPyramid(
+        userAddress,
+        campaignType,
+        chainId
       );
 
       return event;

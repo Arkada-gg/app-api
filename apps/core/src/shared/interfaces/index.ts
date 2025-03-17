@@ -27,6 +27,11 @@ export interface ITransaction {
   created_at: Date;
 }
 
+export enum PyramidType {
+  BASIC = 'basic',
+  GOLD = 'gold',
+}
+
 export interface SessionRequest extends Request {
   userAddress: { address: string };
 }
@@ -244,6 +249,9 @@ export class GetCampaignResponse {
   @ApiProperty({ example: 'default', description: 'тип ивента' })
   event_type: 'default' | 'mystery' | 'special';
 
+  @ApiProperty({ example: 'false', description: 'требуется ли минт пирамиды' })
+  pyramid_required: boolean;
+
   @ApiProperty({ example: 1337, description: 'Chainid' })
   chain_id: number;
 }
@@ -256,105 +264,9 @@ export class GetCampaignWithUserStatusResponse extends GetCampaignResponse {
   user_status: string;
 }
 
-export class GetCampaignByIdOrSlugResponse {
-  @ApiProperty({ example: '12345', description: 'ID кампании' })
-  id: string;
-
-  @ApiProperty({ example: 'campaign-slug', description: 'Slug кампании' })
-  slug: string;
-
-  @ApiProperty({ example: 'Campaign name', description: 'Название кампании' })
-  name: string;
-
-  @ApiProperty({
-    example: 'Campaign description',
-    description: 'Описание кампании',
-  })
-  description: string;
-
-  @ApiProperty({
-    example: 'campaign-image.png',
-    description: 'Изображение кампании',
-  })
-  image: string;
-
-  @ApiProperty({ type: [RewardDto] })
-  rewards: RewardDto[];
-
-  @ApiProperty({
-    example: 'promo',
-    description: 'promo',
-  })
-  promo: string;
-
+export class GetCampaignByIdOrSlugResponse extends GetCampaignResponse {
   @ApiProperty({ type: [QuestDto] })
   quests: QuestDto[];
-
-  @ApiProperty({
-    example: '2025-01-01T00:00:00Z',
-    description: 'Дата начала кампании',
-  })
-  started_at: string;
-
-  @ApiProperty({
-    example: '2025-02-01T00:00:00Z',
-    description: 'Дата окончания кампании',
-  })
-  finished_at: string;
-
-  @ApiProperty({ example: 100, description: 'Количество участников' })
-  participants: number;
-
-  @ApiProperty({ example: 'basic', description: 'Тип кампании' })
-  type: 'basic' | 'premium';
-
-  @ApiProperty({ example: '["dApp"]', description: 'Тэги кампании' })
-  tags: string[];
-
-  @ApiProperty({
-    example: 'medium',
-    description: 'easy-medium-hard',
-  })
-  difficulty: 'easy' | 'medium' | 'hard';
-
-  @ApiProperty({
-    example: 'Краткое описание',
-    description: 'Краткое описание',
-  })
-  short_description: string;
-
-  @ApiProperty({
-    example: 'Наименование проекта',
-    description: 'Краткое описание',
-  })
-  project_name: string;
-
-  @ApiProperty({
-    example: 'Описание проекта',
-    description: 'Краткое описание',
-  })
-  project_description: string;
-
-  @ApiProperty({
-    example: 'IN_PROGRESS',
-    description: 'Статус кампании',
-  })
-  status: string;
-
-  @ApiProperty({
-    example: 'урл лого',
-    description: 'Лого кампании',
-  })
-  project_logo: string;
-
-  @ApiProperty({ example: '["urCategory"]', description: 'Категории кампании' })
-  category: string[];
-
-  @ApiProperty({ example: 'default', description: 'тип ивента' })
-  event_type: 'default' | 'mystery' | 'special';
-
-  @ApiProperty({ example: 1337, description: 'Chainid' })
-  chain_id: number;
 }
 
 export class GetUserResponse {
@@ -463,4 +375,9 @@ export class GetUserResponse {
     required: false,
   })
   twitter_points: number;
+
+  @ApiProperty({
+    description: 'Количество пирамид по айди сети',
+  })
+  pyramids_info: Record<string, Record<PyramidType, number>>;
 }
