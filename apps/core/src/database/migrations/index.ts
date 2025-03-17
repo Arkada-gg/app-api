@@ -22,16 +22,16 @@ import * as m21 from './1674235500025_add_twitter_points_column';
 import * as m22 from './1674235500026_add_transactions_table';
 import * as m23 from './1674235500027_add_ignore_campaign_start_to_campaigns';
 import * as m26 from './1674235500028_add_project_logo_and_category_to_campaigns';
-import * as m30 from './1674235500029_add_pyramid_fields_to_user_table';
-import * as m31 from './1674235500030_add_pyramid_required_to_campaigns_table';
+import * as m33 from './1674235500029_add_pyramid_fields_to_user_table';
+import * as m34 from './1674235500030_add_pyramid_required_to_campaigns_table';
 import * as m24 from './1674235501000_create_discord_guilds_table';
 import * as m25 from './1674235501001_create_email_table';
 import * as m27 from './1674235501002_add_discord_to_quest_type_enum';
 import * as m28 from './1674235501003_add_event_type_to_campaigns';
 import * as m29 from './1674235501004_add_hash_to_quest_completions';
-import * as m30 from './1674235600025_add_wallet_points_columns'
-import * as m31 from './1674235700025_add_last_wallet_score_update_column'
-import * as m32 from './1674235501005_add_chain_id_to_campaigns'
+import * as m32 from './1674235501005_add_chain_id_to_campaigns';
+import * as m30 from './1674235600025_add_wallet_points_columns';
+import * as m31 from './1674235700025_add_last_wallet_score_update_column';
 // import * as s1 from './1674235300005_seed_campaigns_and_quests';
 // import * as s2 from './1674235300006_add_swap_and_add_liquidity_quests';
 import * as s3 from './1674235300013_seed_sonnex_campaign_and_quiz_quest';
@@ -69,6 +69,8 @@ export const allMigrations = [
   m30,
   m31,
   m32,
+  m33,
+  m34,
   // s1,
   // s2,
   s3,
