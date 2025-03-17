@@ -1,13 +1,12 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import session from 'express-session';
-import cookieParser from 'cookie-parser';
-import { rateLimit } from 'express-rate-limit';
 import { Logger, ValidationPipe } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import basicAuth from 'express-basic-auth';
-import express from 'express';
+import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
+import express from 'express';
+import basicAuth from 'express-basic-auth';
+import session from 'express-session';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const server = express();
@@ -34,8 +33,6 @@ async function bootstrap() {
       'https://dashboard.galxe.com',
       'https://galxe.com',
       'https://app-galxe.com',
-      'https://app-ui-git-testing-deployment-arkadaminds-projects.vercel.app',
-      'https://3105-2a00-f41-58f2-71fc-91db-a9d7-2ddc-f08b.ngrok-free.app',
       'https://app-ui-git-viewer-arkadaminds-projects.vercel.app',
       'https://166b39d2.landing-dev-7nt.pages.dev',
       'https://www.arkada.gg',

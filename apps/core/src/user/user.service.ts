@@ -84,16 +84,18 @@ export class UserService {
     endAt: string,
     doExcludeRef: boolean,
     limitNum: number,
+    sortBy: 'points' | 'pyramids',
     userAddress?: string,
-    doIncludeRefWithTwScore?: boolean
+    doIncludeRefWithTwScore?: boolean,
   ) {
     return this.userRepository.getLeaderboardCustom(
       startAt,
       endAt,
       doExcludeRef,
       limitNum,
+      sortBy,
       userAddress,
-      doIncludeRefWithTwScore
+      doIncludeRefWithTwScore,
     );
   }
 
