@@ -2,14 +2,34 @@ export interface IUser {
   address: string;
   name?: string;
   email?: string;
-  points?: number;
+  points?: any;
+  total_points?: any;
   avatar?: string;
   twitter?: string;
   discord?: string;
-  telegram?: string;
+  telegram?: any;
   github?: string;
   created_at?: Date;
   updated_at?: Date;
+  ref_owner: string;
+  referral_code: string;
+  twitter_points: number;
+  wallet_points: number;
+  wallet_additional_points: number;
+  last_wallet_score_update?: Date;
+}
+
+export interface ITransaction {
+  hash: string;
+  event_name: string;
+  block_number: number;
+  args: Record<string, any>; // JSONB can be any key-value object
+  created_at: Date;
+}
+
+export enum PyramidType {
+  BASIC = 'basic',
+  GOLD = 'gold',
 }
 
 export interface SessionRequest extends Request {
@@ -24,6 +44,31 @@ export class RewardDto {
 
   @ApiProperty({ example: '100', description: 'Значение награды' })
   value: string;
+}
+
+export class TelegramDto {
+  @ApiProperty({ example: '560000232', description: 'Айди юзера в телеграм' })
+  id: number;
+
+  @ApiProperty({
+    example: 'some_name123',
+    description: 'Никнейм юзера в телеграм',
+  })
+  username: string;
+}
+
+export class PointsDto {
+  @ApiProperty({ example: '100', description: 'Поинты за реферальную систему' })
+  ref: number;
+
+  @ApiProperty({ example: '100', description: 'Поинты за daily начисления' })
+  daily: number;
+
+  @ApiProperty({ example: '100', description: 'Поинты за кампании' })
+  base_campaign: number;
+
+  @ApiProperty({ example: '100', description: 'Всего поинтов' })
+  total: number;
 }
 
 export class QuestTypeDto {
@@ -142,13 +187,13 @@ export class GetCampaignResponse {
     example: '2025-01-01T00:00:00Z',
     description: 'Дата начала кампании',
   })
-  startedAt: string;
+  started_at: string;
 
   @ApiProperty({
     example: '2025-02-01T00:00:00Z',
     description: 'Дата окончания кампании',
   })
-  finishedAt: string;
+  finished_at: string;
 
   @ApiProperty({ example: 100, description: 'Количество участников' })
   participants: number;
@@ -163,81 +208,65 @@ export class GetCampaignResponse {
     example: 'medium',
     description: 'easy-medium-hard',
   })
-  difficulty: string;
+  difficulty: 'easy' | 'medium' | 'hard';
 
   @ApiProperty({
     example: 'Краткое описание',
     description: 'Краткое описание',
   })
   short_description: string;
+
+  @ApiProperty({
+    example: 'Наименование проекта',
+    description: 'Краткое описание',
+  })
+  project_name: string;
+
+  @ApiProperty({
+    example: 'Описание проекта',
+    description: 'Краткое описание',
+  })
+  project_description: string;
+
+  @ApiProperty({
+    example: 'IN_PROGRESS',
+    description: 'Статус кампании',
+  })
+  status: string;
+
+  @ApiProperty({
+    example: 'урл лого',
+    description: 'Лого кампании',
+  })
+  project_logo: string;
+
+  @ApiProperty({
+    example: '["sluggg"]',
+    description: 'Категории кампании',
+  })
+  category: string[];
+
+  @ApiProperty({ example: 'default', description: 'тип ивента' })
+  event_type: 'default' | 'mystery' | 'special';
+
+  @ApiProperty({ example: 'false', description: 'требуется ли минт пирамиды' })
+  pyramid_required: boolean;
+
+  @ApiProperty({ example: 1337, description: 'Chainid' })
+  chain_id: number;
 }
 
-export class GetCampaignByIdOrSlugResponse {
-  @ApiProperty({ example: '12345', description: 'ID кампании' })
-  id: string;
-
-  @ApiProperty({ example: 'campaign-slug', description: 'Slug кампании' })
-  slug: string;
-
-  @ApiProperty({ example: 'Campaign name', description: 'Название кампании' })
-  name: string;
-
+export class GetCampaignWithUserStatusResponse extends GetCampaignResponse {
   @ApiProperty({
-    example: 'Campaign description',
-    description: 'Описание кампании',
+    example: 'active | started | completed',
+    description: 'Статус кампании по юзеру',
   })
-  description: string;
+  user_status: string;
+}
 
-  @ApiProperty({
-    example: 'campaign-image.png',
-    description: 'Изображение кампании',
-  })
-  image: string;
-
-  @ApiProperty({ type: [RewardDto] })
-  rewards: RewardDto[];
-
-  @ApiProperty({
-    example: 'promo',
-    description: 'promo',
-  })
-  promo: string;
-
+export class GetCampaignByIdOrSlugResponse extends GetCampaignResponse {
   @ApiProperty({ type: [QuestDto] })
   quests: QuestDto[];
-
-  @ApiProperty({
-    example: '2025-01-01T00:00:00Z',
-    description: 'Дата начала кампании',
-  })
-  startedAt: string;
-
-  @ApiProperty({
-    example: '2025-02-01T00:00:00Z',
-    description: 'Дата окончания кампании',
-  })
-  finishedAt: string;
-
-  @ApiProperty({ example: 100, description: 'Количество участников' })
-  participants: number;
-
-  @ApiProperty({ example: 'basic', description: 'Тип кампании' })
-  type: 'basic' | 'premium';
-
-  @ApiProperty({ example: '["dApp"]', description: 'Тэги кампании' })
-  tags: string[];
-
-  @ApiProperty({
-    example: 'medium',
-    description: 'easy-medium-hard',
-  })
-  difficulty: string;
-
-  @ApiProperty({
-    example: 'Краткое описание',
-    description: 'Краткое описание',
-  })
-  short_description: string;
 }
 
 export class GetUserResponse {
@@ -261,11 +290,9 @@ export class GetUserResponse {
   twitter?: string;
 
   @ApiProperty({
-    example: 'johndoe',
-    description: 'Имя в Telegram',
-    required: false,
+    type: TelegramDto,
   })
-  telegram?: string;
+  telegram?: TelegramDto;
 
   @ApiProperty({
     example: 'johndoe',
@@ -289,11 +316,9 @@ export class GetUserResponse {
   email?: string;
 
   @ApiProperty({
-    example: '250',
-    description: 'Поинты пользователя',
-    required: false,
+    type: PointsDto,
   })
-  points?: number;
+  points?: PointsDto;
 
   @ApiProperty({
     example: '2025-01-27 06:10:35.315982',
@@ -322,4 +347,37 @@ export class GetUserResponse {
     required: false,
   })
   campaigns_completed?: number;
+
+  @ApiProperty({
+    example: 'HG5K9',
+    description: 'Реф код',
+    required: false,
+  })
+  referral_code?: string;
+
+  @ApiProperty({
+    example: '0x12345...',
+    description: 'Адрес чью рефералку использовал юзер',
+    required: false,
+  })
+  ref_owner?: string;
+
+  @ApiProperty({
+    example: '10',
+    description: 'Количество рефералов',
+    required: false,
+  })
+  ref_count?: number;
+
+  @ApiProperty({
+    example: '10',
+    description: 'Твитер скор',
+    required: false,
+  })
+  twitter_points: number;
+
+  @ApiProperty({
+    description: 'Количество пирамид по айди сети',
+  })
+  pyramids_info: Record<string, Record<PyramidType, number>>;
 }

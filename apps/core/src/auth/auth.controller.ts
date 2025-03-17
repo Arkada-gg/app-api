@@ -1,9 +1,8 @@
-import { Controller, Post, Body, Req, UseGuards } from '@nestjs/common';
-import { SignupDto } from './dto/signup.dto';
-import { AuthService } from './auth.service';
-import { SessionRequest } from '../shared/interfaces';
-import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { SignatureAuthGuard } from './guard/signature-auth.guard';
+import { AuthService } from './auth.service';
+import { SignupDto } from './dto/signup.dto';
 
 @Controller('auth')
 @ApiTags('Auth')
@@ -12,10 +11,9 @@ export class AuthController {
 
   @Post('signup')
   @UseGuards(SignatureAuthGuard)
-  @ApiOperation({ summary: 'Авторизация' })
-  @ApiResponse({ status: 200, description: 'Успешно получен профиль' })
+  @ApiOperation({ summary: 'Авторизация с реф-кодом (необязательно)' })
+  @ApiResponse({ status: 200, description: 'Успешная регистрация/логин' })
   @ApiBody({
-    description: 'Поля необходимые для регистрации',
     schema: {
       properties: {
         address: {
@@ -24,14 +22,13 @@ export class AuthController {
         },
         signature: {
           type: 'string',
-          example: 'Welcome! This is your signature',
+          example: '0x7520b00a...',
         },
       },
     },
   })
   async signup(@Body() signupDto: SignupDto) {
     const user = await this.authService.signup(signupDto);
-
     return {
       message: 'Signup successful',
       user,

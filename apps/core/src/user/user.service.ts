@@ -2,31 +2,125 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { UserRepository } from './user.repository';
-import { S3Service } from '../s3/s3.service';
+import jwt from 'jsonwebtoken';
 import { Multer } from 'multer';
-import { IUser } from '../shared/interfaces';
-import { ESocialPlatform, SocialFieldMap } from './user.constants';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { EPointsType } from '../quests/interface';
+import { S3Service } from '../s3/s3.service';
+import { IUser, PyramidType } from '../shared/interfaces';
 import { BindSocialDto } from './dto/bind-social.dto';
+import { CreateUserEmailDto } from './dto/create-user-email.dto';
 import { UnbindSocialDto } from './dto/unbind-social.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { ESocialPlatform, SocialFieldMap } from './user.constants';
+import { UserRepository } from './user.repository';
 
 @Injectable()
 export class UserService {
   constructor(
     private readonly userRepository: UserRepository,
     private readonly s3Service: S3Service
-  ) {}
+  ) { }
 
   async findByAddress(address: string): Promise<IUser | null> {
     return this.userRepository.findByAddress(address);
   }
 
+  async createUserEmail(dto: CreateUserEmailDto) {
+    const email = await this.userRepository.findEmail(dto.email);
+    if (email) {
+      throw new BadRequestException('Email already exists');
+    }
+    if (dto.address) {
+      const address = await this.userRepository.findAddress(dto.address);
+      if (address) {
+        throw new BadRequestException('Address already exists');
+      }
+    }
+    return await this.userRepository.createEmail(dto.email, dto.address);
+  }
+
+  async incrementPyramid(address: string, type: PyramidType, chainId: number) {
+    await this.userRepository.incrementPyramid(address, type, chainId);
+  }
+
   async findByEmail(email: string): Promise<IUser | null> {
     return this.userRepository.findByEmail(email);
+  }
+
+  async createUserIfNotExists(address: string): Promise<IUser> {
+    const lower = address.toLowerCase();
+    const existing = await this.findByAddress(lower);
+    if (existing) {
+      return existing;
+    }
+    return this.userRepository.createUserWithReferral(lower);
+  }
+
+  async bindReferral(refCode: string, address: string): Promise<IUser> {
+    const lower = address.toLowerCase();
+    const existingUser = await this.findByAddress(lower);
+    if (!existingUser) {
+      throw new BadRequestException('User not found');
+    }
+    if (existingUser.ref_owner) {
+      throw new BadRequestException('Referral owner is already set');
+    }
+    const owner = await this.userRepository.findByReferralCode(refCode);
+    if (!owner) {
+      throw new BadRequestException('Invalid referral code');
+    }
+    if (owner.address.toLowerCase() === lower) {
+      throw new BadRequestException('Cannot refer yourself');
+    }
+    await this.userRepository.setRefOwner(lower, owner.address);
+    const updatedUser = await this.findByAddress(lower);
+    return updatedUser;
+  }
+
+  async getLeaderboardCustom(
+    startAt: string,
+    endAt: string,
+    doExcludeRef: boolean,
+    limitNum: number,
+    sortBy: 'points' | 'pyramids',
+    userAddress?: string,
+    doIncludeRefWithTwScore?: boolean,
+  ) {
+    return this.userRepository.getLeaderboardCustom(
+      startAt,
+      endAt,
+      doExcludeRef,
+      limitNum,
+      sortBy,
+      userAddress,
+      doIncludeRefWithTwScore,
+    );
+  }
+
+  async getLeaderboard(
+    period: 'week' | 'month',
+    includeRef: boolean,
+    last: boolean,
+    userAddress?: string
+  ) {
+    return this.userRepository.getLeaderboard(
+      period,
+      includeRef,
+      last,
+      userAddress
+    );
+  }
+
+  async getUsersWithPoints(): Promise<{ address: string; points: number }[]> {
+    return this.userRepository.findUsersWithPoints();
+  }
+
+  async getUsersWithPointsAfterSpecificAddress(
+    address: string
+  ): Promise<{ address: string; points: number }[]> {
+    return this.userRepository.findUsersWithPointAfterSpecificAddress(address);
   }
 
   async updateUser(
@@ -115,7 +209,8 @@ export class UserService {
         return this.bindGitHub(dto);
       case ESocialPlatform.Discord:
         return this.bindDiscord(dto);
-      // ... case 'telegram': return this.bindTelegram(dto);
+      case ESocialPlatform.Telegram:
+        return this.bindTelegram(dto);
       default:
         throw new BadRequestException(`Unknown platform: ${platform}`);
     }
@@ -136,6 +231,14 @@ export class UserService {
       platform as keyof IUser,
       null
     );
+
+    if (platform === ESocialPlatform.Twitter) {
+      await this.userRepository.updateField(
+        lowerAddress,
+        'twitter_points',
+        null
+      );
+    }
     return { success: true };
   }
 
@@ -247,8 +350,94 @@ export class UserService {
     return { success: true };
   }
 
-  async updatePoints(address: string, points: number) {
-    return this.userRepository.updatePoints(address, points);
+  private async bindTelegram(
+    dto: BindSocialDto
+  ): Promise<{ success: boolean }> {
+    const { address, token } = dto;
+    const lowerAddress = address.toLowerCase();
+
+    let decodedUserData: jwt.JwtPayload;
+    try {
+      const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET!);
+      if (typeof decoded === 'string') {
+        throw new BadRequestException('Invalid token structure.');
+      }
+      decodedUserData = decoded;
+    } catch (error: unknown) {
+      throw new BadRequestException(
+        `Token verification failed: ${(error as Error).message}`
+      );
+    }
+
+    if (!decodedUserData.username) {
+      throw new BadRequestException('No username provided in Telegram token');
+    }
+    if (!decodedUserData.id) {
+      throw new BadRequestException('No user id provided in Telegram token');
+    }
+
+    const telegram_username = decodedUserData.username;
+    const telegram_id = decodedUserData.id;
+
+    const existingUser = await this.userRepository.findByTelegramId(
+      telegram_id
+    );
+    if (existingUser && existingUser.address.toLowerCase() !== lowerAddress) {
+      throw new BadRequestException('Telegram account already taken');
+    }
+
+    await this.userRepository.updateField(
+      lowerAddress,
+      'telegram',
+      JSON.stringify({
+        id: telegram_id,
+        username: telegram_username,
+      })
+    );
+    return { success: true };
+  }
+
+  async awardCampaignCompletion(address: string, basePoints: number) {
+    const user = await this.findByAddress(address);
+    await this.updatePoints(address, basePoints, EPointsType.Campaign);
+    if (user?.ref_owner) {
+      let bonus = Math.floor(basePoints * 0.01);
+      if (bonus > 0 && bonus < 1) bonus = 1;
+      await this.updatePoints(user.ref_owner, bonus, EPointsType.Referral);
+    }
+  }
+
+  async updatePoints(address: string, points: number, pointType: any) {
+    await this.userRepository.updatePoints(address, points, pointType);
+  }
+
+  async findUsersWithTwitterChunk(offset: number, batch_size: number) {
+    return await this.userRepository.findUsersWithTwitterChunk(
+      offset,
+      batch_size
+    );
+  }
+
+  async setTwitterScorePoints(userId: string, newPoints: number) {
+    try {
+      await this.userRepository.updateTwitterPoints(userId, newPoints);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `setTwitterScorePoints failed: ${error.message}`
+      );
+    }
+  }
+
+  async getPointsDetails(
+    address: string
+  ): Promise<{ total: number; breakdown: Record<string, number> }> {
+    const user = await this.findByAddress(address);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+    const breakdown = await this.userRepository.getTotalPointsByType(address);
+    const total = user.points || 0;
+    return { total, breakdown };
   }
 
   async getCompletedQuestsCount(address: string): Promise<number> {
@@ -265,4 +454,30 @@ export class UserService {
 
     return completions;
   }
+
+  async findUsersWithWalletChunk(offset: number, batchSize: number): Promise<{ id: string; walletAddress: string }[]> {
+    try {
+      return await this.userRepository.findUsersWithWalletChunk(offset, batchSize);
+    } catch (error) {
+      throw new InternalServerErrorException(`findUsersWithWalletChunk failed: ${error.message}`);
+    }
+  }
+
+  async setWalletScorePoints(userId: string, basePoints: number, additionalPoints: number): Promise<void> {
+    try {
+      await this.userRepository.updateWalletPoints(userId, basePoints);
+      await this.userRepository.updateWalletAdditionalPoints(userId, additionalPoints);
+    } catch (error) {
+      throw new InternalServerErrorException(`setWalletScorePoints failed: ${error.message}`);
+    }
+  }
+
+  async updateLastWalletScoreUpdate(userId: string, timestamp: Date): Promise<void> {
+    try {
+      await this.userRepository.updateLastWalletScoreUpdate(userId, timestamp);
+    } catch (error) {
+      throw new InternalServerErrorException(`updateLastWalletScoreUpdate failed: ${error.message}`);
+    }
+  }
+
 }

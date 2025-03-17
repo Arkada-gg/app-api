@@ -1,26 +1,27 @@
 import {
-  Controller,
-  Post,
-  Body,
   BadRequestException,
+  Body,
+  Controller,
   Get,
-  Param,
   InternalServerErrorException,
+  Param,
+  Post,
   UseGuards,
 } from '@nestjs/common';
-import { QuestService } from './quest.service';
-import { CheckQuestDto } from './dto/check-quest.dto';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
   ApiBadRequestResponse,
+  ApiOperation,
   ApiParam,
+  ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
-import { QuestCompletionDto } from './dto/quest.competion.dto';
+import { ConditionalSignatureAuthGuard } from '../auth/guard/conditional-auth.guard';
 import { UserService } from '../user/user.service';
+import { CheckQuestDto } from './dto/check-quest.dto';
 import { CompleteQuestDto } from './dto/complete-quest.dto';
-import { SignatureAuthGuard } from '../auth/guard/signature-auth.guard';
+import { GetMintDataDto, GetMintDataResponse } from './dto/get-mint-data.dto';
+import { QuestCompletionDto } from './dto/quest.competion.dto';
+import { QuestService } from './quest.service';
 
 @ApiTags('Quests')
 @Controller('quests')
@@ -31,7 +32,7 @@ export class QuestController {
   ) {}
 
   @Post('check-quest')
-  @UseGuards(SignatureAuthGuard)
+  @UseGuards(ConditionalSignatureAuthGuard)
   @ApiOperation({ summary: 'Проверить выполнение задания пользователем' })
   @ApiResponse({ status: 200, description: 'Задание выполнено' })
   @ApiBadRequestResponse({
@@ -44,6 +45,13 @@ export class QuestController {
     if (!quest) {
       throw new BadRequestException(`No quest with id ${id}`);
     }
+    const campaignId = quest.campaign_id;
+    const campaign = await this.questService.getCampaignById(campaignId);
+    if (campaign.status === 'FINISHED' || campaign.finishedAt <= Date.now()) {
+      throw new BadRequestException(
+        'This campaign is finished; cannot proceed.'
+      );
+    }
     if (quest.type === 'quiz') {
       const isCompleted = await this.questService.checkQuestCompletion(
         id,
@@ -51,22 +59,18 @@ export class QuestController {
       );
       if (!isCompleted) {
         throw new BadRequestException('Quest not completed');
-      } else {
-        await this.questService.completeQuestAndAwardPoints(id, address);
       }
       return { id, address, isCompleted };
     }
     const isCompleted = await this.questService.checkQuest(id, address);
     if (!isCompleted) {
       throw new BadRequestException('Quest not completed');
-    } else {
-      await this.questService.completeQuestAndAwardPoints(id, address);
     }
     return { id, address, isCompleted };
   }
 
   @Post('complete-quest')
-  @UseGuards(SignatureAuthGuard)
+  @UseGuards(ConditionalSignatureAuthGuard)
   @ApiOperation({ summary: 'Выполнить квест NOT ONCHAIN' })
   @ApiResponse({ status: 200, description: 'Задание выполнено' })
   @ApiBadRequestResponse({
@@ -79,6 +83,14 @@ export class QuestController {
     if (!quest) {
       throw new BadRequestException(`No quest with id ${id}`);
     }
+    const campaignId = quest.campaign_id;
+    const campaign = await this.questService.getCampaignById(campaignId);
+    if (campaign.status === 'FINISHED' || campaign.finishedAt <= Date.now()) {
+      throw new BadRequestException(
+        'This campaign is finished; cannot proceed.'
+      );
+    }
+
     if (quest.type === 'onchain') {
       throw new BadRequestException('Cant complete qust if it is Onchain');
     }
@@ -167,5 +179,23 @@ export class QuestController {
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
+  }
+
+  @Post('mint-data')
+  @UseGuards(ConditionalSignatureAuthGuard)
+  @ApiOperation({
+    summary: 'Получить подписанные данные для минта пирамиды',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Подписанные данные для минта пирамиды',
+    type: GetMintDataResponse,
+  })
+  async getSignedMintData(@Body() body: GetMintDataDto) {
+    const { campaignIdOrSlug, userAddress } = body;
+    return await this.questService.getSignedMintData(
+      campaignIdOrSlug,
+      userAddress
+    );
   }
 }

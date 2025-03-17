@@ -4,6 +4,11 @@ export const name = '1674235300002_create_campaigns_table';
 
 export async function up(client: Client): Promise<void> {
   await client.query(`
+CREATE TYPE public.campaign_type AS ENUM (
+     'basic',
+     'premium'
+ );
+
     CREATE TABLE IF NOT EXISTS campaigns (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       slug VARCHAR(255) UNIQUE NOT NULL,

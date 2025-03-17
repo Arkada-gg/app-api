@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CampaignRepository } from './campaign.repository';
 import { CampaignType } from './dto/get-campaigns.dto';
+import { UserCampaignStatus } from './dto/get-user-campaigns.dto';
 
 @Injectable()
 export class CampaignService {
@@ -9,13 +10,23 @@ export class CampaignService {
   async getActiveCampaigns(
     page: number,
     limit: number,
-    type?: CampaignType
+    type?: CampaignType,
+    category?: string[]
   ): Promise<any[]> {
-    return this.campaignRepository.findActiveCampaigns(page, limit, type);
+    return this.campaignRepository.findActiveCampaigns(
+      page,
+      limit,
+      type,
+      category
+    );
   }
 
   async getCampaignByIdOrSlug(idOrSlug: string): Promise<any> {
     return this.campaignRepository.findCampaignByIdOrSlug(idOrSlug);
+  }
+
+  async getCampaignStatuses(ids: string[], address: string) {
+    return this.campaignRepository.getCampaignStatuses(ids, address);
   }
 
   async incrementParticipants(id: string) {
@@ -45,5 +56,25 @@ export class CampaignService {
       userAddress
     );
     return result.rowCount === 1;
+  }
+
+  async getCampaignStatus(campaignId: string, userAddress: string) {
+    return this.campaignRepository.getCampaignStatus(campaignId, userAddress);
+  }
+
+  async getUserCampaigns(
+    userAddress: string,
+    status?: UserCampaignStatus,
+    type?: CampaignType,
+    page = 1,
+    limit = 5
+  ) {
+    return this.campaignRepository.getUserCampaigns(
+      userAddress,
+      status,
+      type,
+      page,
+      limit
+    );
   }
 }

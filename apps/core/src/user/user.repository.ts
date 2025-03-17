@@ -1,35 +1,120 @@
-// src/users/user.repository.ts
-
 import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
-  NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { IUser } from '../shared/interfaces';
-import { UpdateUserDto } from './dto/update-user.dto';
 import { QuestRepository } from '../quests/quest.repository';
+import { IUser, PyramidType } from '../shared/interfaces';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UserRepository {
   constructor(
     private readonly dbService: DatabaseService,
     private readonly questRepository: QuestRepository
-  ) {}
+  ) { }
+
+  async createEmail(email: string, address?: string) {
+    const client = this.dbService.getClient();
+    const lowerAddress = address ? address.toLowerCase() : null;
+    const lower = email.toLowerCase();
+    const query = `
+      INSERT INTO user_email (email, address)
+      VALUES ($1, $2)
+      RETURNING email, address, created_at, updated_at
+    `;
+    const values = [lower, lowerAddress || null];
+    const result = await client.query(query, values);
+
+    return result.rows[0];
+  }
+
+  async findEmail(email: string) {
+    const client = this.dbService.getClient();
+    const lower = email.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM user_email WHERE email = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async findAddress(address: string) {
+    const client = this.dbService.getClient();
+    const lower = address.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM user_email WHERE address = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
 
   async findByAddress(address: string): Promise<IUser | null> {
     const client = this.dbService.getClient();
     const lower = address.toLowerCase();
+
     try {
-      const result = await client.query<IUser>(
-        `SELECT * FROM users WHERE address = $1`,
+      const userResult = await client.query<IUser>(
+        `SELECT *, COALESCE(points, 0) AS total_points, last_wallet_score_update FROM users WHERE address = $1`,
         [lower]
       );
-      if (result.rows[0]) {
-        result.rows[0].address = result.rows[0].address.toString();
+
+      if (!userResult.rows[0]) {
+        return null;
       }
-      return result.rows[0] || null;
+
+      const user = userResult.rows[0];
+      user.address = user.address.toString();
+
+      const pointsResult = await client.query<{
+        point_type: string;
+        sum: number;
+      }>(
+        `
+        SELECT point_type, COALESCE(SUM(points), 0) AS sum 
+        FROM user_points 
+        WHERE user_address = $1 
+        GROUP BY point_type
+        `,
+        [lower]
+      );
+
+      let refPoints = 0;
+      let baseCampaignPoints = 0;
+      let dailyPoints = 0;
+
+      for (const row of pointsResult.rows) {
+        if (row.point_type === 'referral') {
+          refPoints = +row.sum;
+        } else if (row.point_type === 'base_campaign') {
+          baseCampaignPoints = row.sum;
+        } else if (row.point_type === 'daily') {
+          dailyPoints = row.sum;
+        }
+      }
+
+      user.points = {
+        ref: +refPoints,
+        daily: +dailyPoints,
+        twitter: user.twitter_points,
+        base_campaign: +baseCampaignPoints,
+        wallet: user.wallet_points || 0,
+        wallet_additional: user.wallet_additional_points || 0,
+        total: +user.total_points,
+      };
+
+      delete user.total_points;
+
+      return user;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
@@ -49,12 +134,74 @@ export class UserRepository {
     }
   }
 
+  async findUsersWithTwitterChunk(
+    offset: number,
+    limit: number
+  ): Promise<any[]> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        SELECT address AS id, twitter AS twitterHandle
+        FROM users
+        WHERE twitter IS NOT NULL
+        ORDER BY address
+        LIMIT $1 OFFSET $2
+      `;
+      const result = await client.query(query, [limit, offset]);
+      return result.rows;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async updateTwitterPoints(userId: string, points: number): Promise<void> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        UPDATE users
+        SET twitter_points = $1
+        WHERE address = $2
+      `;
+      await client.query(query, [points, userId.toLowerCase()]);
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
   async findByName(name: string): Promise<IUser | null> {
     const client = this.dbService.getClient();
     const lower = name.toLowerCase();
     try {
       const res = await client.query<IUser>(
         `SELECT * FROM users WHERE name = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async findByTelegramId(name: string): Promise<IUser | null> {
+    const client = this.dbService.getClient();
+    const lower = name.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM users WHERE telegram->>'id' = $1`,
+        [lower]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async findByDiscordUsername(name: string): Promise<IUser | null> {
+    const client = this.dbService.getClient();
+    const lower = name.toLowerCase();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM users WHERE discord = $1`,
         [lower]
       );
       return res.rows[0] || null;
@@ -82,20 +229,6 @@ export class UserRepository {
       const res = await client.query<IUser>(
         `SELECT * FROM users WHERE github = $1`,
         [name]
-      );
-      return res.rows[0] || null;
-    } catch (error) {
-      throw new InternalServerErrorException(error.message);
-    }
-  }
-
-  async findByDiscordUsername(name: string): Promise<IUser | null> {
-    const client = this.dbService.getClient();
-    const lower = name.toLowerCase();
-    try {
-      const res = await client.query<IUser>(
-        `SELECT * FROM users WHERE discord = $1`,
-        [lower]
       );
       return res.rows[0] || null;
     } catch (error) {
@@ -196,44 +329,6 @@ export class UserRepository {
     }
   }
 
-  async updatePoints(address: string, points: number): Promise<void> {
-    const client = this.dbService.getClient();
-
-    try {
-      await client.query('BEGIN');
-
-      const query = `
-        UPDATE users
-        SET points = points + $1
-        WHERE address = $2
-        RETURNING points;
-      `;
-
-      const result = await client.query(query, [points, address]);
-
-      if (result.rowCount === 0) {
-        throw new NotFoundException('Пользователь не найден');
-      }
-
-      const updatedPoints = result.rows[0].points;
-
-      if (updatedPoints < 0) {
-        throw new BadRequestException('Баланс не может быть отрицательным');
-      }
-
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      throw new InternalServerErrorException(error.message);
-    }
-  }
-
   async getCompletedQuestsCount(userAddress: string): Promise<number> {
     const client = this.dbService.getClient();
     const lowerAddress = userAddress.toLowerCase();
@@ -267,6 +362,621 @@ export class UserRepository {
       throw new InternalServerErrorException(
         `Ошибка при получении количества завершенных кампаний: ${error.message}`
       );
+    }
+  }
+
+  async findByReferralCode(refCode: string): Promise<IUser | null> {
+    const client = this.dbService.getClient();
+    try {
+      const res = await client.query<IUser>(
+        `SELECT * FROM users WHERE referral_code = $1`,
+        [refCode]
+      );
+      return res.rows[0] || null;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+  async getLeaderboardCustom(
+    startAt: string | undefined,
+    endAt: string | undefined,
+    excludeRef: boolean,
+    limit: number,
+    sortBy: 'points' | 'pyramids',
+    userAddress?: string,
+    includeRefWithTwitterScore?: boolean,
+  ): Promise<{
+    top: Array<{
+      address: string;
+      name: string | null;
+      avatar: string | null;
+      twitter: string | null;
+      points: number;
+      campaigns_completed: number;
+      gold_pyramids: number,
+      basic_pyramids: number,
+      rank: number;
+    }>;
+  }> {
+    const defaultStart = new Date('2025-01-01T00:00:00Z');
+    const startDate = startAt ? new Date(startAt) : defaultStart;
+    const endDate = endAt ? new Date(endAt) : new Date();
+
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+
+    const client = this.dbService.getClient();
+
+    const cte = `WITH user_points_aggregated AS (
+    SELECT
+      up.user_address,
+      COALESCE(SUM(up.points), 0) AS total_points
+    FROM user_points up
+    JOIN users u ON u.address = up.user_address
+    WHERE up.created_at BETWEEN $1 AND $2
+      AND (
+        ${!excludeRef ? 'TRUE' : `(
+          up.point_type != 'referral' OR (
+            ${includeRefWithTwitterScore ? 'TRUE' : 'FALSE'}
+            AND COALESCE(u.twitter_score, 0) > 0
+            AND up.point_type = 'referral'
+          )
+        )`}
+      )
+    GROUP BY up.user_address
+  ),
+  campaigns_completed_aggregated AS (
+    SELECT
+      cc.user_address,
+      COUNT(*) AS campaigns_completed
+    FROM campaign_completions cc
+    WHERE cc.completed_at BETWEEN $1 AND $2
+    GROUP BY cc.user_address
+  ),
+  user_pyramids AS (
+    SELECT
+      u.address,
+      SUM((p.value->>'gold')::INTEGER) AS gold_pyramids,
+      SUM((p.value->>'basic')::INTEGER) AS basic_pyramids
+    FROM users u,
+    LATERAL jsonb_each(u.pyramids_info) AS p
+    GROUP BY u.address
+  ),
+  ranked_users AS (
+    SELECT
+      u.address,
+      u.name,
+      u.avatar,
+      u.twitter,
+      COALESCE(upa.total_points, 0) AS total_points,
+      COALESCE(cca.campaigns_completed, 0) AS campaigns_completed,
+      COALESCE(up.gold_pyramids, 0) AS gold_pyramids,
+      COALESCE(up.basic_pyramids, 0) AS basic_pyramids,
+      ROW_NUMBER() OVER (
+        ORDER BY
+          ${sortBy === 'pyramids' ? 'gold_pyramids DESC NULLS LAST, basic_pyramids DESC NULLS LAST' : 'total_points DESC'}
+      ) AS rank
+    FROM users u
+    LEFT JOIN user_points_aggregated upa ON u.address = upa.user_address
+    LEFT JOIN campaigns_completed_aggregated cca ON u.address = cca.user_address
+    LEFT JOIN user_pyramids up ON u.address = up.address
+    WHERE COALESCE(upa.total_points, 0) > 0
+  )`;
+
+    const topNsql = `
+    ${cte}
+    SELECT
+      address,
+      name,
+      avatar,
+      twitter,
+      total_points,
+      campaigns_completed,
+      gold_pyramids,
+      basic_pyramids,
+      rank
+    FROM ranked_users
+    ORDER BY rank
+    LIMIT $3
+  `;
+
+    if (!userAddress) {
+      try {
+        const topRes = await client.query(topNsql, [startIso, endIso, limit]);
+        const top = topRes.rows.map((row) => ({
+          address: row.address,
+          name: row.name,
+          avatar: row.avatar,
+          twitter: row.twitter,
+          points: Number(row.total_points),
+          campaigns_completed: Number(row.campaigns_completed),
+          gold_pyramids: Number(row.gold_pyramids),
+          basic_pyramids: Number(row.basic_pyramids),
+          rank: Number(row.rank),
+        }));
+        return { top };
+      } catch (error) {
+        throw new InternalServerErrorException(error.message);
+      }
+    }
+
+    const userRankSql = `
+    ${cte}
+    SELECT
+      address,
+      name,
+      avatar,
+      twitter,
+      total_points,
+      campaigns_completed,
+      gold_pyramids,
+      basic_pyramids,
+      rank
+    FROM ranked_users
+    WHERE address = $3
+  `;
+
+    try {
+      const [topRes, userRes] = await Promise.all([
+        client.query(topNsql, [startIso, endIso, limit]),
+        client.query(userRankSql, [startIso, endIso, userAddress.toLowerCase()]),
+      ]);
+
+      const top = topRes.rows.map((r) => ({
+        address: r.address,
+        name: r.name,
+        avatar: r.avatar,
+        twitter: r.twitter,
+        points: Number(r.total_points),
+        campaigns_completed: Number(r.campaigns_completed),
+        gold_pyramids: Number(r.gold_pyramids),
+        basic_pyramids: Number(r.basic_pyramids),
+        rank: Number(r.rank),
+      }));
+
+      if (userRes.rows.length === 0) {
+        return { top };
+      }
+
+      const userRow = userRes.rows[0];
+      const userRank = Number(userRow.rank);
+
+      if (userRank > limit) {
+        top.push({
+          address: userRow.address,
+          name: userRow.name,
+          avatar: userRow.avatar,
+          twitter: userRow.twitter,
+          points: Number(userRow.total_points),
+          campaigns_completed: Number(userRow.campaigns_completed),
+          gold_pyramids: Number(userRow.gold_pyramids),
+          basic_pyramids: Number(userRow.basic_pyramids),
+          rank: userRank,
+        });
+      }
+
+      return { top };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+
+  async getLeaderboard(
+    period: 'week' | 'month',
+    includeRef = true,
+    last = false,
+    userAddress?: string
+  ): Promise<{
+    top: Array<{
+      address: string;
+      name: string | null;
+      avatar: string | null;
+      twitter: string | null;
+      points: number;
+      campaigns_completed: number;
+      rank: number;
+    }>;
+  }> {
+    const client = this.dbService.getClient();
+
+    const now = new Date();
+    let startDate: Date;
+    let endDate: Date;
+    if (period === 'week') {
+      const dayOfWeek = (now.getDay() + 6) % 7;
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - dayOfWeek);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+
+      if (last) {
+        startDate.setDate(startDate.getDate() - 7);
+        endDate.setDate(endDate.getDate() - 7);
+      }
+    } else {
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      startDate = new Date(year, month, 1, 0, 0, 0, 0);
+      endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+      if (last) {
+        startDate.setMonth(startDate.getMonth() - 1);
+        endDate = new Date(
+          startDate.getFullYear(),
+          startDate.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999
+        );
+      }
+    }
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+
+    const excludeReferral = includeRef ? '' : `AND up.point_type != 'referral'`;
+
+    const cte = `
+      WITH user_points_aggregated AS (
+        SELECT
+          up.user_address,
+          COALESCE(SUM(up.points), 0) AS total_points
+        FROM user_points up
+        WHERE up.created_at BETWEEN $1 AND $2
+          ${excludeReferral}
+        GROUP BY up.user_address
+      ),
+      campaigns_completed_aggregated AS (
+        SELECT
+          cc.user_address,
+          COUNT(*) AS campaigns_completed
+        FROM campaign_completions cc
+        WHERE cc.completed_at BETWEEN $1 AND $2
+        GROUP BY cc.user_address
+      ),
+      ranked_users AS (
+        SELECT
+          u.address,
+          u.name,
+          u.avatar,
+          u.twitter,
+          COALESCE(upa.total_points, 0) AS total_points,
+          COALESCE(cca.campaigns_completed, 0) AS campaigns_completed,
+          ROW_NUMBER() OVER (ORDER BY COALESCE(upa.total_points, 0) DESC) AS rank
+        FROM users u
+        LEFT JOIN user_points_aggregated upa
+          ON u.address = upa.user_address
+        LEFT JOIN campaigns_completed_aggregated cca
+          ON u.address = cca.user_address
+        WHERE COALESCE(upa.total_points, 0) > 0
+      )
+    `;
+
+    const top50sql = `
+      ${cte}
+      SELECT 
+        address,
+        name,
+        avatar,
+        twitter,
+        total_points,
+        campaigns_completed,
+        rank
+      FROM ranked_users
+      WHERE rank <= 50
+      ORDER BY rank
+    `;
+
+    if (!userAddress) {
+      const topRes = await client.query(top50sql, [startIso, endIso]);
+      const top = topRes.rows.map((row) => ({
+        address: row.address,
+        name: row.name,
+        avatar: row.avatar,
+        twitter: row.twitter,
+        points: Number(row.total_points),
+        campaigns_completed: Number(row.campaigns_completed),
+        rank: Number(row.rank),
+      }));
+      return { top };
+    }
+
+    const userRankSql = `
+      ${cte}
+      SELECT 
+        address,
+        name,
+        avatar,
+        twitter,
+        total_points,
+        campaigns_completed,
+        rank
+      FROM ranked_users
+      WHERE address = $3
+    `;
+
+    try {
+      const [topRes, userRes] = await Promise.all([
+        client.query(top50sql, [startIso, endIso]),
+        client.query(userRankSql, [
+          startIso,
+          endIso,
+          userAddress.toLowerCase(),
+        ]),
+      ]);
+      console.log('------>', userRes);
+      const top = topRes.rows.map((r) => ({
+        address: r.address,
+        name: r.name,
+        avatar: r.avatar,
+        twitter: r.twitter,
+        points: Number(r.total_points),
+        campaigns_completed: Number(r.campaigns_completed),
+        rank: Number(r.rank),
+      }));
+
+      if (userRes.rows.length === 0) {
+        return { top };
+      }
+
+      const userRow = userRes.rows[0];
+      const userRank = Number(userRow.rank);
+
+      if (userRank > 50) {
+        top.push({
+          address: userRow.address,
+          name: userRow.name,
+          avatar: userRow.avatar,
+          twitter: userRow.twitter,
+          points: Number(userRow.total_points),
+          campaigns_completed: Number(userRow.campaigns_completed),
+          rank: userRank,
+        });
+      }
+
+      return { top };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async createUserWithReferral(address: string): Promise<IUser> {
+    const lower = address.toLowerCase();
+    try {
+      let refCode: string;
+
+      do {
+        refCode = this.generateShortCode(5);
+      } while (await this.isReferralCodeExists(refCode));
+
+      const result = await this.dbService.getClient().query<IUser>(
+        `INSERT INTO users (address, name, referral_code)
+         VALUES ($1, $1, $2)
+         RETURNING *`,
+        [lower, refCode]
+      );
+
+      return result.rows[0];
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  private async isReferralCodeExists(code: string): Promise<boolean> {
+    const result = await this.dbService
+      .getClient()
+      .query(`SELECT 1 FROM users WHERE referral_code = $1`, [code]);
+    return result.rows.length > 0;
+  }
+
+  private generateShortCode(length: number): string {
+    return Math.random()
+      .toString(36)
+      .slice(2, 2 + length)
+      .toUpperCase();
+  }
+
+  async findUsersWithPoints(): Promise<{ address: string; points: number }[]> {
+    const client = this.dbService.getClient();
+    const res = await client.query(`
+      SELECT address, points
+      FROM users
+      WHERE points > 0
+    `);
+    return res.rows;
+  }
+
+  async findUsersWithPointAfterSpecificAddress(
+    address: string
+  ): Promise<{ address: string; points: number }[]> {
+    const client = this.dbService.getClient();
+    const res = await client.query(
+      `
+        SELECT address, points
+        FROM users
+        WHERE points > 0
+          AND address > $1
+        ORDER BY address;
+    `,
+      [address]
+    );
+    return res.rows;
+  }
+
+  async updatePoints(
+    address: string,
+    points: number,
+    pointType: 'base_campaign' | 'base_quest' | 'referral'
+  ) {
+    const lower = address.toLowerCase();
+    const user = await this.findByAddress(address);
+    const userPoints = user.points.total;
+    const client = this.dbService.getClient();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO user_points (user_address, points, point_type)
+         VALUES ($1, $2, $3)`,
+        [lower, points, pointType]
+      );
+      const totalPoints = userPoints + points;
+      await client.query(
+        `UPDATE users
+         SET points = $1
+         WHERE address = $2`,
+        [totalPoints, lower]
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async getTotalPointsByType(address: string): Promise<Record<string, number>> {
+    const lower = address.toLowerCase();
+    try {
+      const result = await this.dbService.getClient().query(
+        `SELECT point_type, SUM(points) AS total
+         FROM user_points
+         WHERE user_address = $1
+         GROUP BY point_type`,
+        [lower]
+      );
+      const data: Record<string, number> = {};
+      for (const row of result.rows) {
+        data[row.point_type] = Number(row.total);
+      }
+      return data;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async getReferralsCount(address: string): Promise<number> {
+    const lower = address.toLowerCase();
+    try {
+      const result = await this.dbService
+        .getClient()
+        .query(`SELECT COUNT(*) AS cnt FROM users WHERE ref_owner = $1`, [
+          lower,
+        ]);
+      return parseInt(result.rows[0].cnt, 10) || 0;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async setRefOwner(referredAddress: string, refOwnerAddress: string) {
+    const lowerRef = referredAddress.toLowerCase();
+    const lowerOwner = refOwnerAddress.toLowerCase();
+    try {
+      const client = this.dbService.getClient();
+      await client.query(
+        `
+        UPDATE users
+        SET ref_owner = $1
+        WHERE address = $2
+        AND ref_owner IS NULL;
+        `,
+        [lowerOwner, lowerRef]
+      );
+
+      await client.query(
+        `
+        UPDATE users
+        SET ref_count = ref_count + 1
+        WHERE address = $1;
+        `,
+        [lowerOwner]
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async incrementPyramid(address: string, type: PyramidType, chainId: number) {
+    const lower = address.toLowerCase();
+    const client = this.dbService.getClient();
+
+    await client.query(
+      `
+      UPDATE users 
+      SET pyramids_info = COALESCE(pyramids_info, '{}') || 
+        jsonb_build_object($2::text, 
+          jsonb_build_object(
+            $3::text, 
+            COALESCE((pyramids_info->($2::text)->($3::text))::int, 0) + 1
+          )
+        )
+      WHERE address = $1
+      `,
+      [lower, chainId, type.toLowerCase()]
+    );
+  }
+
+  async findUsersWithWalletChunk(
+    offset: number,
+    limit: number
+  ): Promise<{ id: string; walletAddress: string }[]> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        SELECT address AS id, address AS walletAddress
+        FROM users
+        WHERE address IS NOT NULL
+        ORDER BY address
+        LIMIT $1 OFFSET $2
+      `;
+      const result = await client.query(query, [limit, offset]);
+      return result.rows;
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async updateWalletPoints(userId: string, points: number): Promise<void> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        UPDATE users
+        SET wallet_points = $1
+        WHERE address = $2
+      `;
+      await client.query(query, [points, userId.toLowerCase()]);
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async updateWalletAdditionalPoints(userId: string, points: number): Promise<void> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        UPDATE users
+        SET wallet_additional_points = $1
+        WHERE address = $2
+      `;
+      await client.query(query, [points, userId.toLowerCase()]);
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async updateLastWalletScoreUpdate(userId: string, timestamp: Date): Promise<void> {
+    const client = this.dbService.getClient();
+    try {
+      const query = `
+        UPDATE users
+        SET last_wallet_score_update = $1
+        WHERE address = $2
+      `;
+      await client.query(query, [timestamp, userId.toLowerCase()]);
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
     }
   }
 }

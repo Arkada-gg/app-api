@@ -11,6 +11,9 @@ export class PriceService {
   private tokenToCoingeckoId: Record<string, string> = {
     ethereum: 'ethereum',
     astroport: 'astar',
+    vastr: 'bifrost-voucher-astr',
+    yayeth: 'yay-stakestone-ether',
+    swapx: 'swapx-2',
   };
 
   constructor() {

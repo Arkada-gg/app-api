@@ -1,27 +1,17 @@
 import {
-  Controller,
-  Post,
-  Body,
   BadRequestException,
+  Controller,
   Get,
-  Param,
-  InternalServerErrorException,
   HttpException,
   HttpStatus,
+  Param,
   UseInterceptors,
-  Options,
 } from '@nestjs/common';
-import { QuestService } from './quest.service';
-import { CheckQuestDto } from './dto/check-quest.dto';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBadRequestResponse,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ethers } from 'ethers';
+import { ARKADA_NFTS } from '../shared/constants/addresses';
 import { GalxeCorsInterceptor } from './interceptors/wildcard-cors.interceptor';
+import { QuestService } from './quest.service';
 
 @ApiTags('Nft')
 @Controller('nft')
@@ -55,8 +45,10 @@ export class NftController {
       if (!ethers.isAddress(address)) {
         throw new BadRequestException('Incorrect address');
       }
-      const hasMinted = await this.questService.hasMintedNft(address);
-      return hasMinted ? 1 : 0;
+      const hasMinted = await this.questService.hasMintedNfts(address, [
+        ARKADA_NFTS.SHOGUN_SECOND,
+      ]);
+      return hasMinted[ARKADA_NFTS.SHOGUN_SECOND] ? 1 : 0;
     } catch (error) {
       throw new HttpException(
         `Error checking minted NFT: ${error.message}`,

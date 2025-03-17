@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString } from 'class-validator';
 
 export class BindSocialDto {
   @ApiProperty({ example: '0x123...', description: 'User Address' })

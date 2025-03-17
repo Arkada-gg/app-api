@@ -1,13 +1,12 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import session from 'express-session';
-import cookieParser from 'cookie-parser';
-import { rateLimit } from 'express-rate-limit';
 import { Logger, ValidationPipe } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import basicAuth from 'express-basic-auth';
-import express from 'express';
+import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
+import express from 'express';
+import basicAuth from 'express-basic-auth';
+import session from 'express-session';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const server = express();
@@ -17,7 +16,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
       transform: true,
     })
   );
@@ -29,10 +28,14 @@ async function bootstrap() {
       'https://app.arkada.gg',
       'https://api.arkada.gg',
       'http://localhost:3000',
+      'http://localhost:3001',
       'http://127.0.0.1:3000',
       'https://dashboard.galxe.com',
       'https://galxe.com',
       'https://app-galxe.com',
+      'https://app-ui-git-viewer-arkadaminds-projects.vercel.app',
+      'https://166b39d2.landing-dev-7nt.pages.dev',
+      'https://www.arkada.gg',
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
@@ -73,21 +76,13 @@ async function bootstrap() {
     })
   );
 
-  app.use(
-    rateLimit({
-      windowMs: 15 * 60 * 1000,
-      max: 50,
-      message: 'Too many requests from this IP, please try again later.',
-    })
-  );
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    })
-  );
+  // app.use(
+  //   rateLimit({
+  //     windowMs: 15 * 60 * 1000,
+  //     max: 50,
+  //     message: 'Too many requests from this IP, please try again later.',
+  //   })
+  // );
 
   await app.listen(process.env.CORE_PORT, () => {
     Logger.log(`Core Service is running on port ${process.env.CORE_PORT}`);

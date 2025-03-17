@@ -1,33 +1,55 @@
 import {
-  Injectable,
   BadRequestException,
+  Injectable,
   InternalServerErrorException,
-  NotFoundException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
-import { QuestRepository } from './quest.repository';
 import { ethers } from 'ethers';
-import { soneiumProvider, ethProvider } from '../shared/provider';
 import fetch from 'node-fetch';
-import { QuestTask, QuestType } from './interface';
-import { UniswapV3ABI } from '../shared/abi/uniswapV3';
-import { ArkadaAbi } from '../shared/abi/arkada';
-import { SwapRouterABI } from '../shared/abi/swapRouter';
-import { UserService } from '../user/user.service';
+import { ConfigService } from '../_config/config.service';
 import { CampaignService } from '../campaigns/campaign.service';
+import { DiscordBotService } from '../discord/discord.service';
+import { IpfsService } from '../ipfs/ipfs.service';
 import { PriceService } from '../price/price.service';
-import { l2BridgeABI } from '../shared/abi/l2BridgeABI';
-import { mintABI } from '../shared/abi/mintABI';
-import { newAbi } from '../shared/abi/newAbi';
-import { UniswapV3PoolABI } from '../shared/abi/uniswapV3Pool';
-import { randomABI } from '../shared/abi/idk';
-import { MintNewABI } from '../shared/abi/mintNew';
-import { VaultABI } from '../shared/abi/vault-buy-execution';
-import { buyABI } from '../shared/abi/newXd';
+import { ArkadaAbi } from '../shared/abi/arkada.abi';
+import { l2BridgeABI } from '../shared/abi/l2Bridge.abi.';
+import { mintABI } from '../shared/abi/mint.abi';
+import { MintNewABI } from '../shared/abi/mintNew.abi';
+import { MulticallAbi } from '../shared/abi/multicall.abi';
+import { newAbi } from '../shared/abi/new.abi';
+import { SwapRouterABI } from '../shared/abi/swapRouter.abi';
+import { UniswapV3ABI } from '../shared/abi/uniswapV3.abi';
+import { UniswapV3PoolABI } from '../shared/abi/uniswapV3Pool.abi';
+import { VaultABI } from '../shared/abi/vault-buy-execution.abi';
+import {
+  ARKADA_NFTS,
+  SONEIUM_MULTICALL_ADDRESS,
+} from '../shared/constants/addresses';
+import { PyramidType } from '../shared/interfaces';
+import { soneiumProvider } from '../shared/provider';
+import { UserService } from '../user/user.service';
+import {
+  ARKADA_NFTS_MULTIPLIER_BPS,
+  MAX_BPS,
+  MINT_PRICE,
+  PYRAMID_IMAGE_URI,
+  REF_OWNER_BPS,
+  USER_REWARD_BPS,
+} from './constants/mint';
+import { QuestType } from './interface';
+import {
+  IFeeRecipient,
+  IMintPyramidData,
+  IRewardData,
+  ITransactionData,
+  SIGN_TYPES,
+} from './interface/sign';
+import { QuestRepository } from './quest.repository';
 
 @Injectable()
 export class QuestService {
-  private readonly contractAbiMap: { [contractAddress: string]: any } = {
+  private readonly contractAbiMap: { [addr: string]: any } = {
     '0xdef357d505690f1b0032a74c3b581163c23d1535': SwapRouterABI,
     '0x6f5f9d55f727928b644b04d987b1c0cf50af8c0b': UniswapV3ABI,
     '0xcC943afF0F3F8746CCbC3f54BB8869176dBb17F3': ArkadaAbi,
@@ -35,671 +57,200 @@ export class QuestService {
     '0x43a91c353620b18070ad70416f1667250a75daed': mintABI,
     '0xae2b32e603d303ed120f45b4bc2ebac314de080b': newAbi,
     '0xe15bd143d36e329567ae9a176682ab9fafc9c3d2': UniswapV3PoolABI,
-    '0x34834f208f149e0269394324c3f19e06df2ca9cb': randomABI,
     '0x39df84267fda113298d4794948b86026efd47e32': MintNewABI,
     '0x580DD7a2CfC523347F15557ad19f736F74D5677c': VaultABI,
-    '0x1c5d80edb12341dca11f4500aa67b4d2238f3220': buyABI,
   };
 
   private readonly tokenToCoingeckoId: { [token: string]: string } = {
-    ethereum: 'ethereum',
-    astroport: 'astar',
+    '0x4200000000000000000000000000000000000006': 'ethereum',
+    '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441': 'astar',
+    '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369': 'usdc',
+    '0x29219dd400f2bf60e5a23d13be72b486d4038894': 'usdc',
+    '0x60336f9296c79da4294a19153ec87f8e52158e5f': 'bifrost-voucher-astr',
+    '0xa04bc7140c26fc9bb1f36b1a604c7a5a88fb0e70': 'swapx-2',
   };
-
-  private priceCache: {
-    [tokenId: string]: { price: number; timestamp: number };
-  } = {};
 
   constructor(
     private readonly questRepository: QuestRepository,
     private readonly userService: UserService,
     private readonly campaignService: CampaignService,
-    private readonly priceService: PriceService
-  ) {}
+    private readonly priceService: PriceService,
+    private readonly discordService: DiscordBotService,
+    private readonly configService: ConfigService,
+    private readonly ipfsService: IpfsService
+  ) { }
 
   async getAllCompletedQuestsByUser(address: string) {
-    return await this.questRepository.getAllCompletedQuestsByUser(address);
+    return this.questRepository.getAllCompletedQuestsByUser(address);
+  }
+
+  async getCampaignById(id: string) {
+    return await this.campaignService.getCampaignByIdOrSlug(id);
   }
 
   async getCompletedQuestsByUserInCampaign(
     campaignId: string,
     address: string
   ) {
-    return await this.questRepository.getCompletedQuestsByUserInCampaign(
+    return this.questRepository.getCompletedQuestsByUserInCampaign(
       campaignId,
       address
     );
   }
+
   async checkQuestCompletion(id: string, address: string) {
-    return await this.questRepository.checkQuestCompletion(id, address);
+    return this.questRepository.checkQuestCompletion(id, address);
   }
 
-  async hasMintedNft(userAddress: string): Promise<boolean> {
+  async getQuestValue(id: string): Promise<any> {
+    const quest = await this.questRepository.getQuest(id);
+    return quest.value;
+  }
+
+  async getQuest(id: string): Promise<QuestType> {
+    const quest = await this.questRepository.getQuest(id);
+    return quest;
+  }
+
+  async hasMintedNfts(
+    userAddress: string,
+    nftAddresses: ARKADA_NFTS[]
+  ): Promise<Record<ARKADA_NFTS, boolean>> {
     try {
-      const contractAddress = '0x39df84267fda113298d4794948b86026efd47e32';
-
       const minimalAbi = ['function hasMinted(address) view returns (bool)'];
+      const iface = new ethers.Interface(minimalAbi);
 
-      const contract = new ethers.Contract(
-        contractAddress,
-        minimalAbi,
+      // Prepare multicall data
+      const calls = nftAddresses.map((address) => ({
+        target: address.toLowerCase(),
+        callData: iface.encodeFunctionData('hasMinted', [userAddress]),
+      }));
+
+      // Create multicall contract instance
+      const multicallContract = new ethers.Contract(
+        SONEIUM_MULTICALL_ADDRESS,
+        MulticallAbi,
         soneiumProvider
       );
 
-      const minted = await contract.hasMinted(userAddress);
-      Logger.debug(`hasMinted(${userAddress}) => ${minted}`);
-
-      return minted;
-    } catch (error) {
-      Logger.error(`Ошибка при вызове hasMinted: ${error.message}`);
-      return false;
-    }
-  }
-
-  async completeQuestQuiz(id: string, userAddress: string): Promise<boolean> {
-    try {
-      const isCompleted = await this.questRepository.checkQuestCompletion(
-        id,
-        userAddress
-      );
-      if (isCompleted) {
-        return true;
-      }
-      const questStored: QuestType = await this.questRepository.getQuest(id);
-
-      const allQuests: QuestType[] =
-        await this.questRepository.getQuestsByCampaign(questStored.campaign_id);
-
-      const currentQuestIndex = allQuests.findIndex(
-        (quest) => quest.id === questStored.id
+      // Execute multicall
+      const { returnData } = await multicallContract.aggregate.staticCall(
+        calls
       );
 
-      if (currentQuestIndex === -1) {
-        throw new NotFoundException(
-          `Quest with id ${id} not found in campaign`
-        );
-      }
-
-      for (let i = 0; i < currentQuestIndex; i++) {
-        const priorQuest = allQuests[i];
-        const isPriorQuestCompleted =
-          await this.questRepository.checkQuestCompletion(
-            priorQuest.id,
-            userAddress
+      return nftAddresses.reduce((acc, address, index) => {
+        try {
+          const decoded = iface.decodeFunctionResult(
+            'hasMinted',
+            returnData[index]
           );
-        if (!isPriorQuestCompleted) {
-          throw new BadRequestException(
-            `Для выполнения этого квеста нужно сначала пройти: ${priorQuest.name}`
+          return { ...acc, [address]: decoded[0] };
+        } catch (error) {
+          Logger.error(
+            `Error decoding result for ${address}: ${error.message}`
           );
+          return { ...acc, [address]: false };
         }
-      }
-      const lowerAddress = userAddress.toLowerCase();
-
-      await this.questRepository.completeQuest(id, lowerAddress);
-
-      if (questStored.sequence === 1) {
-        await this.campaignService.incrementParticipants(
-          questStored.campaign_id
-        );
-        Logger.debug(
-          `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
-        );
-      }
-
-      try {
-        const campaignId = questStored.campaign_id;
-
-        const allCampaignQuests = allQuests;
-
-        const completedQuests =
-          await this.questRepository.getCompletedQuestsByUserInCampaign(
-            campaignId,
-            lowerAddress
-          );
-        if (completedQuests.length === allCampaignQuests.length) {
-          const wasMarked = await this.campaignService.markCampaignAsCompleted(
-            campaignId,
-            lowerAddress
-          );
-
-          if (wasMarked) {
-            const campaign = await this.campaignService.getCampaignByIdOrSlug(
-              campaignId
-            );
-            const rewards = campaign.rewards; // [{ "type": "tokens", "value": "100" }, ...]
-
-            let totalPoints = 0;
-            rewards.forEach((reward: any) => {
-              if (reward.type === 'tokens') {
-                totalPoints += parseInt(reward.value, 10);
-              }
-            });
-
-            await this.userService.updatePoints(lowerAddress, totalPoints);
-          }
-        }
-      } catch (error) {
-        throw new InternalServerErrorException(
-          `Ошибка при завершении квеста и начислении баллов: ${error.message}`
-        );
-      }
-      return true;
+      }, {} as Record<ARKADA_NFTS, boolean>);
     } catch (error) {
-      if (
-        error instanceof BadRequestException ||
-        error instanceof InternalServerErrorException ||
-        error instanceof NotFoundException
-      ) {
-        throw error;
-      }
+      Logger.error(`Error in hasMintedNfts: ${error.message}`);
       throw new InternalServerErrorException(
-        `Error while checking Quest: ${error.message}`
+        `Error in hasMintedNfts: ${error.message}`
       );
     }
   }
-
-  async completeQuestAndAwardPoints(
-    questId: string,
-    userAddress: string
-  ): Promise<void> {
+  async completeCampaignAndAwardPoints(
+    campaignId: string,
+    userAddress: string,
+    completeAnyway: boolean,
+    campaignTotalQuests?: number
+  ) {
     const lowerAddress = userAddress.toLowerCase();
     try {
-      const quest = await this.questRepository.getQuest(questId);
-      const campaignId = quest.campaign_id;
-
-      const allCampaignQuests = await this.questRepository.getQuestsByCampaign(
+      const campaign = await this.campaignService.getCampaignByIdOrSlug(
         campaignId
       );
+      // if PYRAMID mint required and we call method from not webhook, then we don't need to mark campaign as completed
+      if (campaign.pyramid_required && !completeAnyway) return;
 
+      const allCampaignQuests =
+        campaignTotalQuests ??
+        (await this.questRepository.getQuestsByCampaign(campaignId)).length;
       const completedQuests =
         await this.questRepository.getCompletedQuestsByUserInCampaign(
           campaignId,
           lowerAddress
         );
-
-      if (completedQuests.length === allCampaignQuests.length) {
+      if (completedQuests.length === allCampaignQuests) {
         const wasMarked = await this.campaignService.markCampaignAsCompleted(
           campaignId,
           lowerAddress
         );
-
         if (wasMarked) {
-          const campaign = await this.campaignService.getCampaignByIdOrSlug(
-            campaignId
-          );
-          const rewards = campaign.rewards; // [{ "type": "tokens", "value": "100" }, ...]
-
+          const rewards = campaign.rewards;
           let totalPoints = 0;
-          rewards.forEach((reward: any) => {
-            if (reward.type === 'tokens') {
-              totalPoints += parseInt(reward.value, 10);
-            }
+          rewards.forEach((r: any) => {
+            if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
           });
-
-          await this.userService.updatePoints(lowerAddress, totalPoints);
+          await this.userService.awardCampaignCompletion(
+            lowerAddress,
+            totalPoints
+          );
         }
       }
+
+      return campaign;
     } catch (error) {
       throw new InternalServerErrorException(
         `Ошибка при завершении квеста и начислении баллов: ${error.message}`
       );
     }
   }
-  private createBlockscoutUrl(chain: string, address: string): string {
-    let baseUrl = 'https://soneium.blockscout.com';
-    if (chain === 'Soneium') {
-      baseUrl = 'https://soneium.blockscout.com';
-    } else if (chain === 'Ethereum') {
-      return 'https://soneium.blockscout.com/api?module=account&action=eth_get_balance&address=';
-    } else {
-      throw new Error(`Unsupported chain: ${chain}`);
-    }
 
-    const nowUnix = Math.floor(Date.now() / 1000);
-    const weekAgoUnix = nowUnix - 7 * 24 * 60 * 60;
-
-    const queryParams = new URLSearchParams({
-      module: 'account',
-      action: 'txlist',
-      address: address,
-      start_timestamp: weekAgoUnix.toString(),
-      end_timestamp: nowUnix.toString(),
-      page: '1',
-      offset: '1000',
-      sort: 'asc',
-      // filter_by: 'to',
-    });
-
-    return `${baseUrl}/api?${queryParams.toString()}`;
-  }
-
-  async checkQuest(id: string, address: string): Promise<boolean> {
+  async completeQuestQuiz(id: string, userAddress: string): Promise<boolean> {
     try {
-      const isCompleted = await this.questRepository.checkQuestCompletion(
+      const alreadyDone = await this.questRepository.checkQuestCompletion(
         id,
-        address
+        userAddress
       );
-      if (isCompleted) {
-        return true;
-      }
-
-      const questStored: QuestType = await this.questRepository.getQuest(id);
-      const questTask: QuestTask = questStored.value;
-
-      const allQuests: QuestType[] =
-        await this.questRepository.getQuestsByCampaign(questStored.campaign_id);
-      const currentQuestIndex = allQuests.findIndex(
-        (quest) => quest.id === questStored.id
+      if (alreadyDone) return true;
+      const questStored = await this.questRepository.getQuest(id);
+      const allInCampaign = await this.questRepository.getQuestsByCampaign(
+        questStored.campaign_id
       );
-
-      if (currentQuestIndex === -1) {
+      const idx = allInCampaign.findIndex((q) => q.id === questStored.id);
+      if (idx === -1) {
         throw new NotFoundException(
           `Quest with id ${id} not found in campaign`
         );
       }
-
-      for (let i = 0; i < currentQuestIndex; i++) {
-        const priorQuest = allQuests[i];
-        const isPriorQuestCompleted =
-          await this.questRepository.checkQuestCompletion(
-            priorQuest.id,
-            address
-          );
-        if (!isPriorQuestCompleted) {
+      for (let i = 0; i < idx; i++) {
+        const prior = allInCampaign[i];
+        const done = await this.questRepository.checkQuestCompletion(
+          prior.id,
+          userAddress
+        );
+        if (!done) {
           throw new BadRequestException(
-            `Для выполнения этого квеста нужно сначала пройти: ${priorQuest.name}`
+            `Для выполнения этого квеста нужно сначала пройти: ${prior.name}`
           );
         }
       }
-
-      if (questStored.type === 'link') {
-        const endpoint = questTask.endpoint.replace('{$address}', address);
-        Logger.debug(`Link quest endpoint: ${endpoint}`);
-        const res = await fetch(endpoint, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        if (!res.ok) {
-          throw new InternalServerErrorException(
-            `Error while requesting link endpoint: ${res.statusText}`
-          );
-        }
-        const data = await res.json();
-        Logger.debug(`Link quest data: ${JSON.stringify(data)}`);
-
-        const exprFn = new Function(
-          'data',
-          `return (${questTask.expression})(data);`
-        );
-        const result = exprFn(data);
-        Logger.debug(`Link quest expression result: ${result}`);
-
-        if (result === 1) {
-          await this.questRepository.completeQuest(id, address);
-          if (questStored.sequence === 1) {
-            await this.campaignService.incrementParticipants(
-              questStored.campaign_id
-            );
-            Logger.debug(
-              `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
-            );
-          }
-          return true;
-        } else {
-          return false;
-        }
-      }
-
-      const url = this.createBlockscoutUrl(questTask.chain, address);
-      if (questTask.chain === 'Ethereum') {
-        const urlR = url + `${address}`;
-        const resTrace = await fetch(urlR, { method: 'GET' });
-        if (!resTrace.ok) {
-          Logger.error(
-            `Error fetching balance: ${resTrace.status} / ${resTrace.statusText}`
-          );
-          return false;
-        }
-
-        const data = await resTrace.json();
-        if (!data || !data.result) {
-          Logger.error('Invalid balance response');
-          return false;
-        }
-
-        const balance = ethers.getBigInt(data.result);
-        Logger.debug(`Balance for ${address}: ${balance.toString()}`);
-
-        if (balance > 0) {
-          await this.questRepository.completeQuest(id, address);
-          if (questStored.sequence === 1) {
-            await this.campaignService.incrementParticipants(
-              questStored.campaign_id
-            );
-            Logger.debug(
-              `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
-            );
-          }
-          return true;
-        } else {
-          return false;
-        }
-      }
-      Logger.debug(url);
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!res.ok) {
-        throw new InternalServerErrorException(
-          `Error while requesting BS API: ${res.statusText}`
+      await this.questRepository.completeQuest(id, userAddress.toLowerCase());
+      if (questStored.sequence === 1) {
+        await this.campaignService.incrementParticipants(
+          questStored.campaign_id
         );
       }
 
-      const data = await res.json();
-
-      if (!Array.isArray(data.result)) {
-        throw new BadRequestException('Incorrect response from BS API');
-      }
-
-      const transactions = data.result;
-      const userTransactions = transactions.filter((tx: any) =>
-        tx.to && questTask.contract1
-          ? tx.to.toLowerCase() === questTask.contract.toLowerCase() ||
-            tx.to.toLowerCase() === questTask.contract1.toLowerCase()
-          : tx.to.toLowerCase() === questTask.contract.toLowerCase() &&
-            tx.from &&
-            tx.from.toLowerCase() === address.toLowerCase()
-      );
-      const ifCaseSupply = questTask.abi_to_find.filter((el) =>
-        el.includes('function supply')
+      await this.completeCampaignAndAwardPoints(
+        questStored.campaign_id,
+        userAddress,
+        false,
+        allInCampaign.length
       );
 
-      if (ifCaseSupply.length > 0) {
-        for (const el of userTransactions) {
-          try {
-            const supplyABI = [
-              'function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)',
-            ];
-            const supplyInterface = new ethers.Interface(supplyABI);
-
-            let parsedSupply;
-            try {
-              parsedSupply = supplyInterface.parseTransaction({
-                data: el.input,
-              });
-            } catch (e) {
-              Logger.debug(`Ошибка парсинга supply: ${e.message}`);
-              continue;
-            }
-            if (!parsedSupply) continue;
-            Logger.debug('Parsed supply transaction:', parsedSupply);
-
-            const asset = parsedSupply.args[0]?.toLowerCase();
-            const amountBN: bigint = parsedSupply.args[1];
-
-            const ASTR_ADDRESS =
-              '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441'.toLowerCase();
-            if (asset !== ASTR_ADDRESS) {
-              Logger.debug(
-                `Asset ${asset} не соответствует ожидаемому ${ASTR_ADDRESS}`
-              );
-              continue;
-            }
-
-            const depositAmount = ethers.formatUnits(amountBN, 18);
-            Logger.debug(`Deposit amount (raw): ${depositAmount}`);
-
-            const depositUSDValue = await this.getUSDValue(
-              'astroport',
-              depositAmount
-            );
-            Logger.debug(`Deposit USD value: ${depositUSDValue}`);
-
-            if (depositUSDValue >= (questTask.minAmountUSD || 20)) {
-              await this.questRepository.completeQuest(id, address);
-              if (questStored.sequence === 1) {
-                await this.campaignService.incrementParticipants(
-                  questStored.campaign_id
-                );
-                Logger.debug(
-                  `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
-                );
-              }
-              return true;
-            }
-          } catch (error) {
-            Logger.error(`Ошибка обработки транзакции: ${error.message}`);
-            continue;
-          }
-        }
-        return false;
-      }
-
-      const ifCaseBorrow = questTask.abi_to_find.filter((el) =>
-        el.includes('function borrow')
-      );
-
-      if (ifCaseBorrow.length > 0) {
-        for (const el of userTransactions) {
-          try {
-            const borrowABI = [
-              'function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)',
-            ];
-            const borrowInterface = new ethers.Interface(borrowABI);
-
-            let parsedBorrow;
-            try {
-              parsedBorrow = borrowInterface.parseTransaction({
-                data: el.input,
-              });
-            } catch (e) {
-              Logger.debug(`Ошибка парсинга borrow: ${e.message}`);
-              continue;
-            }
-            if (!parsedBorrow) continue;
-            Logger.debug('Parsed borrow transaction:', parsedBorrow);
-
-            const asset = parsedBorrow.args[0]?.toLowerCase();
-            const amountBN: bigint = parsedBorrow.args[1];
-
-            const USDC_ADDRESS =
-              '0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC369'.toLowerCase();
-            if (asset !== USDC_ADDRESS) {
-              Logger.debug(
-                `Asset ${asset} не соответствует ожидаемому ${USDC_ADDRESS}`
-              );
-              continue;
-            }
-
-            const borrowAmount = ethers.formatUnits(amountBN, 6);
-            Logger.debug(`Borrow amount (raw): ${borrowAmount} USDC`);
-
-            const minThreshold = questTask.minAmountUSD || 0;
-            if (parseFloat(borrowAmount) >= minThreshold) {
-              await this.questRepository.completeQuest(id, address);
-              if (questStored.sequence === 1) {
-                await this.campaignService.incrementParticipants(
-                  questStored.campaign_id
-                );
-                Logger.debug(
-                  `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
-                );
-              }
-              return true;
-            }
-          } catch (error) {
-            Logger.error(`Ошибка обработки транзакции: ${error.message}`);
-            continue;
-          }
-        }
-        return false;
-      }
-
-      const ifCaseBuy = questTask.abi_to_find.filter((el) =>
-        el.includes('function buy')
-      );
-      if (ifCaseBuy.length > 0) {
-        for (const tx of userTransactions) {
-          try {
-            if (
-              tx.input.startsWith('0xac9650d8') &&
-              tx.input
-                .toLowerCase()
-                .includes(
-                  '2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase()
-                )
-            ) {
-              await this.questRepository.completeQuest(id, address);
-              await this.campaignService.incrementParticipants(
-                questStored.campaign_id
-              );
-              Logger.debug(
-                `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
-              );
-              return true;
-            }
-            const multicallABI = ['function multicall(bytes[] data)'];
-            const mcInterface = new ethers.Interface(multicallABI);
-
-            const topParsed = mcInterface.parseTransaction(tx.input);
-
-            return false;
-          } catch (error) {
-            Logger.error(`Ошибка обработки транзакции: ${error.message}`);
-            continue;
-          }
-        }
-
-        return false;
-      }
-
-      const ifCase = questTask.abi_to_find.filter((el) =>
-        el.includes('function mint')
-      );
-
-      if (ifCase.length > 0) {
-        for (const el of userTransactions) {
-          try {
-            const multicallABI = ['function multicall(bytes[] data)'];
-            const mcInterface = new ethers.Interface(multicallABI);
-            let topParsed;
-            try {
-              topParsed = mcInterface.parseTransaction({ data: el.input });
-            } catch (e) {
-              Logger.debug(`Ошибка парсинга multicall: ${e.message}`);
-              continue;
-            }
-            if (!topParsed) continue;
-
-            const parsed = this.parseMintManual(topParsed.args[0][0]);
-            if (!parsed || !parsed.token0 || !parsed.token1) {
-              continue;
-            }
-
-            const token0 = parsed.token0.toLowerCase();
-            const token1 = parsed.token1.toLowerCase();
-            const ASTR_ADDRESS = '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441';
-            const SECOND_ADDRESS = questTask.abi_equals[0][1];
-
-            if (token0 !== ASTR_ADDRESS && token1 !== ASTR_ADDRESS) {
-              Logger.debug(`Ни token0, ни token1 не равен ASTR`);
-              continue;
-            }
-
-            const amount0Desired = parsed.amount0Desired || 0;
-            const amount1Desired = parsed.amount1Desired || 0;
-
-            let astrAmountBN = null;
-            let ethAmountBN = null;
-
-            if (token0 === ASTR_ADDRESS) {
-              astrAmountBN = amount0Desired;
-            }
-            if (token1 === ASTR_ADDRESS) {
-              astrAmountBN = amount1Desired;
-            }
-            if (token0 === SECOND_ADDRESS) {
-              ethAmountBN = amount0Desired;
-            }
-            if (token1 === SECOND_ADDRESS) {
-              ethAmountBN = amount1Desired;
-            }
-
-            if (!astrAmountBN) {
-              Logger.debug(`Не нашли amount, соответствующий ASTR`);
-              continue;
-            }
-
-            const astrAmount = ethers.formatUnits(astrAmountBN, 18);
-            const ethAmount = ethers.formatUnits(ethAmountBN || 0n, 18);
-            Logger.debug(
-              `Astr amount: ${astrAmount}, Eth amount: ${ethAmount}`
-            );
-
-            const astrUSDValue = await this.getUSDValue(
-              'astroport',
-              astrAmount
-            );
-            const ethUSDValue = await this.getUSDValue('ethereum', ethAmount);
-            Logger.debug(
-              `Astr value: ${astrUSDValue}, Eth value: ${ethUSDValue}`
-            );
-
-            const totalValue = astrUSDValue + ethUSDValue;
-            Logger.debug(`totalValue ${totalValue}`);
-
-            if (totalValue >= (questTask.minAmountUSD || 20)) {
-              await this.questRepository.completeQuest(id, address);
-              if (questStored.sequence === 1) {
-                await this.campaignService.incrementParticipants(
-                  questStored.campaign_id
-                );
-                Logger.debug(
-                  `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
-                );
-              }
-              return true;
-            }
-          } catch (error) {
-            Logger.error(`Ошибка обработки транзакции: ${error.message}`);
-            continue;
-          }
-        }
-        return false;
-      }
-
-      Logger.debug(
-        `Txns for user ${address} -> ${questTask.contract}: ${userTransactions.length}. `
-      );
-
-      for (const tx of userTransactions) {
-        const txHash = tx.hash;
-        const isQuestDone = await this.decodeTransaction(
-          txHash,
-          questTask,
-          address
-        );
-
-        if (isQuestDone) {
-          Logger.debug(`Quest completed by tx: ${txHash}`);
-          await this.questRepository.completeQuest(id, address);
-          if (questStored.sequence === 1) {
-            await this.campaignService.incrementParticipants(
-              questStored.campaign_id
-            );
-            Logger.debug(
-              `Campaign ${questStored.campaign_id}: participants incremented for first quest.`
-            );
-          }
-          return true;
-        }
-      }
-
-      return false;
+      return true;
     } catch (error) {
       if (
         error instanceof BadRequestException ||
@@ -714,537 +265,1105 @@ export class QuestService {
     }
   }
 
-  async extractAstrValueFromMulticall(
-    questTask: QuestTask,
-    calls: string[]
-  ): Promise<string | null> {
-    const ASTR_ADDRESS = '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441';
-    const abi = this.contractAbiMap[questTask.contract.toLowerCase()];
+  async checkQuest(id: string, address: string): Promise<boolean> {
+    const doneAlready = await this.checkQuestCompletion(id, address);
+    if (doneAlready) return true;
 
-    const iface = new ethers.Interface(abi);
+    const quest = await this.getQuest(id);
+    if (!quest) throw new NotFoundException(`Quest ${id} not found`);
+    const campaignQuests = await this.questRepository.getQuestsByCampaign(
+      quest.campaign_id
+    );
 
-    for (const callData of calls) {
-      if (!callData.startsWith('0x')) {
-        continue;
-      }
-      try {
-        const parsedTx = iface.parseTransaction({ data: callData });
-        if (!parsedTx) continue;
+    const idx = campaignQuests.findIndex((q) => q.id === quest.id);
+    if (idx < 0) throw new NotFoundException(`Quest ${id} not in campaign`);
 
-        Logger.debug(`Parsed: ${parsedTx.name}, args: ${parsedTx.args}`);
-
-        const tokenAddr = (parsedTx.args[0] as string).toLowerCase();
-        const amountBN = parsedTx.args[1] as bigint;
-
-        if (tokenAddr === ASTR_ADDRESS) {
-          const astrValue = ethers.formatUnits(amountBN, 18);
-          return astrValue;
-        }
-      } catch (err) {
-        Logger.debug(`Ошибка парсинга: ${err}`);
-        continue;
+    for (let i = 0; i < idx; i++) {
+      const prior = campaignQuests[i];
+      const priorDone = await this.checkQuestCompletion(prior.id, address);
+      if (!priorDone) {
+        throw new BadRequestException(`Сначала нужно выполнить: ${prior.name}`);
       }
     }
-    return null;
+
+    const ok = await this.handleQuestLogic(quest, address);
+    if (!ok) return false;
+
+    await this.questRepository.completeQuest(id, address);
+
+    if (quest.sequence === 1) {
+      await this.campaignService.incrementParticipants(quest.campaign_id);
+    }
+
+    await this.completeCampaignAndAwardPoints(
+      quest.campaign_id,
+      address,
+      false,
+      campaignQuests.length
+    );
+
+    return true;
   }
 
-  private async decodeTransaction(
-    txHash: string,
-    questTask: QuestTask,
-    address: string
-  ): Promise<boolean> {
-    try {
-      const provider =
-        questTask.chain === 'Soneium' ? soneiumProvider : ethProvider;
-      const transaction = await provider.getTransaction(txHash);
-      const receipt = await provider.getTransactionReceipt(txHash);
-
-      if (!transaction || !receipt) {
-        Logger.error(`Txn not found: ${txHash}`);
+  private async handleQuestLogic(quest: QuestType, userAddr: string) {
+    if (quest.type === 'link') {
+      return this.handleLinkQuest(quest, userAddr);
+    }
+    if (quest.type === 'discord') {
+      const user = await this.userService.findByAddress(userAddr);
+      if (!user || !user.discord) {
         return false;
       }
-      const fallbackAbi = this.contractAbiMap[questTask.contract.toLowerCase()];
-      let contractInterface: ethers.Interface | null = null;
-      contractInterface = new ethers.Interface(fallbackAbi);
+      return await this.discordService.isUserInGuildByUsername(
+        quest.value.guildId,
+        user.discord
+      );
+    }
+    if (quest.value.type === 'checkMethod') {
+      return this.handleCheckMethodQuest(quest, userAddr);
+    }
+    if (quest.value.type === 'onchainCheckAmountOfTxns') {
+      return this.handleOnchainCheckAmountOfTxns(quest, userAddr);
+    }
+    if (quest.value.type === 'checkOnchainMethod') {
+      return this.handleCheckOnchainMethodQuest(quest, userAddr);
+    }
+    return this.checkOnChainQuest(quest, userAddr);
+  }
 
-      let parsedTx: ethers.TransactionDescription;
+  private async handleLinkQuest(quest: QuestType, userAddr: string) {
+    const task = quest.value;
+    if (task.contract) {
       try {
-        parsedTx = contractInterface.parseTransaction({
-          data: transaction.data,
-          value: transaction.value,
-        });
-      } catch (err) {
-        Logger.debug(`parseTransaction error (top-level): ${err.message}`);
+        const contract = new ethers.Contract(
+          task.contract,
+          ['function hasMinted(address) view returns (bool)'],
+          soneiumProvider
+        );
+        const minted = await contract.hasMinted(userAddr);
+        return !!minted;
+      } catch {
         return false;
       }
+    }
+    if (task.url) {
+      const c = await this.campaignService.getCampaignByIdOrSlug(
+        quest.campaign_id
+      );
+      const finalUrl = task.url.replace('{$address}', userAddr);
+      const res = await fetch(finalUrl);
+      const responseJson = await res.json();
+      const campaignStart = new Date(c.started_at);
+      const matchingCount = responseJson.data.filter((item: any) => {
+        const createdAt = new Date(item.createdAt);
+        return createdAt > campaignStart;
+      }).length;
 
-      Logger.debug(`Top-level method: ${parsedTx.name}`);
+      console.log(
+        `Найдено записей после начала кампании: ${matchingCount} (требуется: ${task.minTxns})`
+      );
 
-      if (parsedTx.name === 'multicall') {
-        const rawTraceUrl = `https://soneium.blockscout.com/api/v2/transactions/${txHash}/raw-trace`;
-        const resTrace = await fetch(rawTraceUrl, { method: 'GET' });
-        if (!resTrace.ok) {
-          Logger.error(
-            `Error fetching raw trace: ${resTrace.status} / ${resTrace.statusText}`
-          );
-          return false;
-        }
-
-        const traceData = await resTrace.json();
-        const topCalls = traceData.calls || [];
-        const isOk = await this.traverseMulticall(topCalls, questTask);
-        return isOk;
-      } else {
-        return await this.decodeSingleTransaction(parsedTx, questTask, address);
+      if (matchingCount >= task.minTxns) {
+        return true;
       }
-    } catch (error) {
-      Logger.error(`decodeTransaction error: ${error.message}`);
       return false;
     }
+
+    if (task.endpoint) {
+      let finalUrl = task.endpoint.replace('{$address}', userAddr);
+      if (task.params)
+        finalUrl = this.buildLinkUrl(task.endpoint, task.params, userAddr);
+
+      console.log('------>', finalUrl);
+      const res = await fetch(finalUrl);
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (task.expression) {
+        const fn = new Function('data', `return (${task.expression})(data);`);
+        return !!fn(data);
+      }
+      return !!data.verified;
+    }
+    return false;
   }
 
-  private async traverseMulticall(
-    calls: any[],
-    questTask: QuestTask
+  private async handleOnchainCheckAmountOfTxns(
+    quest: QuestType,
+    userAddr: string
   ): Promise<boolean> {
-    let contractInterface: ethers.Interface;
-    if (questTask.abi_to_find && Array.isArray(questTask.abi_to_find)) {
-      contractInterface = new ethers.Interface(questTask.abi_to_find);
-    } else {
-      const fallbackAbi = this.contractAbiMap[questTask.contract.toLowerCase()];
-      contractInterface = new ethers.Interface(fallbackAbi);
+    if (quest.value.url) {
+      return this.handleLinkQuest(quest, userAddr);
+    }
+    if (quest.value.methodToExecute) {
+      try {
+        const contractAddress =
+          quest.value.contract ||
+          (quest.value.contracts && quest.value.contracts[0]);
+        if (!contractAddress) {
+          console.error('Контракт не задан в квесте');
+          return false;
+        }
+        const iface = new ethers.Interface([quest.value.methodToExecute]);
+        const contract = new ethers.Contract(
+          contractAddress,
+          iface.fragments,
+          soneiumProvider
+        );
+        const result = quest.value.methodToExecute.includes('balanceOf')
+          ? await contract.balanceOf(userAddr)
+          : await contract.checkDatas(userAddr);
+        const streak = ethers.toBigInt(result) ? result : result.streak;
+        console.log(
+          `checkDatas returned streak = ${streak.toString()} (требуется: ${quest.value.methodToEqual
+          })`
+        );
+        if (streak < quest.value.methodToEqual) {
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.error('Ошибка при вызове checkDatas:', err);
+        return false;
+      }
     }
 
-    for (const call of calls) {
-      if (call.calls && Array.isArray(call.calls)) {
-        const isFoundInNested = await this.traverseMulticall(
-          call.calls,
-          questTask
-        );
-        if (isFoundInNested) {
+    const chain = quest.value.chain || 'Soneium';
+    const c = await this.getCampaignById(quest.campaign_id);
+    const txs = await this.getUserTransactions(chain, userAddr, c);
+
+    if (quest.value.methodChecks && Array.isArray(quest.value.methodChecks)) {
+      for (const checkItem of quest.value.methodChecks) {
+        if (Array.isArray(checkItem)) {
+          let groupCount = 0;
+          const groupThreshold = checkItem[0].minTxns || 0;
+          for (const check of checkItem) {
+            try {
+              const iface = new ethers.Interface([check.signature]);
+              if (
+                (iface.fragments[0] as ethers.FunctionFragment).name ===
+                'externalDelegateCall'
+              ) {
+                const relevantTxs = txs.filter(
+                  (tx) =>
+                    check.contract &&
+                    tx.to.toLowerCase() === check.contract.toLowerCase()
+                );
+                if (relevantTxs.length === 0) {
+                  return false;
+                }
+                const count = await relevantTxs.reduce(
+                  async (prevPromise: Promise<number>, tx) => {
+                    const acc = await prevPromise;
+                    try {
+                      let usdValue = 0;
+                      if (+tx.value) {
+                        const dataStr = tx.input.toLowerCase();
+                        const tokenToCheck =
+                          '570f09ac53b96929e3868f71864e36ff6b1b67d7';
+                        if (dataStr.includes(tokenToCheck)) {
+                          usdValue = await this.convertToUSD(
+                            '0x4200000000000000000000000000000000000006',
+                            tx.value
+                          );
+                          console.log('ETH стоимость (USD):', usdValue);
+                        }
+                      }
+                      return usdValue >= check.txMinValue ? acc + 1 : acc;
+                    } catch (err) {
+                      return acc;
+                    }
+                  },
+                  Promise.resolve(0)
+                );
+                groupCount += count;
+              } else {
+                const count = txs.reduce((acc, tx) => {
+                  try {
+                    if (
+                      check.contract &&
+                      tx.to.toLowerCase() !== check.contract.toLowerCase()
+                    ) {
+                      return acc;
+                    }
+                    const parsed = iface.parseTransaction({ data: tx.input });
+                    return parsed &&
+                      parsed.name ===
+                      (iface.fragments[0] as ethers.FunctionFragment).name
+                      ? acc + 1
+                      : acc;
+                  } catch (err) {
+                    return acc;
+                  }
+                }, 0);
+                groupCount += count;
+              }
+            } catch (err) {
+              continue;
+            }
+          }
+          console.log(
+            `Альтернативная группа: суммарно ${groupCount} транзакций (требуется: ${groupThreshold})`
+          );
+          if (groupCount < groupThreshold) {
+            return false;
+          }
+        } else {
+          // Одиночная проверка
+          try {
+            const iface = new ethers.Interface([checkItem.signature]);
+            const count = txs.reduce((acc, tx) => {
+              try {
+                if (
+                  checkItem.contract &&
+                  tx.to.toLowerCase() !== checkItem.contract.toLowerCase()
+                ) {
+                  return acc;
+                }
+                const parsed = iface.parseTransaction({ data: tx.input });
+                return parsed &&
+                  parsed.name ===
+                  (iface.fragments[0] as ethers.FunctionFragment).name
+                  ? acc + 1
+                  : acc;
+              } catch (err) {
+                return acc;
+              }
+            }, 0);
+            console.log(
+              `Метод ${(iface.fragments[0] as ethers.FunctionFragment).name
+              }: ${count} транзакций (требуется: ${checkItem.minTxns})`
+            );
+            if (count < checkItem.minTxns) {
+              return false;
+            }
+          } catch (err) {
+            return false;
+          }
+        }
+      }
+      return true;
+    } else {
+      const minTxns = quest.value.minTxns || 0;
+      const contractTxs = txs.filter((tx) =>
+        quest.value.contracts.some(
+          (addr: string) => tx.to.toLowerCase() === addr.toLowerCase()
+        )
+      );
+      console.log('Общее число транзакций по контрактам:', contractTxs.length);
+      return contractTxs.length >= minTxns;
+    }
+  }
+
+  private async handleCheckOnchainMethodQuest(
+    quest: QuestType,
+    userAddr: string
+  ) {
+    const abi = quest.value.actions
+      ? quest.value.actions[0].methodSignatures
+      : quest.value.methodSignatures;
+
+    const iface = new ethers.Interface(abi);
+    const c = await this.getCampaignById(quest.campaign_id);
+
+    const transactions = await this.getUserTransactions(
+      quest.value.chain,
+      userAddr,
+      c
+    );
+
+    const contractTransactions = transactions.filter(
+      (tx) =>
+        tx.to.toLowerCase() === quest.value.contracts[0]?.toLowerCase() ||
+        tx.to.toLowerCase() === quest.value.contracts[1]?.toLowerCase() ||
+        tx.to.toLowerCase() === quest.value.contracts[2]?.toLowerCase()
+    );
+
+    console.log(`Transactions found for user ${contractTransactions.length}`);
+
+    for (const tx of contractTransactions) {
+      try {
+        const parsed = iface.parseTransaction({ data: tx.input });
+
+        if (parsed.name === 'checkIn') {
           return true;
         }
-      }
-
-      if (
-        call.type !== 'CALL' &&
-        call.type !== 'DELEGATECALL' &&
-        call.type !== 'STATICCALL'
-      ) {
-        continue;
-      }
-
-      const toAddress = call.to;
-      const inputData = call.input;
-      const valueHex = call.value;
-
-      if (!toAddress || !inputData) {
-        continue;
-      }
-
-      let parsedValue = 0n;
-      if (typeof valueHex === 'string' && valueHex.startsWith('0x')) {
-        try {
-          parsedValue = ethers.toBigInt(valueHex);
-        } catch {
-          parsedValue = 0n;
+        if (parsed.name === 'safeTransferFrom') {
+          return true;
         }
-      }
 
-      let parsedCall: ethers.TransactionDescription | null = null;
-      try {
-        parsedCall = contractInterface.parseTransaction({
-          data: inputData,
-          value: parsedValue,
-        });
-      } catch (err) {
-        Logger.debug(`parseTransaction error: ${err.message}`);
-        continue;
-      }
-
-      if (!parsedCall) {
-        continue;
-      }
-
-      Logger.debug(`Inner call method: ${parsedCall.name}`);
-      if (parsedCall.name === 'multicall') {
-        if (call.calls && Array.isArray(call.calls)) {
-          const subCheck = await this.traverseMulticall(call.calls, questTask);
-          if (subCheck) return true;
+        if (quest.value.methodToFind) {
+          for (let i = 0; i <= quest.value.methodToFind.length; i++) {
+            if (parsed.name === quest.value.methodToFind[i]) {
+              return true;
+            }
+          }
         }
-        continue;
-      }
-      if (!parsedCall) {
-        if (call.calls && Array.isArray(call.calls)) {
-          const subCheck = await this.traverseMulticall(call.calls, questTask);
-          if (subCheck) return false;
-        }
-        continue;
-      }
 
-      const isOk = await this.decodeSingleTransaction(parsedCall, questTask);
-      if (isOk) {
-        return true;
+        if (parsed.name === 'execute') {
+          const inputs = parsed.args[1];
+          if (inputs.length > 2) {
+            continue;
+          }
+          for (const encodedInput of inputs) {
+            try {
+              const data = encodedInput.replace(/^0x/, '').toLowerCase();
+
+              const chunkSize = 64;
+              const chunks = data.match(new RegExp(`.{1,${chunkSize}}`, 'g'));
+
+              if (!chunks || chunks.length < 2) {
+                return null;
+              }
+
+              const valueHex = '0x' + chunks[1];
+
+              const valueWei = BigInt(valueHex);
+
+              const depositAmount = ethers.formatUnits(valueWei, 18);
+              Logger.debug(`Deposit amount (raw): ${depositAmount}`);
+
+              const depositUSDValue = await this.convertToUSD(
+                '0x4200000000000000000000000000000000000006',
+                valueWei
+              );
+              const token0 =
+                '4200000000000000000000000000000000000006'.toLowerCase();
+              const token1 =
+                '2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase();
+              const minLimit = quest.value.actions[0].minUsdTotal;
+              const dataLC = encodedInput.toLowerCase();
+              const isPairValid =
+                encodedInput.toLowerCase().includes(token0) &&
+                encodedInput.toLowerCase().includes(token1);
+              const isAmountValid = depositUSDValue >= minLimit;
+              if (isPairValid && isAmountValid) {
+                return true;
+              } else {
+                console.log('❌ Квест не выполнен.');
+                continue;
+              }
+            } catch (error) {
+              continue;
+            }
+          }
+        }
+      } catch (e) {
+        continue;
       }
     }
 
     return false;
   }
 
-  private parseMintManual(inputData: string) {
-    if (inputData && inputData.startsWith('0x')) {
-      inputData = inputData.slice(2);
-    } else return;
+  private async handleCheckMethodQuest(quest: QuestType, userAddr: string) {
+    const task = quest.value;
+    try {
+      const contract = new ethers.Contract(
+        task.contracts[0],
+        task.methodSignatures,
+        soneiumProvider
+      );
 
-    const methodId = inputData.slice(0, 8);
-
-    let offset = 8;
-
-    const wordSize = 64;
-
-    function readWord(): string {
-      const wordHex = inputData.slice(offset, offset + wordSize);
-      offset += wordSize;
-      return wordHex;
-    }
-
-    const token0Word = readWord(); // 1) token0
-    const token1Word = readWord(); // 2) token1
-    const feeWord = readWord(); // 3) fee (uint24)
-    const tickLWord = readWord(); // 4) tickLower (int24)
-    const tickUWord = readWord(); // 5) tickUpper (int24)
-    const amt0Word = readWord(); // 6) amount0Desired (uint256)
-    const amt1Word = readWord(); // 7) amount1Desired (uint256)
-    const amt0MinW = readWord(); // 8) amount0Min
-    const amt1MinW = readWord(); // 9) amount1Min
-    const recWord = readWord(); // 10) recipient (address)
-    const ddlWord = readWord(); // 11) deadline (uint256)
-
-    function parseAddress(wordHex: string): string {
-      const last40 = wordHex.slice(24);
-      return '0x' + last40.toLowerCase();
-    }
-
-    const token0 = parseAddress(token0Word);
-    const token1 = parseAddress(token1Word);
-
-    function hexToBigInt(hex: string): bigint {
-      if (!hex || hex.length === 0) {
-        return 0n;
+      let newBalance;
+      if (task.methodSignatures[0].includes('uint256 id')) {
+        newBalance = await contract.balanceOf(userAddr, 0);
+      } else {
+        newBalance = await contract.balanceOf(userAddr);
       }
-      return BigInt('0x' + hex);
+      return newBalance > 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  private buildLinkUrl(endpoint: string, paramsStr: string, address: string) {
+    const replaced = paramsStr.replace(/\$\{address\}/g, `"${address}"`);
+    let jsonStr = replaced.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
+    jsonStr = jsonStr.replace(/:\s*(0x[0-9a-fA-F]+)/g, ': "$1"');
+
+    const paramsObj = JSON.parse(jsonStr);
+    if (paramsObj.minOutputAmount) {
+      paramsObj.minOutputAmount = Number(paramsObj.minOutputAmount) * 1000000;
+    }
+    const qs = new URLSearchParams(paramsObj).toString();
+    return `${endpoint}?${qs}`;
+  }
+
+  private async checkOnChainQuest(quest: QuestType, userAddr: string) {
+    const data = quest.value;
+    if (
+      data.actions &&
+      !data.actions[0]?.minUsdTotal &&
+      !data.actions[0]?.contracts
+    ) {
+      const ok = await this.checkTokenBalanceQuest(
+        data.actions[0].tokens[0].address,
+        userAddr,
+        data.actions[0].methodSignatures,
+        data.actions[0].tokens[0].minAmountToken
+      );
+      if (ok) return true;
+      return false;
     }
 
-    const fee256 = hexToBigInt(feeWord); // всё 256
-    const fee = Number(fee256 & BigInt(0xffffff)); // 24 бита
+    const chain = quest.value.chain || 'Soneium';
 
-    const tickL256 = hexToBigInt(tickLWord);
-    const raw24 = Number(tickL256 & BigInt(0xffffff));
-    const signBit = 1 << 23;
-    let tickLower = raw24;
-    if ((raw24 & signBit) !== 0) {
-      tickLower = raw24 - (1 << 24);
+    const c = await this.getCampaignById(quest.campaign_id);
+
+    const txs = await this.getUserTransactions(chain, userAddr, c);
+    if (!txs.length) return false;
+    const txnsToAddress = txs.filter(
+      (tx) =>
+        tx.to.toLowerCase() === quest.value.contracts[0].toLowerCase() ||
+        tx.to.toLowerCase() === quest.value.contracts[1]?.toLowerCase() ||
+        tx.to.toLowerCase() === quest.value.contracts[2]?.toLowerCase()
+    );
+    console.log('--txnsToAddress.length---->', txnsToAddress.length);
+
+    for (const tx of txnsToAddress) {
+      if (!data.minAmountUSD && !data.actions && data.methodSignatures) {
+        const ok = await this.checkBuyNFTQuest(tx, data.methodSignatures);
+        if (ok) return true;
+        return false;
+      }
+      if (quest.value.type === 'checkInputData') {
+        if (
+          tx.input.startsWith('0xac9650d8') &&
+          tx.input
+            .toLowerCase()
+            .includes('2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase())
+        ) {
+          return true;
+        }
+      }
+      const ok = await this.parseOnchainTx(tx, data.actions);
+      if (ok) return true;
     }
 
-    const tickU256 = hexToBigInt(tickUWord);
-    const raw24U = Number(tickU256 & BigInt(0xffffff));
-    let tickUpper = raw24U;
-    if ((raw24U & signBit) !== 0) {
-      tickUpper = raw24U - (1 << 24);
+    return false;
+  }
+
+  private async checkTokenBalanceQuest(
+    tokenAddress: string,
+    userAddress: string,
+    abi: any,
+    amount: number
+  ) {
+    const contract = new ethers.Contract(tokenAddress, abi, soneiumProvider);
+
+    const balance = abi[0].includes('uint256 id)')
+      ? await contract.balanceOf(userAddress, 0)
+      : await contract.balanceOf(userAddress);
+
+    if (+balance.toString() < amount) {
+      return false;
+    }
+    return true;
+  }
+
+  async parseExternalDelegateCall(rawInput: string): Promise<any> {
+    const delegateABI = [
+      'function externalDelegateCall(address target, bytes data)',
+    ];
+
+    const iface = new ethers.Interface(delegateABI);
+
+    let parsedTx;
+    try {
+      parsedTx = iface.parseTransaction({ data: rawInput });
+    } catch (err) {
+      console.log('Ошибка parseTransaction:', err);
+      return;
     }
 
-    const amount0Desired = hexToBigInt(amt0Word);
-    const amount1Desired = hexToBigInt(amt1Word);
-    const amount0Min = hexToBigInt(amt0MinW);
-    const amount1Min = hexToBigInt(amt1MinW);
-    const deadline = hexToBigInt(ddlWord);
+    const callData = parsedTx.args[1] as string;
 
-    const recipient = parseAddress(recWord);
+    const result = this.parseTokensAndAmount(callData);
+    return result;
+  }
+
+  parseTokensAndAmount(hexData: string) {
+    const data = hexData.startsWith('0x') ? hexData.slice(2) : hexData;
+
+    const tokenAHex = '2cae934a1e84f693fbb78ca5ed3b0a6893259441';
+    const tokenBHex = '4200000000000000000000000000000000000006';
+    const tokenCHex = '570f09AC53b96929e3868f71864E36Ff6b1B67D7';
+
+    if (hexData.includes(tokenCHex)) {
+      const idxA = data.indexOf(tokenAHex.toLowerCase());
+      const idxB = data.indexOf(tokenBHex.toLowerCase());
+      const next32 = data.slice(
+        idxB + tokenBHex.length + 215,
+        idxB + tokenBHex.length + 226
+      );
+      if (!next32) {
+        return null;
+      }
+      const amount = BigInt('0x' + next32);
+
+      return {
+        tokenA: '0x' + tokenAHex,
+        tokenB: '0x' + tokenBHex,
+        amount,
+      };
+    }
+    const idxA = data.indexOf(tokenAHex.toLowerCase());
+    const idxB = data.indexOf(tokenBHex.toLowerCase());
+
+    if (idxA === -1 || idxB === -1) {
+      return null;
+    }
+
+    const next32 = data.slice(
+      idxB + tokenBHex.length + 215,
+      idxB + tokenBHex.length + 226
+    );
+    if (!next32) {
+      return null;
+    }
+    const amount = BigInt('0x' + next32);
 
     return {
-      methodId,
-      token0,
-      token1,
-      fee,
-      tickLower,
-      tickUpper,
-      amount0Desired,
-      amount1Desired,
-      amount0Min,
-      amount1Min,
-      recipient,
-      deadline,
+      // tokenA: '0x' + tokenAHex,
+      // tokenB: '0x' + tokenBHex,
+      amount,
     };
   }
 
-  async extractMintAmounts(
-    multicallInput: string[]
-  ): Promise<{ astrAmount: string } | null> {
-    console.log('------>', multicallInput);
-    if (!multicallInput || multicallInput.length === 0) {
-      Logger.error('extractMintAmounts: пустой массив входных данных');
-      return null;
-    }
-    const mintData = multicallInput[0];
-    const parsed = this.parseMintManual(mintData);
-    if (!parsed) {
-      Logger.error('extractMintAmounts: не удалось распарсить mint данные');
-      return null;
-    }
-
-    const ASTR_ADDRESS = '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441';
-
-    let astrAmountBN: bigint | null = null;
-
-    if (parsed.token0.toLowerCase() === ASTR_ADDRESS) {
-      astrAmountBN = parsed.amount0Desired;
-    } else if (parsed.token1.toLowerCase() === ASTR_ADDRESS) {
-      astrAmountBN = parsed.amount1Desired;
-    }
-
-    if (!astrAmountBN) {
-      Logger.error('extractMintAmounts: не найдено значение для ASTR');
-      return null;
-    }
-    if (astrAmountBN) {
-      console.log(astrAmountBN, 'parsed---->', parsed);
-    }
-    const astrAmount = ethers.formatUnits(astrAmountBN, 18);
-
-    Logger.debug(`Извлечены суммы: ASTR = ${astrAmount}`);
-    return { astrAmount };
-  }
-
-  private async decodeSingleTransaction(
-    parsedTx: ethers.TransactionDescription,
-    questTask: QuestTask,
-    address?: string
-  ): Promise<boolean> {
-    const isValid = await this.validateAbiEquals(parsedTx, questTask);
-    if (!isValid) {
-      return false;
-    }
-    if (parsedTx.name === 'deposit') {
-      const amountBN: bigint = parsedTx.args[0];
-      const astrAmount = ethers.formatUnits(amountBN, 6);
-      const minBN = questTask.minAmountUSD || '1000000';
-
-      if (+astrAmount < +minBN) {
-        Logger.debug(`Deposit: ${amountBN} < required ${minBN}`);
-        return false;
+  private async checkBuyNFTQuest(tx: any, abi: any) {
+    for (const abiStr of abi) {
+      const iface = new ethers.Interface([abiStr]);
+      let parsed;
+      try {
+        parsed = iface.parseTransaction({ data: tx.input });
+      } catch (e) {
+        continue;
       }
+      if (!parsed) continue;
 
-      return true;
-    }
-
-    if (parsedTx.name === 'mint') {
-      const params = parsedTx.args[0];
-      if (!params) return false;
-
-      const token0 = params.token0?.toLowerCase();
-      const token1 = params.token1?.toLowerCase();
-
-      const ASTR_ADDRESS = '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441';
-      const SECOND_ADDRESS = questTask.abi_equals[0][1];
-
-      if (token0 !== ASTR_ADDRESS && token1 !== ASTR_ADDRESS) {
-        Logger.debug(`Ни token0, ни token1 не равен ASTR`);
-        return false;
-      }
-
-      const amount0Desired = params.amount0Desired || 0;
-      const amount1Desired = params.amount1Desired || 0;
-
-      let astrAmountBN = null;
-      let ethAmountBN = null;
-
-      if (token0 === ASTR_ADDRESS) {
-        astrAmountBN = amount0Desired;
-      }
-      if (token1 === ASTR_ADDRESS) {
-        astrAmountBN = amount1Desired;
-      }
-      if (token0 === SECOND_ADDRESS) {
-        ethAmountBN = amount0Desired;
-      }
-      if (token1 === SECOND_ADDRESS) {
-        ethAmountBN = amount1Desired;
-      }
-
-      if (!astrAmountBN) {
-        Logger.debug(`Не нашли amount, соответствующий ASTR`);
-        return false;
-      }
-
-      const astrAmount = ethers.formatUnits(astrAmountBN || 0, 18);
-      const ethAmount = ethers.formatUnits(ethAmountBN || 0, 18);
-
-      Logger.debug(`Astr amount: ${astrAmount}, Eth amount: ${ethAmount}`);
-
-      const astrUSDValue = await this.getUSDValue('astroport', astrAmount);
-      const ethUSDValue = await this.getUSDValue('ethereum', ethAmount);
-      Logger.debug(`Astr value: ${astrUSDValue}, Eth value: ${ethUSDValue}`);
-
-      const totalValue = astrUSDValue + ethUSDValue;
-
-      if (totalValue < (questTask.minAmountUSD || 20)) {
-        Logger.debug(
-          `Сумма ASTR в ликвидности (${totalValue} USD) меньше, чем нужно (${questTask.minAmountUSD} USD)`
-        );
-        return false;
-      }
-      return true;
-    }
-
-    if (parsedTx.args?.length > 0) {
-      const firstArg = parsedTx.args[0];
-      if (Array.isArray(firstArg) && firstArg.length > 0) {
-        const pathBytes = firstArg[0];
-        if (typeof pathBytes === 'string' && pathBytes.startsWith('0x')) {
-          const pathAddresses = this.extractAddressesFromPath(pathBytes);
-          Logger.debug(`Path addresses: ${pathAddresses}`);
-        }
-      }
-    }
-
-    if (questTask.minAmountUSD) {
-      const firstArg = parsedTx.args[0];
-      if (Array.isArray(firstArg)) {
-        const amountIn = firstArg[firstArg.length - 2];
-        if (amountIn) {
-          const amountInETH = ethers.formatEther(amountIn);
-          const usdAmount = await this.getUSDValue('ethereum', amountInETH);
-          if (usdAmount < questTask.minAmountUSD) {
-            Logger.debug(
-              `Сумма свапа (${usdAmount}) меньше требуемого минимума (${questTask.minAmountUSD} USD)`
-            );
-            return false;
-          }
-          Logger.debug(
-            `Сумма свапа (${usdAmount}) больше требуемого минимума (${questTask.minAmountUSD} USD)`
-          );
-          return true;
-        }
-      }
-    }
-  }
-
-  private async validateAbiEquals(
-    parsedTx: ethers.TransactionDescription,
-    questTask: QuestTask
-  ): Promise<boolean> {
-    if (!questTask.abi_equals || !Array.isArray(questTask.abi_equals)) {
-      return true;
-    }
-
-    const realArgs = Array.from(parsedTx.args || []);
-
-    for (const conditionArr of questTask.abi_equals) {
-      let isConditionMatched = true;
-      for (let i = 0; i < conditionArr.length; i++) {
-        const expected = conditionArr[i];
-        if (expected === 0 || expected === undefined) {
-          continue;
-        }
-
-        if (typeof expected === 'string') {
-          if (
-            !realArgs[0][i] ||
-            realArgs[0][i].toLowerCase() !== expected.toLowerCase()
-          ) {
-            isConditionMatched = false;
-            break;
-          }
-        } else {
-          if (realArgs[0][i].toString() !== expected.toString()) {
-            isConditionMatched = false;
-            break;
-          }
-        }
-      }
-
-      if (isConditionMatched) {
-        Logger.debug(`Сошлось по условию: ${JSON.stringify(conditionArr)}`);
+      if (parsed.name === 'buy') {
         return true;
       }
     }
-
     return false;
   }
 
-  private extractAddressesFromPath(path: string): string[] {
-    const addresses: string[] = [];
-    const pathWithout0x = path.startsWith('0x') ? path.slice(2) : path;
-
-    const addressLength = 40;
-    const feeLength = 6;
-    const stepLength = addressLength + feeLength;
-    const numSteps = Math.floor(pathWithout0x.length / stepLength);
-
-    for (let i = 0; i < numSteps; i++) {
-      const start = i * stepLength;
-      const end = start + addressLength;
-      const address = '0x' + pathWithout0x.slice(start, end);
-      if (ethers.isAddress(address)) {
-        addresses.push(address.toLowerCase());
-      }
-    }
-
-    const lastStart = numSteps * stepLength;
-    if (lastStart + addressLength <= pathWithout0x.length) {
-      const address =
-        '0x' + pathWithout0x.slice(lastStart, lastStart + addressLength);
-      if (ethers.isAddress(address)) {
-        addresses.push(address.toLowerCase());
-      }
-    }
-
-    return addresses;
+  private async parseOnchainTx(tx: any, actions: any[]): Promise<boolean> {
+    const rawInput = tx.input || '';
+    if (!rawInput.startsWith('0x')) return false;
+    const ok = await this.parseOnchainData(rawInput, actions, tx);
+    return ok;
   }
 
-  private async validateLogConditions(
-    args: any,
-    questTask: QuestTask
+  private async parseOnchainData(
+    hexData: string,
+    actions: any[],
+    parentTx: any
   ): Promise<boolean> {
-    if (questTask.id === 'quest6') {
-      return true;
+    for (const action of actions) {
+      const signatures: string[] = action.methodSignatures || [];
+      for (const sig of signatures) {
+        let parsedTx: ethers.TransactionDescription | null = null;
+        try {
+          const iface = new ethers.Interface([sig]);
+          parsedTx = iface.parseTransaction({ data: hexData });
+        } catch (err) {
+          continue;
+        }
+
+        if (!parsedTx) {
+          continue;
+        }
+        const methodName = parsedTx.name.toLowerCase();
+        if (methodName === 'multicall') {
+          const subcalls: string[] = parsedTx.args[0];
+          let subcallSuccess = false;
+
+          for (const subData of subcalls) {
+            const ok = await this.parseOnchainData(subData, actions, parentTx);
+            if (ok) {
+              subcallSuccess = true;
+              break;
+            }
+          }
+
+          if (subcallSuccess) {
+            return true;
+          } else {
+            continue;
+          }
+        }
+        if (methodName === 'depositTokenDelegate') {
+          const eventOk = await this.parseNeemoDepositEvent(parentTx.hash);
+          if (eventOk) {
+            return true;
+          }
+        }
+        if (methodName === 'swap') {
+          let totalUsdValue = 0;
+          const request = parsedTx.args[0];
+          const routes = request[3];
+          const lastToken = request[2][0];
+          if (
+            lastToken.toLowerCase() !==
+            '0x2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase()
+          ) {
+            return false;
+          }
+
+          for (const route of routes) {
+            const tokenAddr = route[0] as string;
+            if (
+              tokenAddr.toLowerCase() !==
+              '0x4200000000000000000000000000000000000006'
+            ) {
+              continue;
+            }
+            const amountBN = route[1] as bigint;
+            const usdValueForRoute = await this.convertToUSD(
+              tokenAddr.toLowerCase(),
+              parentTx.value
+            );
+
+            totalUsdValue = usdValueForRoute;
+          }
+
+          Logger.debug(`Total swap USD value: ${totalUsdValue}`);
+          if (totalUsdValue >= (action.minUsdTotal || 0)) {
+            return true;
+          }
+        } else {
+          const sumUSD = await this.checkActionTokens(
+            action,
+            parsedTx,
+            parentTx
+          );
+          if (sumUSD >= (action.minUsdTotal || 0)) {
+            return true;
+          } else {
+            continue;
+          }
+        }
+      }
     }
 
-    if (questTask.id === 'quest7') {
-      return true;
+    return false;
+  }
+
+  private async parseNeemoDepositEvent(txHash: string): Promise<boolean> {
+    const receipt = await soneiumProvider.getTransactionReceipt(txHash);
+    if (!receipt || !receipt.logs) return false;
+
+    const eventAbi = [
+      'event LogDepositTokenDelegate(address indexed user, address indexed delegateTo, uint256 tokenAmount, uint256 lstAmount)',
+    ];
+    const iface = new ethers.Interface(eventAbi);
+
+    for (const log of receipt.logs) {
+      try {
+        const parsedLog = iface.parseLog(log);
+        if (parsedLog.name === 'LogDepositTokenDelegate') {
+          return true;
+        }
+      } catch (e) {
+        continue;
+      }
     }
     return false;
   }
 
-  private async getUSDValue(token: string, amount: string): Promise<number> {
-    try {
-      const tokenId = this.tokenToCoingeckoId[token.toLowerCase()];
-      if (!tokenId) {
-        Logger.warn(`No CoinGecko ID found for token: ${token}`);
-        return 0;
+  private async checkActionTokens(
+    action: any,
+    parsedTx: ethers.TransactionDescription,
+    rawTx: any
+  ): Promise<number> {
+    let totalUsd = 0;
+    const actualTokens: { address: string; amount: bigint }[] = [];
+
+    if (parsedTx.signature.includes('supplyCollateralAndBorrow')) {
+      const borrowAmountBN = parsedTx.args[2] as bigint;
+      const tokenAddr = (parsedTx.args[3] as string).toLowerCase();
+
+      const allowedCollaterals = [
+        '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369'.toLowerCase(),
+        '0x4200000000000000000000000000000000000006'.toLowerCase(),
+      ];
+      if (allowedCollaterals.includes(tokenAddr)) {
+        const usdVal = await this.convertToUSD(
+          '0x2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase(),
+          borrowAmountBN
+        );
+        return usdVal;
       }
-
-      const price = await this.priceService.getTokenPrice(tokenId);
-
-      if (!price) {
-        Logger.warn(`No price data found for token: ${tokenId}`);
-        return 0;
-      }
-
-      return parseFloat(amount) * price;
-    } catch (error) {
-      Logger.error(`Error in getUSDValue: ${error.message}`);
-      return 0;
     }
+
+    if (!action.tokens && action.minUsdTotal && action.methodSignatures) {
+      const tokenAmountBN = parsedTx.args[0] as bigint;
+      const usdVal = await this.convertToUSD(
+        '0x2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase(),
+        tokenAmountBN
+      );
+      return usdVal;
+    }
+
+    for (const tokenDef of action.tokens || []) {
+      const tokenAddr = (tokenDef.address || '').toLowerCase();
+      let amountBN = 0n;
+      const idx = tokenDef.paramIndex;
+      const tokenIdx = tokenDef.paramIndexToken;
+
+      if (idx === undefined || idx === null) continue;
+
+      let argVal;
+      let tokenVal;
+      if (Array.isArray(parsedTx.args[0])) {
+        argVal = parsedTx.args[0][idx];
+        if (Array.isArray(parsedTx.args[0][tokenIdx])) {
+          tokenVal = parsedTx.args[0][tokenIdx][1];
+        }
+        if (tokenDef.paramIndex && tokenDef.paramIndex2) {
+          argVal = parsedTx.args[0][tokenDef.paramIndex2];
+          actualTokens.push({ address: tokenDef.address, amount: argVal });
+        } else {
+          tokenVal = parsedTx.args[0][tokenIdx].includes(tokenDef.address)
+            ? tokenDef.address
+            : parsedTx.args[0][tokenIdx];
+        }
+      } else {
+        argVal = parsedTx.args[idx];
+        tokenVal = parsedTx.args[tokenIdx];
+        if (Array.isArray(tokenVal)) {
+          tokenVal = parsedTx.args[tokenIdx][0][1];
+        }
+      }
+      if (!tokenIdx && !tokenVal) {
+        actualTokens.push({ address: tokenDef.address, amount: argVal });
+      }
+      if (
+        tokenVal &&
+        tokenVal.toString().toLowerCase() !== tokenAddr.toLowerCase()
+      )
+        continue;
+      if (!argVal) continue;
+      if (typeof argVal === 'bigint') {
+        amountBN = argVal;
+      }
+      actualTokens.push({ address: tokenVal, amount: amountBN });
+    }
+
+    if (action.orderedTokens) {
+      for (let i = 0; i < action.tokens.length; i++) {
+        const actual = actualTokens[i];
+        if (!actual) return 0;
+        const def = action.tokens[i];
+        if (
+          action.tokens[i].paramIndexToken ===
+          action.tokens[i + 1]?.paramIndexToken
+        ) {
+          if (
+            !parsedTx.args[0][action.tokens[i].paramIndexToken]
+              .toLowerCase()
+              .includes(action.tokens[i].address.toLowerCase()) ||
+            !parsedTx.args[0][action.tokens[i + 1].paramIndexToken]
+              .toLowerCase()
+              .includes(action.tokens[i + 1].address.toLowerCase().slice(2))
+          ) {
+            continue;
+          }
+          const token0Index = parsedTx.args[0][
+            action.tokens[i].paramIndexToken
+          ].indexOf(action.tokens[i].address);
+          const token1Index = parsedTx.args[0][
+            action.tokens[i + 1].paramIndexToken
+          ].indexOf(action.tokens[i + 1]?.address);
+          if (token0Index < token1Index) {
+            return 0;
+          }
+          const usdVal = await this.convertToUSD(
+            action.tokens[i].address.toLowerCase(),
+            actual.amount
+          );
+          return (totalUsd += usdVal);
+        } else {
+          if (!actual) return 0;
+          if (def.address.toLowerCase() !== actual.address.toLowerCase()) {
+            return 0;
+          }
+          if ((def.minAmountToken || 0) > 0) {
+            //свериться с минимальным кол-вом если есть
+          }
+          const usdVal = await this.convertToUSD(actual.address, actual.amount);
+          totalUsd += usdVal;
+        }
+      }
+    } else {
+      for (const def of action.tokens) {
+        const found = actualTokens.find(
+          (t) =>
+            t.address && t.address.toLowerCase() === def.address.toLowerCase()
+        );
+        if (!found) {
+          return 0;
+        }
+        if ((def.minAmountToken || 0) > 0) {
+          // 466 same
+        }
+        const usdVal = await this.convertToUSD(found.address, found.amount);
+        totalUsd += usdVal;
+      }
+    }
+    return totalUsd;
   }
 
-  async getQuestValue(id: string): Promise<any> {
-    const quest: QuestType = await this.questRepository.getQuest(id);
-    return quest.value;
+  private async convertToUSD(
+    tokenAddr: string,
+    amountBN: bigint
+  ): Promise<number> {
+    if (!amountBN || amountBN === 0n) return 0;
+    const decimals =
+      tokenAddr.toLowerCase() ===
+        '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369' ||
+        tokenAddr.toLowerCase() ===
+        '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
+        ? 6
+        : 18;
+    const floatAmount = parseFloat(ethers.formatUnits(amountBN, decimals));
+    console.log('floatAmount------>', floatAmount);
+    if (
+      tokenAddr.toLowerCase() ===
+      '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369' ||
+      tokenAddr.toLowerCase() ===
+      '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
+    ) {
+      return floatAmount * 1;
+    }
+    const coingeckoKey =
+      this.tokenToCoingeckoId[tokenAddr.toLowerCase()] || 'ethereum';
+    const price = await this.priceService.getTokenPrice(coingeckoKey);
+    if (!price) return 0;
+    return floatAmount * price;
   }
 
-  async getQuest(id: string): Promise<QuestType> {
-    const quest: QuestType = await this.questRepository.getQuest(id);
-    return quest;
+  private async getUserTransactions(chain: any, addr: string, campaign: any) {
+    if (chain === 'Soneium' || chain === 1868) {
+      console.log('------>', 123);
+      const now = Math.floor(Date.now() / 1000);
+      const startedAt = Math.floor(campaign.started_at / 1000);
+      const ignoreStart = campaign.ignore_campaign_start;
+      let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
+      if (startTs < 0) startTs = 0;
+      const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=1000&sort=desc`;
+      console.log('scout------>', url);
+      const r = await fetch(url);
+      if (!r.ok) return [];
+      const data = await r.json();
+      if (!data || !Array.isArray(data.result)) return [];
+      return data.result;
+    }
+    if (chain === 146) {
+      const now = Math.floor(Date.now() / 1000);
+
+      const startedAt = Math.floor(
+        new Date(campaign.started_at + 'Z').getTime() / 1000
+      );
+      const ignoreStart = campaign.ignore_campaign_start;
+      let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
+      console.log('-startedAt----->', startedAt);
+      console.log('-startTs----->', startTs);
+      if (startTs < 0) startTs = 0;
+      console.log('Etherscan startTs:', startTs);
+      const apiKey = this.configService.get('ETHERSCAN_API_KEY') || '';
+      const urlForBlock = `https://api.sonicscan.org/api?module=block&action=getblocknobytime&timestamp=${startTs}&closest=before&apikey=${apiKey}`;
+      const rBlock = await fetch(urlForBlock);
+      if (!rBlock.ok) return [];
+      const dataBlock = await rBlock.json();
+      if (!dataBlock.result) {
+        throw new Error('No block hash by ts');
+      }
+      const block = dataBlock.result;
+      const url = `https://api.sonicscan.org/api?module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`;
+      console.log('scan------>', url);
+      console.log('Etherscan URL:', url);
+      const r = await fetch(url);
+      if (!r.ok) return [];
+      const data = await r.json();
+      if (!data || !Array.isArray(data.result)) return [];
+      return data.result;
+    }
+
+    return [];
+  }
+
+  async getSignedMintData(idOrSlug: string, userAddress: string) {
+    const campaign = await this.campaignService.getCampaignByIdOrSlug(idOrSlug);
+    if (!campaign) {
+      throw new BadRequestException('Campaign not found');
+    }
+    if (!campaign.pyramid_required) {
+      throw new BadRequestException(
+        'Campaign does not require minting Pyramid'
+      );
+    }
+    const campaignStatus = await this.campaignService.getCampaignStatus(
+      campaign.id,
+      userAddress
+    );
+    if (campaignStatus.status === 'completed') {
+      throw new BadRequestException('Campaign already completed');
+    }
+
+    const chainId = this.configService.getOrThrow('SIGN_DOMAIN_CHAIN_ID');
+
+    const signDomain = {
+      name: this.configService.getOrThrow('SIGN_DOMAIN_NAME'),
+      version: this.configService.getOrThrow('SIGN_DOMAIN_VERSION'),
+      chainId,
+      verifyingContract: this.configService.getOrThrow(
+        'PYRAMID_CONTRACT_ADDRESS'
+      ),
+    };
+
+    const completedQuests =
+      await this.questRepository.getCompletedQuestsByUserInCampaign(
+        campaign.id,
+        userAddress
+      );
+
+    if (!completedQuests.length) {
+      throw new BadRequestException(
+        'No completed quests found for this campaign'
+      );
+    }
+
+    if (completedQuests.length !== campaign.quests.length) {
+      throw new BadRequestException('All quests must be completed');
+    }
+
+    const user = await this.userService.findByAddress(userAddress);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const transactions = completedQuests
+      .filter((quest) => !!quest.transaction_hash)
+      .map<ITransactionData>((quest) => {
+        return {
+          txHash: quest.transaction_hash,
+          networkChainId: chainId,
+        };
+      });
+
+    const recipients: IFeeRecipient[] = user.ref_owner
+      ? [
+        {
+          recipient: user.ref_owner, //ref_owner is the address of the user who referred the user
+          BPS: REF_OWNER_BPS,
+        },
+      ]
+      : [];
+
+    const pyramidType =
+      campaign.type === 'premium' ? PyramidType.GOLD : PyramidType.BASIC;
+
+    const metadata = {
+      name: campaign.name,
+      image: PYRAMID_IMAGE_URI[pyramidType],
+      attributes: [
+        { trait_type: 'Quest ID', value: campaign.id },
+        { trait_type: 'Type', value: campaign.type },
+        { trait_type: 'Title', value: campaign.name },
+        { trait_type: 'Transaction Chain', value: 'Soneium' },
+        { trait_type: 'Transaction Count', value: transactions.length },
+        { trait_type: 'Community', value: campaign.project_name },
+        ...(campaign.tags[0]
+          ? [{ trait_type: 'Tag', value: campaign.tags[0] }]
+          : []),
+        { trait_type: 'Difficulty', value: campaign.difficulty },
+      ],
+    };
+
+    const fileName = `${campaign.id
+      }-${userAddress.toLowerCase()}-metadata.json`;
+    const keyvalues = {
+      campaignId: campaign.id,
+      userAddress: userAddress.toLowerCase(),
+    };
+
+    const metadataURI = await this.ipfsService.uploadJson(
+      metadata,
+      fileName,
+      keyvalues
+    );
+
+    const hasMintedNfts = await this.hasMintedNfts(
+      userAddress,
+      Object.values(ARKADA_NFTS)
+    );
+
+    const highestNftMultiplierBPS = Object.values(ARKADA_NFTS).reduce(
+      (acc, nft) => {
+        // Only consider multiplier if NFT is minted
+        if (hasMintedNfts[nft]) {
+          return Math.max(acc, ARKADA_NFTS_MULTIPLIER_BPS[nft]);
+        }
+        return acc;
+      },
+      0
+    );
+
+    // mint price depends on campaign type
+    const mintPrice = MINT_PRICE[pyramidType];
+
+    // reward amount is 20% of mint price
+    const rewardAmountBase =
+      (mintPrice * BigInt(USER_REWARD_BPS)) / BigInt(MAX_BPS);
+
+    // reward amount is 20% of mint price + some BPS of base rewards depending on highest NFT multiplier
+    const rewardAmount =
+      rewardAmountBase +
+      (rewardAmountBase * BigInt(highestNftMultiplierBPS)) / BigInt(MAX_BPS);
+
+    const reward: IRewardData = {
+      tokenAddress: ethers.ZeroAddress,
+      chainId: parseInt(chainId),
+      amount: rewardAmount.toString(),
+      tokenId: 0,
+      tokenType: 0,
+      rakeBps: 0,
+      factoryAddress: ethers.ZeroAddress,
+    };
+
+    const nonce = Math.floor(Date.now() / 1000); // Current timestamp as nonce
+
+    const pyramidData: IMintPyramidData = {
+      questId: campaign.id,
+      nonce,
+      price: mintPrice.toString(),
+      toAddress: userAddress,
+      walletProvider: 'metamask', // Default wallet provider
+      tokenURI: metadataURI,
+      embedOrigin: 'Arkada',
+      transactions,
+      recipients,
+      reward,
+    };
+
+    // // Get the private key for signing
+    const privateKey = this.configService.getOrThrow(
+      'PYRAMID_SIGNER_PRIVATE_KEY'
+    );
+    const wallet = new ethers.Wallet(privateKey);
+
+    // // Sign the data
+    const signature = await wallet.signTypedData(
+      signDomain,
+      SIGN_TYPES,
+      pyramidData
+    );
+
+    return {
+      data: pyramidData,
+      signature,
+    };
   }
 }
