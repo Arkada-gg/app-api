@@ -26,13 +26,14 @@ import {
   ARKADA_NFTS,
   SONEIUM_MULTICALL_ADDRESS,
 } from '../shared/constants/addresses';
+import { PyramidType } from '../shared/interfaces';
 import { soneiumProvider } from '../shared/provider';
 import { UserService } from '../user/user.service';
 import {
   ARKADA_NFTS_MULTIPLIER_BPS,
-  BASIC_QUEST_MINT_PRICE,
   MAX_BPS,
-  PREMIUM_QUEST_MINT_PRICE,
+  MINT_PRICE,
+  PYRAMID_IMAGE_URI,
   REF_OWNER_BPS,
   USER_REWARD_BPS,
 } from './constants/mint';
@@ -1138,9 +1139,12 @@ export class QuestService {
         ]
       : [];
 
+    const pyramidType =
+      campaign.type === 'premium' ? PyramidType.GOLD : PyramidType.BASIC;
+
     const metadata = {
       name: campaign.name,
-      image: '',
+      image: PYRAMID_IMAGE_URI[pyramidType],
       attributes: [
         { trait_type: 'Quest ID', value: campaign.id },
         { trait_type: 'Type', value: campaign.type },
@@ -1186,10 +1190,7 @@ export class QuestService {
     );
 
     // mint price depends on campaign type
-    const mintPrice =
-      campaign.type === 'basic'
-        ? BASIC_QUEST_MINT_PRICE
-        : PREMIUM_QUEST_MINT_PRICE;
+    const mintPrice = MINT_PRICE[pyramidType];
 
     // reward amount is 20% of mint price
     const rewardAmountBase =
