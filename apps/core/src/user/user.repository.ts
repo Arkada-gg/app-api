@@ -382,8 +382,9 @@ export class UserRepository {
     endAt: string | undefined,
     excludeRef: boolean,
     limit: number,
+    sortBy: 'points' | 'pyramids',
     userAddress?: string,
-    includeRefWithTwitterScore?: boolean
+    includeRefWithTwitterScore?: boolean,
   ): Promise<{
     top: Array<{
       address: string;
@@ -392,6 +393,8 @@ export class UserRepository {
       twitter: string | null;
       points: number;
       campaigns_completed: number;
+      gold_pyramids: number,
+      basic_pyramids: number,
       rank: number;
     }>;
   }> {
@@ -404,72 +407,78 @@ export class UserRepository {
 
     const client = this.dbService.getClient();
 
-    const cte = `
-      WITH user_points_aggregated AS (
-        SELECT
-          up.user_address,
-          COALESCE(SUM(up.points), 0) AS total_points
-        FROM user_points up
-        JOIN users u
-          ON u.address = up.user_address
-        WHERE up.created_at BETWEEN $1 AND $2
-          AND (
-            ${!excludeRef
-        ? 'TRUE'
-        : `
-              (
-                up.point_type != 'referral'
-                OR (
-                  ${includeRefWithTwitterScore ? 'TRUE' : 'FALSE'}
-                  AND COALESCE(u.twitter_score, 0) > 0
-                  AND up.point_type = 'referral'
-                )
-              )
-            `
-      }
+    const cte = `WITH user_points_aggregated AS (
+    SELECT
+      up.user_address,
+      COALESCE(SUM(up.points), 0) AS total_points
+    FROM user_points up
+    JOIN users u ON u.address = up.user_address
+    WHERE up.created_at BETWEEN $1 AND $2
+      AND (
+        ${!excludeRef ? 'TRUE' : `(
+          up.point_type != 'referral' OR (
+            ${includeRefWithTwitterScore ? 'TRUE' : 'FALSE'}
+            AND COALESCE(u.twitter_score, 0) > 0
+            AND up.point_type = 'referral'
           )
-        GROUP BY up.user_address
-      ),
-      campaigns_completed_aggregated AS (
-        SELECT
-          cc.user_address,
-          COUNT(*) AS campaigns_completed
-        FROM campaign_completions cc
-        WHERE cc.completed_at BETWEEN $1 AND $2
-        GROUP BY cc.user_address
-      ),
-      ranked_users AS (
-        SELECT
-          u.address,
-          u.name,
-          u.avatar,
-          u.twitter,
-          COALESCE(upa.total_points, 0) AS total_points,
-          COALESCE(cca.campaigns_completed, 0) AS campaigns_completed,
-          ROW_NUMBER() OVER (ORDER BY COALESCE(upa.total_points, 0) DESC) AS rank
-        FROM users u
-        LEFT JOIN user_points_aggregated upa
-          ON u.address = upa.user_address
-        LEFT JOIN campaigns_completed_aggregated cca
-          ON u.address = cca.user_address
-        WHERE COALESCE(upa.total_points, 0) > 0
+        )`}
       )
-    `;
+    GROUP BY up.user_address
+  ),
+  campaigns_completed_aggregated AS (
+    SELECT
+      cc.user_address,
+      COUNT(*) AS campaigns_completed
+    FROM campaign_completions cc
+    WHERE cc.completed_at BETWEEN $1 AND $2
+    GROUP BY cc.user_address
+  ),
+  user_pyramids AS (
+    SELECT
+      u.address,
+      SUM((p.value->>'gold')::INTEGER) AS gold_pyramids,
+      SUM((p.value->>'basic')::INTEGER) AS basic_pyramids
+    FROM users u,
+    LATERAL jsonb_each(u.pyramids_info) AS p
+    GROUP BY u.address
+  ),
+  ranked_users AS (
+    SELECT
+      u.address,
+      u.name,
+      u.avatar,
+      u.twitter,
+      COALESCE(upa.total_points, 0) AS total_points,
+      COALESCE(cca.campaigns_completed, 0) AS campaigns_completed,
+      COALESCE(up.gold_pyramids, 0) AS gold_pyramids,
+      COALESCE(up.basic_pyramids, 0) AS basic_pyramids,
+      ROW_NUMBER() OVER (
+        ORDER BY
+          ${sortBy === 'pyramids' ? 'gold_pyramids DESC NULLS LAST, basic_pyramids DESC NULLS LAST' : 'total_points DESC'}
+      ) AS rank
+    FROM users u
+    LEFT JOIN user_points_aggregated upa ON u.address = upa.user_address
+    LEFT JOIN campaigns_completed_aggregated cca ON u.address = cca.user_address
+    LEFT JOIN user_pyramids up ON u.address = up.address
+    WHERE COALESCE(upa.total_points, 0) > 0
+  )`;
 
     const topNsql = `
-      ${cte}
-      SELECT
-        address,
-        name,
-        avatar,
-        twitter,
-        total_points,
-        campaigns_completed,
-        rank
-      FROM ranked_users
-      ORDER BY rank
-      LIMIT $3
-    `;
+    ${cte}
+    SELECT
+      address,
+      name,
+      avatar,
+      twitter,
+      total_points,
+      campaigns_completed,
+      gold_pyramids,
+      basic_pyramids,
+      rank
+    FROM ranked_users
+    ORDER BY rank
+    LIMIT $3
+  `;
 
     if (!userAddress) {
       try {
@@ -481,6 +490,8 @@ export class UserRepository {
           twitter: row.twitter,
           points: Number(row.total_points),
           campaigns_completed: Number(row.campaigns_completed),
+          gold_pyramids: Number(row.gold_pyramids),
+          basic_pyramids: Number(row.basic_pyramids),
           rank: Number(row.rank),
         }));
         return { top };
@@ -490,27 +501,25 @@ export class UserRepository {
     }
 
     const userRankSql = `
-      ${cte}
-      SELECT
-        address,
-        name,
-        avatar,
-        twitter,
-        total_points,
-        campaigns_completed,
-        rank
-      FROM ranked_users
-      WHERE address = $3
-    `;
+    ${cte}
+    SELECT
+      address,
+      name,
+      avatar,
+      twitter,
+      total_points,
+      campaigns_completed,
+      gold_pyramids,
+      basic_pyramids,
+      rank
+    FROM ranked_users
+    WHERE address = $3
+  `;
 
     try {
       const [topRes, userRes] = await Promise.all([
         client.query(topNsql, [startIso, endIso, limit]),
-        client.query(userRankSql, [
-          startIso,
-          endIso,
-          userAddress.toLowerCase(),
-        ]),
+        client.query(userRankSql, [startIso, endIso, userAddress.toLowerCase()]),
       ]);
 
       const top = topRes.rows.map((r) => ({
@@ -520,6 +529,8 @@ export class UserRepository {
         twitter: r.twitter,
         points: Number(r.total_points),
         campaigns_completed: Number(r.campaigns_completed),
+        gold_pyramids: Number(r.gold_pyramids),
+        basic_pyramids: Number(r.basic_pyramids),
         rank: Number(r.rank),
       }));
 
@@ -538,6 +549,8 @@ export class UserRepository {
           twitter: userRow.twitter,
           points: Number(userRow.total_points),
           campaigns_completed: Number(userRow.campaigns_completed),
+          gold_pyramids: Number(userRow.gold_pyramids),
+          basic_pyramids: Number(userRow.basic_pyramids),
           rank: userRank,
         });
       }
@@ -547,6 +560,7 @@ export class UserRepository {
       throw new InternalServerErrorException(error.message);
     }
   }
+
 
   async getLeaderboard(
     period: 'week' | 'month',

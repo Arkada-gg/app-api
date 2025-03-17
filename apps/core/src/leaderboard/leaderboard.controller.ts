@@ -1,11 +1,11 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiTags, ApiQuery } from '@nestjs/swagger';
+import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { UserService } from '../user/user.service';
 
 @ApiTags('Leaderboard')
 @Controller()
 export class LeaderboardController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) { }
 
   @Get('/leaderboard')
   @ApiQuery({
@@ -39,13 +39,20 @@ export class LeaderboardController {
     type: Boolean,
     example: false,
   })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    type: String,
+    example: 'points | pyramids',
+  })
   async getLeaderboard(
     @Query('startAt') startAt?: string,
     @Query('endAt') endAt?: string,
     @Query('excludeRef') excludeRef = 'false',
     @Query('limit') limit = '50',
     @Query('address') userAddr?: string,
-    @Query('includeRefWithTwitterScore') incRefTwScore = 'false'
+    @Query('includeRefWithTwitterScore') incRefTwScore = 'false',
+    @Query('sortBy') sortBy: 'points' | 'pyramids' = "points"
   ) {
     const doExcludeRef = excludeRef === 'true';
     const limitNum = parseInt(limit, 10) || 50;
@@ -56,8 +63,9 @@ export class LeaderboardController {
       endAt,
       doExcludeRef,
       limitNum,
+      sortBy,
       userAddr,
-      doIncludeRefWithTwScore
+      doIncludeRefWithTwScore,
     );
   }
 
