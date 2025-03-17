@@ -65,7 +65,9 @@ export class QuestService {
     '0x4200000000000000000000000000000000000006': 'ethereum',
     '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441': 'astar',
     '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369': 'usdc',
+    '0x29219dd400f2bf60e5a23d13be72b486d4038894': 'usdc',
     '0x60336f9296c79da4294a19153ec87f8e52158e5f': 'bifrost-voucher-astr',
+    '0xa04bc7140c26fc9bb1f36b1a604c7a5a88fb0e70': 'swapx-2',
   };
 
   constructor(
@@ -428,6 +430,7 @@ export class QuestService {
     const chain = quest.value.chain || 'Soneium';
     const c = await this.getCampaignById(quest.campaign_id);
     const txs = await this.getUserTransactions(chain, userAddr, c);
+
     if (quest.value.methodChecks && Array.isArray(quest.value.methodChecks)) {
       for (const checkItem of quest.value.methodChecks) {
         if (Array.isArray(checkItem)) {
@@ -436,34 +439,86 @@ export class QuestService {
           for (const check of checkItem) {
             try {
               const iface = new ethers.Interface([check.signature]);
-              const count = txs.reduce((acc, tx) => {
-                try {
-                  const parsed = iface.parseTransaction({ data: tx.input });
-                  return parsed &&
-                    parsed.name ===
-                      (iface.fragments[0] as ethers.FunctionFragment).name
-                    ? acc + 1
-                    : acc;
-                } catch (err) {
-                  return acc;
+              if (
+                (iface.fragments[0] as ethers.FunctionFragment).name ===
+                'externalDelegateCall'
+              ) {
+                const relevantTxs = txs.filter(
+                  (tx) =>
+                    check.contract &&
+                    tx.to.toLowerCase() === check.contract.toLowerCase()
+                );
+                if (relevantTxs.length === 0) {
+                  return false;
                 }
-              }, 0);
-              groupCount += count;
+                const count = await relevantTxs.reduce(
+                  async (prevPromise: Promise<number>, tx) => {
+                    const acc = await prevPromise;
+                    try {
+                      let usdValue = 0;
+                      if (+tx.value) {
+                        const dataStr = tx.input.toLowerCase();
+                        const tokenToCheck =
+                          '570f09ac53b96929e3868f71864e36ff6b1b67d7';
+                        if (dataStr.includes(tokenToCheck)) {
+                          usdValue = await this.convertToUSD(
+                            '0x4200000000000000000000000000000000000006',
+                            tx.value
+                          );
+                          console.log('ETH стоимость (USD):', usdValue);
+                        }
+                      }
+                      return usdValue >= check.txMinValue ? acc + 1 : acc;
+                    } catch (err) {
+                      return acc;
+                    }
+                  },
+                  Promise.resolve(0)
+                );
+                groupCount += count;
+              } else {
+                const count = txs.reduce((acc, tx) => {
+                  try {
+                    if (
+                      check.contract &&
+                      tx.to.toLowerCase() !== check.contract.toLowerCase()
+                    ) {
+                      return acc;
+                    }
+                    const parsed = iface.parseTransaction({ data: tx.input });
+                    return parsed &&
+                      parsed.name ===
+                        (iface.fragments[0] as ethers.FunctionFragment).name
+                      ? acc + 1
+                      : acc;
+                  } catch (err) {
+                    return acc;
+                  }
+                }, 0);
+                groupCount += count;
+              }
             } catch (err) {
               continue;
             }
           }
           console.log(
-            `Альтернативная группа: ${groupCount} транзакций (требуется: ${groupThreshold})`
+            `Альтернативная группа: суммарно ${groupCount} транзакций (требуется: ${groupThreshold})`
           );
           if (groupCount < groupThreshold) {
             return false;
           }
         } else {
+          // Одиночная проверка
           try {
             const iface = new ethers.Interface([checkItem.signature]);
             const count = txs.reduce((acc, tx) => {
               try {
+                if (
+                  checkItem.contract &&
+                  tx.to.toLowerCase() !== checkItem.contract.toLowerCase()
+                ) {
+                  return acc;
+                }
                 const parsed = iface.parseTransaction({ data: tx.input });
                 return parsed &&
                   parsed.name ===
@@ -495,7 +550,7 @@ export class QuestService {
           (addr: string) => tx.to.toLowerCase() === addr.toLowerCase()
         )
       );
-      console.log('------>', contractTxs);
+      console.log('Общее число транзакций по контрактам:', contractTxs.length);
       return contractTxs.length >= minTxns;
     }
   }
@@ -504,7 +559,6 @@ export class QuestService {
     quest: QuestType,
     userAddr: string
   ) {
-    const contractAddress = quest.value.contracts[0].toLowerCase();
     const abi = quest.value.actions
       ? quest.value.actions[0].methodSignatures
       : quest.value.methodSignatures;
@@ -512,7 +566,11 @@ export class QuestService {
     const iface = new ethers.Interface(abi);
     const c = await this.getCampaignById(quest.campaign_id);
 
-    const transactions = await this.getUserTransactions('Soneium', userAddr, c);
+    const transactions = await this.getUserTransactions(
+      quest.value.chain,
+      userAddr,
+      c
+    );
 
     const contractTransactions = transactions.filter(
       (tx) =>
@@ -661,6 +719,7 @@ export class QuestService {
         tx.to.toLowerCase() === quest.value.contracts[1]?.toLowerCase() ||
         tx.to.toLowerCase() === quest.value.contracts[2]?.toLowerCase()
     );
+    console.log('--txnsToAddress.length---->', txnsToAddress.length);
 
     for (const tx of txnsToAddress) {
       if (!data.minAmountUSD && !data.actions && data.methodSignatures) {
@@ -729,7 +788,26 @@ export class QuestService {
 
     const tokenAHex = '2cae934a1e84f693fbb78ca5ed3b0a6893259441';
     const tokenBHex = '4200000000000000000000000000000000000006';
+    const tokenCHex = '570f09AC53b96929e3868f71864E36Ff6b1B67D7';
 
+    if (hexData.includes(tokenCHex)) {
+      const idxA = data.indexOf(tokenAHex.toLowerCase());
+      const idxB = data.indexOf(tokenBHex.toLowerCase());
+      const next32 = data.slice(
+        idxB + tokenBHex.length + 215,
+        idxB + tokenBHex.length + 226
+      );
+      if (!next32) {
+        return null;
+      }
+      const amount = BigInt('0x' + next32);
+
+      return {
+        tokenA: '0x' + tokenAHex,
+        tokenB: '0x' + tokenBHex,
+        amount,
+      };
+    }
     const idxA = data.indexOf(tokenAHex.toLowerCase());
     const idxB = data.indexOf(tokenBHex.toLowerCase());
 
@@ -747,8 +825,8 @@ export class QuestService {
     const amount = BigInt('0x' + next32);
 
     return {
-      tokenA: '0x' + tokenAHex,
-      tokenB: '0x' + tokenBHex,
+      // tokenA: '0x' + tokenAHex,
+      // tokenB: '0x' + tokenBHex,
       amount,
     };
   }
@@ -797,7 +875,6 @@ export class QuestService {
         if (!parsedTx) {
           continue;
         }
-
         const methodName = parsedTx.name.toLowerCase();
         if (methodName === 'multicall') {
           const subcalls: string[] = parsedTx.args[0];
@@ -818,10 +895,8 @@ export class QuestService {
           }
         }
         if (methodName === 'depositTokenDelegate') {
-          // Проверяем логи
           const eventOk = await this.parseNeemoDepositEvent(parentTx.hash);
           if (eventOk) {
-            // Квест выполнен
             return true;
           }
         }
@@ -904,7 +979,6 @@ export class QuestService {
     rawTx: any
   ): Promise<number> {
     let totalUsd = 0;
-
     const actualTokens: { address: string; amount: bigint }[] = [];
 
     if (parsedTx.signature.includes('supplyCollateralAndBorrow')) {
@@ -945,12 +1019,23 @@ export class QuestService {
       let tokenVal;
       if (Array.isArray(parsedTx.args[0])) {
         argVal = parsedTx.args[0][idx];
-        tokenVal = parsedTx.args[0][tokenIdx].includes(tokenDef.address)
-          ? tokenDef.address
-          : parsedTx.args[0][tokenIdx];
+        if (Array.isArray(parsedTx.args[0][tokenIdx])) {
+          tokenVal = parsedTx.args[0][tokenIdx][1];
+        }
+        if (tokenDef.paramIndex && tokenDef.paramIndex2) {
+          argVal = parsedTx.args[0][tokenDef.paramIndex2];
+          actualTokens.push({ address: tokenDef.address, amount: argVal });
+        } else {
+          tokenVal = parsedTx.args[0][tokenIdx].includes(tokenDef.address)
+            ? tokenDef.address
+            : parsedTx.args[0][tokenIdx];
+        }
       } else {
         argVal = parsedTx.args[idx];
         tokenVal = parsedTx.args[tokenIdx];
+        if (Array.isArray(tokenVal)) {
+          tokenVal = parsedTx.args[tokenIdx][0][1];
+        }
       }
       if (!tokenIdx && !tokenVal) {
         actualTokens.push({ address: tokenDef.address, amount: argVal });
@@ -964,7 +1049,6 @@ export class QuestService {
       if (typeof argVal === 'bigint') {
         amountBN = argVal;
       }
-
       actualTokens.push({ address: tokenVal, amount: amountBN });
     }
 
@@ -1038,12 +1122,19 @@ export class QuestService {
   ): Promise<number> {
     if (!amountBN || amountBN === 0n) return 0;
     const decimals =
-      tokenAddr.toLowerCase() === '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369'
+      tokenAddr.toLowerCase() ===
+        '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369' ||
+      tokenAddr.toLowerCase() ===
+        '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
         ? 6
         : 18;
     const floatAmount = parseFloat(ethers.formatUnits(amountBN, decimals));
+    console.log('floatAmount------>', floatAmount);
     if (
-      tokenAddr.toLowerCase() === '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369'
+      tokenAddr.toLowerCase() ===
+        '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369' ||
+      tokenAddr.toLowerCase() ===
+        '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
     ) {
       return floatAmount * 1;
     }
@@ -1055,20 +1146,52 @@ export class QuestService {
   }
 
   private async getUserTransactions(chain: any, addr: string, campaign: any) {
-    if (chain !== 'Soneium' && chain !== 1868) return [];
-    const now = Math.floor(Date.now() / 1000);
-    const startedAt = Math.floor(campaign.started_at / 1000);
-    const ignoreStart = campaign.ignore_campaign_start;
-    let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
-    if (startTs < 0) startTs = 0;
-    console.log('------>', startTs);
-    const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=500&sort=desc`;
-    console.log('------>', url);
-    const r = await fetch(url);
-    if (!r.ok) return [];
-    const data = await r.json();
-    if (!data || !Array.isArray(data.result)) return [];
-    return data.result;
+    if (chain === 'Soneium' && chain === 1868) {
+      const now = Math.floor(Date.now() / 1000);
+      const startedAt = Math.floor(campaign.started_at / 1000);
+      const ignoreStart = campaign.ignore_campaign_start;
+      let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
+      if (startTs < 0) startTs = 0;
+      const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=500&sort=desc`;
+      console.log('scout------>', url);
+      const r = await fetch(url);
+      if (!r.ok) return [];
+      const data = await r.json();
+      if (!data || !Array.isArray(data.result)) return [];
+      return data.result;
+    }
+    if (chain === 146) {
+      const now = Math.floor(Date.now() / 1000);
+
+      const startedAt = Math.floor(
+        new Date(campaign.started_at + 'Z').getTime() / 1000
+      );
+      const ignoreStart = campaign.ignore_campaign_start;
+      let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
+      console.log('-startedAt----->', startedAt);
+      console.log('-startTs----->', startTs);
+      if (startTs < 0) startTs = 0;
+      console.log('Etherscan startTs:', startTs);
+      const apiKey = this.configService.get('ETHERSCAN_API_KEY') || '';
+      const urlForBlock = `https://api.sonicscan.org/api?module=block&action=getblocknobytime&timestamp=${startTs}&closest=before&apikey=${apiKey}`;
+      const rBlock = await fetch(urlForBlock);
+      if (!rBlock.ok) return [];
+      const dataBlock = await rBlock.json();
+      if (!dataBlock.result) {
+        throw new Error('No block hash by ts');
+      }
+      const block = dataBlock.result;
+      const url = `https://api.sonicscan.org/api?module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`;
+      console.log('scan------>', url);
+      console.log('Etherscan URL:', url);
+      const r = await fetch(url);
+      if (!r.ok) return [];
+      const data = await r.json();
+      if (!data || !Array.isArray(data.result)) return [];
+      return data.result;
+    }
+
+    return [];
   }
 
   async getSignedMintData(idOrSlug: string, userAddress: string) {
