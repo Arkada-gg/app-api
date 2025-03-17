@@ -78,7 +78,7 @@ export class QuestService {
     private readonly discordService: DiscordBotService,
     private readonly configService: ConfigService,
     private readonly ipfsService: IpfsService
-  ) {}
+  ) { }
 
   async getAllCompletedQuestsByUser(address: string) {
     return this.questRepository.getAllCompletedQuestsByUser(address);
@@ -413,8 +413,7 @@ export class QuestService {
           : await contract.checkDatas(userAddr);
         const streak = ethers.toBigInt(result) ? result : result.streak;
         console.log(
-          `checkDatas returned streak = ${streak.toString()} (требуется: ${
-            quest.value.methodToEqual
+          `checkDatas returned streak = ${streak.toString()} (требуется: ${quest.value.methodToEqual
           })`
         );
         if (streak < quest.value.methodToEqual) {
@@ -488,7 +487,7 @@ export class QuestService {
                     const parsed = iface.parseTransaction({ data: tx.input });
                     return parsed &&
                       parsed.name ===
-                        (iface.fragments[0] as ethers.FunctionFragment).name
+                      (iface.fragments[0] as ethers.FunctionFragment).name
                       ? acc + 1
                       : acc;
                   } catch (err) {
@@ -522,7 +521,7 @@ export class QuestService {
                 const parsed = iface.parseTransaction({ data: tx.input });
                 return parsed &&
                   parsed.name ===
-                    (iface.fragments[0] as ethers.FunctionFragment).name
+                  (iface.fragments[0] as ethers.FunctionFragment).name
                   ? acc + 1
                   : acc;
               } catch (err) {
@@ -530,8 +529,7 @@ export class QuestService {
               }
             }, 0);
             console.log(
-              `Метод ${
-                (iface.fragments[0] as ethers.FunctionFragment).name
+              `Метод ${(iface.fragments[0] as ethers.FunctionFragment).name
               }: ${count} транзакций (требуется: ${checkItem.minTxns})`
             );
             if (count < checkItem.minTxns) {
@@ -1124,7 +1122,7 @@ export class QuestService {
     const decimals =
       tokenAddr.toLowerCase() ===
         '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369' ||
-      tokenAddr.toLowerCase() ===
+        tokenAddr.toLowerCase() ===
         '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
         ? 6
         : 18;
@@ -1132,9 +1130,9 @@ export class QuestService {
     console.log('floatAmount------>', floatAmount);
     if (
       tokenAddr.toLowerCase() ===
-        '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369' ||
+      '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369' ||
       tokenAddr.toLowerCase() ===
-        '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
+      '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
     ) {
       return floatAmount * 1;
     }
@@ -1146,13 +1144,14 @@ export class QuestService {
   }
 
   private async getUserTransactions(chain: any, addr: string, campaign: any) {
-    if (chain === 'Soneium' && chain === 1868) {
+    if (chain === 'Soneium' || chain === 1868) {
+      console.log('------>', 123);
       const now = Math.floor(Date.now() / 1000);
       const startedAt = Math.floor(campaign.started_at / 1000);
       const ignoreStart = campaign.ignore_campaign_start;
       let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
       if (startTs < 0) startTs = 0;
-      const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=500&sort=desc`;
+      const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=700&sort=desc`;
       console.log('scout------>', url);
       const r = await fetch(url);
       if (!r.ok) return [];
@@ -1255,11 +1254,11 @@ export class QuestService {
 
     const recipients: IFeeRecipient[] = user.ref_owner
       ? [
-          {
-            recipient: user.ref_owner, //ref_owner is the address of the user who referred the user
-            BPS: REF_OWNER_BPS,
-          },
-        ]
+        {
+          recipient: user.ref_owner, //ref_owner is the address of the user who referred the user
+          BPS: REF_OWNER_BPS,
+        },
+      ]
       : [];
 
     const pyramidType =
@@ -1282,9 +1281,8 @@ export class QuestService {
       ],
     };
 
-    const fileName = `${
-      campaign.id
-    }-${userAddress.toLowerCase()}-metadata.json`;
+    const fileName = `${campaign.id
+      }-${userAddress.toLowerCase()}-metadata.json`;
     const keyvalues = {
       campaignId: campaign.id,
       userAddress: userAddress.toLowerCase(),
