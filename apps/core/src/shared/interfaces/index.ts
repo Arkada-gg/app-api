@@ -14,6 +14,9 @@ export interface IUser {
   ref_owner: string;
   referral_code: string;
   twitter_points: number;
+  wallet_points: number;
+  wallet_additional_points: number;
+  last_wallet_score_update?: Date;
 }
 
 export interface ITransaction {
