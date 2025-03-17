@@ -240,6 +240,9 @@ export class GetCampaignResponse {
 
   @ApiProperty({ example: 'default', description: 'тип ивента' })
   event_type: 'default' | 'mystery' | 'special';
+
+  @ApiProperty({ example: 1337, description: 'Chainid' })
+  chain_id: number;
 }
 
 export class GetCampaignWithUserStatusResponse extends GetCampaignResponse {
@@ -346,6 +349,9 @@ export class GetCampaignByIdOrSlugResponse {
 
   @ApiProperty({ example: 'default', description: 'тип ивента' })
   event_type: 'default' | 'mystery' | 'special';
+
+  @ApiProperty({ example: 1337, description: 'Chainid' })
+  chain_id: number;
 }
 
 export class GetUserResponse {

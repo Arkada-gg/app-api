@@ -64,6 +64,7 @@ export class QuestService {
     '0x4200000000000000000000000000000000000006': 'ethereum',
     '0x2cae934a1e84f693fbb78ca5ed3b0a6893259441': 'astar',
     '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369': 'usdc',
+    '0x29219dd400f2bf60e5a23d13be72b486d4038894': 'usdc',
     '0x60336f9296c79da4294a19153ec87f8e52158e5f': 'bifrost-voucher-astr',
     '0xa04bc7140c26fc9bb1f36b1a604c7a5a88fb0e70': 'swapx-2',
   };
@@ -1013,7 +1014,6 @@ export class QuestService {
             return true;
           }
         } else {
-          console.log(`${parentTx.hash}------>`, parsedTx.args);
           const sumUSD = await this.checkActionTokens(
             action,
             parsedTx,
@@ -1059,7 +1059,6 @@ export class QuestService {
     rawTx: any
   ): Promise<number> {
     let totalUsd = 0;
-
     const actualTokens: { address: string; amount: bigint }[] = [];
 
     if (parsedTx.signature.includes('supplyCollateralAndBorrow')) {
@@ -1102,6 +1101,10 @@ export class QuestService {
         argVal = parsedTx.args[0][idx];
         if (Array.isArray(parsedTx.args[0][tokenIdx])) {
           tokenVal = parsedTx.args[0][tokenIdx][1];
+        }
+        if (tokenDef.paramIndex && tokenDef.paramIndex2) {
+          argVal = parsedTx.args[0][tokenDef.paramIndex2];
+          actualTokens.push({ address: tokenDef.address, amount: argVal });
         } else {
           tokenVal = parsedTx.args[0][tokenIdx].includes(tokenDef.address)
             ? tokenDef.address
@@ -1199,12 +1202,19 @@ export class QuestService {
   ): Promise<number> {
     if (!amountBN || amountBN === 0n) return 0;
     const decimals =
-      tokenAddr.toLowerCase() === '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369'
+      tokenAddr.toLowerCase() ===
+        '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369' ||
+      tokenAddr.toLowerCase() ===
+        '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
         ? 6
         : 18;
     const floatAmount = parseFloat(ethers.formatUnits(amountBN, decimals));
+    console.log('floatAmount------>', floatAmount);
     if (
-      tokenAddr.toLowerCase() === '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369'
+      tokenAddr.toLowerCase() ===
+        '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369' ||
+      tokenAddr.toLowerCase() ===
+        '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
     ) {
       return floatAmount * 1;
     }
@@ -1220,11 +1230,8 @@ export class QuestService {
       const now = Math.floor(Date.now() / 1000);
       const startedAt = Math.floor(campaign.started_at / 1000);
       const ignoreStart = campaign.ignore_campaign_start;
-
       let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
-
       if (startTs < 0) startTs = 0;
-
       const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=500&sort=desc`;
       console.log('scout------>', url);
       const r = await fetch(url);
@@ -1235,13 +1242,26 @@ export class QuestService {
     }
     if (chain === 146) {
       const now = Math.floor(Date.now() / 1000);
-      const startedAt = Math.floor(campaign.started_at / 1000);
+
+      const startedAt = Math.floor(
+        new Date(campaign.started_at + 'Z').getTime() / 1000
+      );
       const ignoreStart = campaign.ignore_campaign_start;
       let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
+      console.log('-startedAt----->', startedAt);
+      console.log('-startTs----->', startTs);
       if (startTs < 0) startTs = 0;
       console.log('Etherscan startTs:', startTs);
-      const apiKey = '8D2AKKD43NNURV5P7AEC5SI725DPI7M27N';
-      const url = `https://api.sonicscan.org/api?module=account&action=txlist&address=${addr}&starttimestamp=${startTs}&endtimestamp=${now}&page=1&offset=500&sort=desc&apikey=${apiKey}`;
+      const apiKey = this.configService.get('ETHERSCAN_API_KEY') || '';
+      const urlForBlock = `https://api.sonicscan.org/api?module=block&action=getblocknobytime&timestamp=${startTs}&closest=before&apikey=${apiKey}`;
+      const rBlock = await fetch(urlForBlock);
+      if (!rBlock.ok) return [];
+      const dataBlock = await rBlock.json();
+      if (!dataBlock.result) {
+        throw new Error('No block hash by ts');
+      }
+      const block = dataBlock.result;
+      const url = `https://api.sonicscan.org/api?module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`;
       console.log('scan------>', url);
       console.log('Etherscan URL:', url);
       const r = await fetch(url);
