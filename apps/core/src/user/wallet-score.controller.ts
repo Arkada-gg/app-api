@@ -1,7 +1,7 @@
 import { Controller, Logger, Post, UnauthorizedException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import axios, { AxiosResponse } from 'axios';
-import { UserService } from '../user/user.service';
+import { UserService } from './user.service';
 import { GetUserId } from '../auth/user.decorator';
 
 interface DeBankBalanceResponse {
@@ -36,7 +36,7 @@ export class WalletScoreController {
     'matic',
     'op',
     'mantle',
-    'tron'
+    // 'tron'
   ];
 
   constructor(private readonly userService: UserService) { }
@@ -64,8 +64,8 @@ export class WalletScoreController {
     if (user.last_wallet_score_update) {
       const lastUpdate = new Date(user.last_wallet_score_update);
       const oneDayInMs = 24 * 60 * 60 * 1000;
-      if (now.getTime() - lastUpdate.getTime() < oneDayInMs) {
-        throw new BadRequestException('Обновление возможно только раз в день');
+      if (now.getTime() - lastUpdate.getTime() < oneDayInMs * 30) {
+        throw new BadRequestException('Обновление возможно только раз в месяц');
       }
     }
 
@@ -132,9 +132,5 @@ export class WalletScoreController {
     }
 
     return { basePoints, additionalPoints };
-  }
-
-  private async sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
