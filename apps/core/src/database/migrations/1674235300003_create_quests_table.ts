@@ -4,6 +4,14 @@ export const name = '1674235300003_create_quests_table';
 
 export async function up(client: Client): Promise<void> {
   await client.query(`
+CREATE TYPE public.quest_type AS ENUM (
+     'onchain',
+     'quiz',
+     'twitter',
+     'link',
+     'discord'
+ );
+
     CREATE TABLE IF NOT EXISTS quests (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       name VARCHAR(255) NOT NULL,

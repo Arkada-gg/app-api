@@ -10,7 +10,7 @@ import * as m9 from './1674235300011_modify_promo_column_in_campaigns';
 import * as m10 from './1674235300014_add_unique_constraint_campaign_completions';
 import * as m11 from './1674235300015_modify_short_desc_in_campaigns';
 import * as m12 from './1674235300016_recreate_quest_type_enum';
-import * as m13 from './1674235500017_add_link_quests_and_update_quest_type';
+// import * as m13 from './1674235500017_add_link_quests_and_update_quest_type';
 import * as m14 from './1674235500018_add_referral_columns_and_points_history';
 import * as m15 from './1674235500019_assign_ref_codes_to_existing_users';
 import * as m16 from './1674235500020_add_users_reffered_amount';
@@ -49,7 +49,7 @@ export const allMigrations = [
   m10,
   m11,
   m12,
-  m13,
+  // m13,
   m14,
   m15,
   m16,
