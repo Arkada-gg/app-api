@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: arkada-core
-          image: your-registry/arkada-core:latest
+          image: ${{ secrets.DOCKER_USERNAME }}/arkada-core:latest
           ports:
             - containerPort: 3000
           env:
