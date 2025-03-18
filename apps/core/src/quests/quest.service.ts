@@ -378,6 +378,7 @@ export class QuestService {
       const res = await fetch(finalUrl);
       if (!res.ok) return false;
       const data = await res.json();
+
       if (task.expression) {
         const fn = new Function('data', `return (${task.expression})(data);`);
         return !!fn(data);
