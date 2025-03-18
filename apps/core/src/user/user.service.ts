@@ -480,4 +480,23 @@ export class UserService {
     }
   }
 
+  async calculateAndSetGitScore(userAddress: string): Promise<number> {
+    const githubUsername = null;
+    const totalPoints = 0
+
+    // TODO: ....
+
+    await this.userRepository.updateGitScorePoints(userAddress, totalPoints);
+
+    return totalPoints;
+  }
+
+  async updateLastGitScoreUpdate(userAddress: string, timestamp: Date): Promise<void> {
+    try {
+      await this.userRepository.updateLastGitScoreUpdate(userAddress, timestamp);
+    } catch (error) {
+      throw new InternalServerErrorException(`updateLastGitScoreUpdate failed: ${error.message}`);
+    }
+  }
+
 }

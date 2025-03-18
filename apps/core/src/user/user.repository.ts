@@ -107,7 +107,8 @@ export class UserRepository {
         daily: +dailyPoints,
         twitter: user.twitter_points,
         base_campaign: +baseCampaignPoints,
-        wallet: user.wallet_points || 0,
+        wallet_points: user.wallet_points || 0,
+        git_points: user.git_points || 0,
         wallet_additional: user.wallet_additional_points || 0,
         total: +user.total_points,
       };
@@ -979,4 +980,36 @@ export class UserRepository {
       throw new InternalServerErrorException(error.message);
     }
   }
+
+
+  async updateGitScorePoints(userAddress: string, points: number): Promise<void> {
+    const client = this.dbService.getClient();
+
+    try {
+      const query = `
+        UPDATE users
+        SET git_score = $1
+        WHERE address = $2
+      `;
+      await client.query(query, [points, userAddress.toLowerCase()]);
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async updateLastGitScoreUpdate(userAddress: string, timestamp: Date): Promise<void> {
+    const client = this.dbService.getClient();
+
+    try {
+      const query = `
+        UPDATE users
+        SET last_git_score_update = $1
+        WHERE address = $2
+      `;
+      await client.query(query, [timestamp, userAddress.toLowerCase()]);
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
 }
