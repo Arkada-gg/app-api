@@ -1294,33 +1294,35 @@ export class QuestService {
       keyvalues
     );
 
-    const hasMintedNfts = await this.hasMintedNfts(
-      userAddress,
-      Object.values(ARKADA_NFTS)
-    );
-
-    const highestNftMultiplierBPS = Object.values(ARKADA_NFTS).reduce(
-      (acc, nft) => {
-        // Only consider multiplier if NFT is minted
-        if (hasMintedNfts[nft]) {
-          return Math.max(acc, ARKADA_NFTS_MULTIPLIER_BPS[nft]);
-        }
-        return acc;
-      },
-      0
-    );
-
     // mint price depends on campaign type
     const mintPrice = MINT_PRICE[pyramidType];
 
-    // reward amount is 20% of mint price
-    const rewardAmountBase =
+    // reward amount is 0% of mint price, was 20% erlier
+    let rewardAmount =
       (mintPrice * BigInt(USER_REWARD_BPS)) / BigInt(MAX_BPS);
 
-    // reward amount is 20% of mint price + some BPS of base rewards depending on highest NFT multiplier
-    const rewardAmount =
-      rewardAmountBase +
-      (rewardAmountBase * BigInt(highestNftMultiplierBPS)) / BigInt(MAX_BPS);
+    if (rewardAmount > BigInt(0)) {
+      const hasMintedNfts = await this.hasMintedNfts(
+        userAddress,
+        Object.values(ARKADA_NFTS)
+      );
+
+      const highestNftMultiplierBPS = Object.values(ARKADA_NFTS).reduce(
+        (acc, nft) => {
+          // Only consider multiplier if NFT is minted
+          if (hasMintedNfts[nft]) {
+            return Math.max(acc, ARKADA_NFTS_MULTIPLIER_BPS[nft]);
+          }
+          return acc;
+        },
+        0
+      );
+
+      // reward amount is 20% of mint price + some BPS of base rewards depending on highest NFT multiplier
+      rewardAmount =
+        rewardAmount +
+        (rewardAmount * BigInt(highestNftMultiplierBPS)) / BigInt(MAX_BPS);
+    }
 
     const reward: IRewardData = {
       tokenAddress: ethers.ZeroAddress,
