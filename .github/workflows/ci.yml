@@ -31,34 +31,34 @@ jobs:
           push: true
           tags: docker.io/${{ secrets.DOCKER_USERNAME }}/arkada-core:${{ github.sha }},docker.io/${{ secrets.DOCKER_USERNAME }}/arkada-core:latest
 
-deploy-staging:
-  name: Deploy to Staging
-  if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/main')
-  runs-on: ubuntu-latest
-  needs: build
-  steps:
-    - name: Check out repo
-      uses: actions/checkout@v3
+  deploy-staging:
+    name: Deploy to Staging
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/main')
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v3
 
-    - name: Set up kubectl
-      uses: azure/setup-kubectl@v3
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
 
-    - name: Configure & Test Kubeconfig
-      run: |
-        echo "${{ secrets.STAGING_KUBECONFIG }}" > kubeconfig
+      - name: Configure & Test Kubeconfig
+        run: |
+          echo "${{ secrets.STAGING_KUBECONFIG }}" > kubeconfig
 
-        ls -lh kubeconfig
+          ls -lh kubeconfig
 
-        head -n 5 kubeconfig
+          head -n 5 kubeconfig
 
-        kubectl cluster-info --kubeconfig=./kubeconfig
-        kubectl get nodes --kubeconfig=./kubeconfig
+          kubectl cluster-info --kubeconfig=./kubeconfig
+          kubectl get nodes --kubeconfig=./kubeconfig
 
-    - name: Deploy to Staging
-      run: |
-        kubectl apply -f k8s/deployment.yaml --validate=false --kubeconfig=./kubeconfig
-        kubectl apply -f k8s/service.yaml --validate=false --kubeconfig=./kubeconfig
-        kubectl rollout status deployment/arkada-core --timeout=120s --kubeconfig=./kubeconfig
+      - name: Deploy to Staging
+        run: |
+          kubectl apply -f k8s/deployment.yaml --validate=false --kubeconfig=./kubeconfig
+          kubectl apply -f k8s/service.yaml --validate=false --kubeconfig=./kubeconfig
+          kubectl rollout status deployment/arkada-core --timeout=120s --kubeconfig=./kubeconfig
 
   deploy-production:
     name: Deploy to Production
