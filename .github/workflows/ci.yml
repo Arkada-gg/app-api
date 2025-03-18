@@ -29,7 +29,7 @@ jobs:
           context: .
           file: apps/core/Dockerfile
           push: true
-          tags: your-registry/arkada-core:${{ github.sha }},your-registry/arkada-core:latest
+          tags: docker.io/${{ secrets.DOCKER_USERNAME }}/arkada-core:${{ github.sha }},docker.io/${{ secrets.DOCKER_USERNAME }}/arkada-core:latest
 
   deploy-staging:
     name: Deploy to Staging
