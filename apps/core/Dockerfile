@@ -5,7 +5,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 COPY . .
 
@@ -22,6 +22,6 @@ COPY --from=builder /app/dist/apps/core core/
 
 RUN chown -R core:core .
 
-RUN npm --prefix core --omit=dev -f install
+RUN npm --prefix core install --legacy-peer-deps --omit=dev
 
 CMD [ "node", "core/main.js" ]
