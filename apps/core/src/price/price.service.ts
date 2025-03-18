@@ -28,15 +28,18 @@ export class PriceService {
 
     const redisConfig: RedisOptions = {
       host: process.env.REDIS_HOST,
-      port,
+      port: +process.env.REDIS_PORT,
+      username: process.env.REDIS_USERNAME,
+      password: process.env.REDIS_PASSWORD,
+      tls: { rejectUnauthorized: false },
     }
 
-    if (process.env.NODE_ENV !== 'development') {
-      // TODO: refactor
-      redisConfig.username = process.env.REDIS_USERNAME
-      redisConfig.password = process.env.REDIS_PASSWORD
-      redisConfig.tls = { rejectUnauthorized: false }
-    }
+    // if (process.env.NODE_ENV !== '') {
+    // TODO: refactor
+    // redisConfig.username = process.env.REDIS_USERNAME
+    // redisConfig.password = process.env.REDIS_PASSWORD
+    // redisConfig.tls = { rejectUnauthorized: false }
+    // }
 
     this.redisClient = new Redis(redisConfig);
   }
