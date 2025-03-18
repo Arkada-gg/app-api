@@ -43,3 +43,5 @@ Thumbs.db
 .nx/workspace-data
 
 .env.local
+.env.pgadmin
+.env.postgres

@@ -79,8 +79,8 @@ export class WalletScoreController {
     if (user.last_wallet_score_update) {
       const lastUpdate = new Date(user.last_wallet_score_update);
       const oneDayInMs = 24 * 60 * 60 * 1000;
-      if (now.getTime() - lastUpdate.getTime() < oneDayInMs * 30) {
-        throw new BadRequestException('Обновление возможно только раз в месяц');
+      if (now.getTime() - lastUpdate.getTime() < oneDayInMs * 365) {
+        throw new BadRequestException('Обновление возможно только раз в год');
       }
     }
 

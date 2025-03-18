@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import Redis from 'ioredis';
+import Redis, { RedisOptions } from 'ioredis';
 import fetch from 'node-fetch';
 
 @Injectable()
@@ -25,13 +25,20 @@ export class PriceService {
       );
     }
 
-    this.redisClient = new Redis({
+
+    const redisConfig: RedisOptions = {
       host: process.env.REDIS_HOST,
-      port: +process.env.REDIS_PORT,
-      username: process.env.REDIS_USERNAME,
-      password: process.env.REDIS_PASSWORD,
-      tls: { rejectUnauthorized: false },
-    });
+      port,
+    }
+
+    if (process.env.NODE_ENV !== 'development') {
+      // TODO: refactor
+      redisConfig.username = process.env.REDIS_USERNAME
+      redisConfig.password = process.env.REDIS_PASSWORD
+      redisConfig.tls = { rejectUnauthorized: false }
+    }
+
+    this.redisClient = new Redis(redisConfig);
   }
 
   @Cron(CronExpression.EVERY_30_MINUTES)
