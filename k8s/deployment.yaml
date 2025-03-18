@@ -9,11 +9,6 @@ spec:
   selector:
     matchLabels:
       app: arkada-core
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
   template:
     metadata:
       labels:
@@ -27,18 +22,177 @@ spec:
           ports:
             - containerPort: 3000
           env:
+            - name: ENV
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: ENV
+            - name: VERIFICATION_MESSAGE
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: VERIFICATION_MESSAGE
+            - name: CORE_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: CORE_PORT
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: arkada-secrets
-                  key: database_url
-            - name: SESSION_SECRET
+                  key: DATABASE_URL
+            - name: SWAGGER_USER
               valueFrom:
                 secretKeyRef:
                   name: arkada-secrets
-                  key: session_secret
-            - name: CORE_PORT
-              value: '3000'
+                  key: SWAGGER_USER
+            - name: SWAGGER_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: SWAGGER_PASS
+            - name: AWS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: AWS_REGION
+            - name: S3_BUCKET_NAME_PROD
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: S3_BUCKET_NAME_PROD
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: S3_BUCKET_NAME_DEV
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: S3_BUCKET_NAME_DEV
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: REDIS_PORT
+            - name: REDIS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: REDIS_USERNAME
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: REDIS_PASSWORD
+            - name: CONSUMER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: CONSUMER_KEY
+            - name: CONSUMER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: CONSUMER_SECRET
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: NEXTAUTH_SECRET
+            - name: DAILY_CHECK_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: DAILY_CHECK_ADDRESS
+            - name: TWITTER_SCOUT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: TWITTER_SCOUT_API_KEY
+            - name: STARTALE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: STARTALE_API_KEY
+            - name: DISCORD_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: DISCORD_BOT_TOKEN
+            - name: DISCORD_BOT_TOKEN3
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: DISCORD_BOT_TOKEN3
+            - name: DISCORD_BOT_TOKEN4
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: DISCORD_BOT_TOKEN4
+            - name: ALCHEMY_SIGNING_KEY_DAILY_CHECK
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: ALCHEMY_SIGNING_KEY_DAILY_CHECK
+            - name: ALCHEMY_SIGNING_KEY_PYRAMID_CLAIM
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: ALCHEMY_SIGNING_KEY_PYRAMID_CLAIM
+            - name: SIGN_DOMAIN_CHAIN_ID
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: SIGN_DOMAIN_CHAIN_ID
+            - name: SIGN_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: SIGN_DOMAIN_NAME
+            - name: SIGN_DOMAIN_VERSION
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: SIGN_DOMAIN_VERSION
+            - name: PYRAMID_SIGNER_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: PYRAMID_SIGNER_PRIVATE_KEY
+            - name: PYRAMID_CONTRACT_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: PYRAMID_CONTRACT_ADDRESS
+            - name: GATEWAY_URL
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: GATEWAY_URL
+            - name: PINATA_JWT
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: PINATA_JWT
+            - name: ETHERSCAN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: arkada-secrets
+                  key: ETHERSCAN_API_KEY
+
           livenessProbe:
             httpGet:
               path: /health
