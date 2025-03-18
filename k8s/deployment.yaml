@@ -19,6 +19,8 @@ spec:
       labels:
         app: arkada-core
     spec:
+      imagePullSecrets:
+        - name: regcred
       containers:
         - name: arkada-core
           image: ilyak7171/arkada-core:latest
