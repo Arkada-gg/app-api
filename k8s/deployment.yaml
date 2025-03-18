@@ -19,6 +19,7 @@ spec:
       containers:
         - name: arkada-core
           image: ilyak7171/arkada-core:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 3000
           env:
