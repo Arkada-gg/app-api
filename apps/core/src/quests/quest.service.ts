@@ -374,7 +374,6 @@ export class QuestService {
       if (task.params)
         finalUrl = this.buildLinkUrl(task.endpoint, task.params, userAddr);
 
-      console.log('------>', finalUrl);
       const res = await fetch(finalUrl);
       if (!res.ok) return false;
       const data = await res.json();

@@ -8,17 +8,31 @@ FROM docker.io/node:lts-alpine
 
 ENV HOST=0.0.0.0
 ENV PORT=3000
+# Stage 1: Build
+FROM docker.io/node:lts-alpine AS builder
 
 WORKDIR /app
 
-RUN addgroup --system core && \
-          adduser --system -G core core
+COPY package*.json ./
+
+RUN npm install --legacy-peer-deps
+
+COPY . .
+
+RUN npm run build:all
+
+# Stage 2: Final image
+FROM docker.io/node:lts-alpine
+
+WORKDIR /app
+
+RUN addgroup --system core && adduser --system -G core core
+
+COPY --from=builder /app/dist/apps/core core/
 
 COPY . core/
 RUN chown -R core:core .
 
-# You can remove this install step if you build with `--bundle` option.
-# The bundled output will include external dependencies.
-RUN npm --prefix core --omit=dev -f install
+RUN npm --prefix core install --legacy-peer-deps --omit=dev
 
-CMD [ "node", "core" ]
+CMD [ "node", "core/main.js" ]
