@@ -6,7 +6,7 @@ export class GetMintDataDto {
   @ApiProperty({ description: 'Адрес пользователя', example: '0x84fsdjf...' })
   @IsString()
   @IsNotEmpty()
-  userAddress: string;
+  address: string;
 
   @ApiPropertyOptional({
     description: 'Айди компании или slug',
