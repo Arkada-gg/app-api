@@ -29,7 +29,7 @@ export class QuestController {
   constructor(
     private readonly questService: QuestService,
     private readonly userService: UserService
-  ) {}
+  ) { }
 
   @Post('check-quest')
   @UseGuards(ConditionalSignatureAuthGuard)
@@ -192,10 +192,10 @@ export class QuestController {
     type: GetMintDataResponse,
   })
   async getSignedMintData(@Body() body: GetMintDataDto) {
-    const { campaignIdOrSlug, userAddress } = body;
+    const { campaignIdOrSlug, address } = body;
     return await this.questService.getSignedMintData(
       campaignIdOrSlug,
-      userAddress
+      address
     );
   }
 }

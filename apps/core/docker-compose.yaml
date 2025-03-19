@@ -1,22 +1,26 @@
 services:
-#  core:
-#    build:
-#      context: ../../
-#      dockerfile: docker/core/Dockerfile
-#    container_name: arkada-api
-#    restart: unless-stopped
-#    init: true
-#    ports:
-#      - '3000:3000/tcp'
-#    env_file:
-#      - .env.local
-#    volumes:
-#      - './src:/app'
-#    networks:
-#      - internal
-#    depends_on:
-#      - redis
-#      - postgres
+  core:
+    build:
+      context: ../../
+      dockerfile: ./docker/core/Dockerfile
+      args:
+        APP: core
+    container_name: arkada-backend
+    command: ['npm', 'run', 'dev:core']
+    restart: unless-stopped
+    init: true
+    ports:
+      - '3000:3000/tcp'
+      - '9229:9229/tcp' # debugger
+    env_file:
+      - .env.local
+    volumes:
+      - './src:/app'
+    networks:
+      - internal
+    depends_on:
+      - redis
+      - postgres
 
   redis:
     image: redis/redis-stack:7.2.0-v2

@@ -7,8 +7,7 @@
   ],
   "scripts": {
     "install:all": "npm install --legacy-peer-deps",
-    "dev:core": "nx serve core",
-    "build:core": "nx build core",
+    "dev:core": "nx run core:serve:development",
     "build:all": "nx run-many --target=build --all",
     "dev:all": "nx run-many --target=serve --all"
   },
