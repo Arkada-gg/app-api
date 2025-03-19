@@ -1275,8 +1275,8 @@ export class QuestService {
         { trait_type: 'Transaction Chain', value: 'Soneium' },
         { trait_type: 'Transaction Count', value: transactions.length },
         { trait_type: 'Community', value: campaign.project_name },
-        ...(campaign.tags[0]
-          ? [{ trait_type: 'Tag', value: campaign.tags[0] }]
+        ...(campaign.tags
+          ? [{ trait_type: 'Tags', value: campaign.tags.join(",") }]
           : []),
         { trait_type: 'Difficulty', value: campaign.difficulty },
       ],
