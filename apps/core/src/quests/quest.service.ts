@@ -192,9 +192,36 @@ export class QuestService {
           rewards.forEach((r: any) => {
             if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
           });
+
+          const nftConfigs = [
+            {
+              address:
+                '0x2877Da93f3b2824eEF206b3B313d4A61E01e5698'.toLowerCase(),
+              multiplier: 1.1,
+            },
+            {
+              address:
+                '0x181b42ca4856237AE76eE8c67F8FF112491eCB9e'.toLowerCase(),
+              multiplier: 1.2,
+            },
+          ];
+          let userMultiplier = 1;
+          for (const nft of nftConfigs) {
+            const contract = new ethers.Contract(
+              nft.address,
+              ['function balanceOf(address owner) view returns (uint256)'],
+              soneiumProvider
+            );
+            const balance = await contract.balanceOf(lowerAddress);
+            if (balance && +balance.toString() > 0) {
+              userMultiplier = Math.max(userMultiplier, nft.multiplier);
+            }
+          }
+
+          const effectivePoints = totalPoints * userMultiplier;
           await this.userService.awardCampaignCompletion(
             lowerAddress,
-            totalPoints
+            effectivePoints
           );
         }
       }
