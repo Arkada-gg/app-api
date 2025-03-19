@@ -45,3 +45,6 @@ Thumbs.db
 .env.local
 .env.pgadmin
 .env.postgres
+
+# Sentry Config File
+.sentryclirc

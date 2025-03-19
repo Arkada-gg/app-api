@@ -8,6 +8,8 @@ import basicAuth from 'express-basic-auth';
 import session from 'express-session';
 import { AppModule } from './app.module';
 
+import "./instrument";
+
 async function bootstrap() {
   const server = express();
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
