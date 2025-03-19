@@ -2,6 +2,7 @@ FROM docker.io/node:lts-alpine
 
 ENV HOST=0.0.0.0
 ENV PORT=3000
+ENV IS_LOCAL_DEV 1
 
 ARG APP
 
