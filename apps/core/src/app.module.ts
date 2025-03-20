@@ -15,7 +15,7 @@ import { AlchemyModule } from './alchemy/alchemy.module';
 import { IpfsModule } from './ipfs/ipfs.module';
 import { HealthzModule } from './healthz/healthz.module';
 import { TransactionsModule } from './transactions/transactions.module';
-import { AlchemyQueueModule } from './s3/queues/alchemy-queue.module';
+import { AlchemyQueueModule } from './queues/alchemy-queue.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),

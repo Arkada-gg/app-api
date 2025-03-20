@@ -6,7 +6,7 @@ import { QuestModule } from '../quests/quest.module';
 import { _ConfigModule } from '../_config/config.module';
 import { AlchemyWebhooksController } from './alchemy.controller';
 import { AlchemyWebhooksService } from './alchemy.service';
-import { AlchemyQueueModule } from '../s3/queues/alchemy-queue.module';
+import { AlchemyQueueModule } from '../queues/alchemy-queue.module';
 import { AlchemyCommonModule } from './alchemy-common.module';
 
 @Module({

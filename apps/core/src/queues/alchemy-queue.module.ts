@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { AlchemyWebhookProcessor } from './alchemy-webhook.processor';
-import { AlchemyCommonModule } from '../../alchemy/alchemy-common.module';
+import { AlchemyCommonModule } from '../alchemy/alchemy-common.module';
 
 @Module({
   imports: [
