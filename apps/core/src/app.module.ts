@@ -14,10 +14,12 @@ import { DiscordModule } from './discord/discord.module';
 import { AlchemyModule } from './alchemy/alchemy.module';
 import { IpfsModule } from './ipfs/ipfs.module';
 import { HealthzModule } from './healthz/healthz.module';
+import { SentryModule } from '@sentry/nestjs/setup';
 import { TransactionsModule } from './transactions/transactions.module';
 import { AlchemyQueueModule } from './queues/alchemy-queue.module';
 @Module({
   imports: [
+    SentryModule.forRoot(),
     ScheduleModule.forRoot(),
     DatabaseModule,
     _ConfigModule,

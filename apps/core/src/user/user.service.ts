@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 import { Multer } from 'multer';
 import { EPointsType } from '../quests/interface';
 import { S3Service } from '../s3/s3.service';
@@ -15,6 +15,7 @@ import { UnbindSocialDto } from './dto/unbind-social.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ESocialPlatform, SocialFieldMap } from './user.constants';
 import { UserRepository } from './user.repository';
+import * as Sentry from '@sentry/node';
 
 @Injectable()
 export class UserService {
@@ -22,6 +23,10 @@ export class UserService {
     private readonly userRepository: UserRepository,
     private readonly s3Service: S3Service
   ) { }
+
+  onModuleInit() {
+    Sentry.captureMessage('Hello from Sentry manually!');
+  }
 
   async findByAddress(address: string): Promise<IUser | null> {
     return this.userRepository.findByAddress(address);
