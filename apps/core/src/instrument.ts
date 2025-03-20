@@ -15,5 +15,4 @@ Sentry.init({
   // Set sampling rate for profiling
   // This is relative to tracesSampleRate
   profilesSampleRate: 0.1,
-  debug: true,
 });
