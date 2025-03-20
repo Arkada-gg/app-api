@@ -11,8 +11,9 @@ import { AppModule } from './app.module';
 import "./instrument";
 
 async function bootstrap() {
-  const server = express();
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
+  // const server = express();
+  // const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
+  const app = await NestFactory.create(AppModule);
 
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
   app.useGlobalPipes(
