@@ -11,8 +11,8 @@ import { QuestService } from '../quests/quest.service';
 import { PyramidType } from '../shared/interfaces';
 import { TransactionsService } from '../transactions/transactions.service';
 import { UserService } from '../user/user.service';
-import daylyCheckAbi from './abis/daily-check-abi.json';
-import pyramidAbi from './abis/pyramid-abi.json';
+import * as daylyCheckAbi from './abis/daily-check-abi.json';
+import * as pyramidAbi from './abis/pyramid-abi.json';
 import { CHAIN_ID_BY_ALCHEMY_CHAIN } from './config/chain';
 import { EventSignature } from './config/signatures';
 

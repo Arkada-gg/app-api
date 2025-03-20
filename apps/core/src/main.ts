@@ -1,15 +1,15 @@
+import "./instrument";
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import cookieParser from 'cookie-parser';
-import express from 'express';
-import basicAuth from 'express-basic-auth';
-import session from 'express-session';
+import * as cookieParser from 'cookie-parser';
+import * as express from 'express';
+import * as basicAuth from 'express-basic-auth';
+import * as session from 'express-session';
 import { AppModule } from './app.module';
 
 
-import "./instrument";
 
 
 import * as Sentry from "@sentry/nestjs"

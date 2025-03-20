@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 import { Multer } from 'multer';
 import { EPointsType } from '../quests/interface';
 import { S3Service } from '../s3/s3.service';
