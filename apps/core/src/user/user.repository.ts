@@ -16,7 +16,7 @@ export class UserRepository {
   ) { }
 
   async createEmail(email: string, address?: string) {
-    const client = this.dbService.getClient();
+    await using client = await this.dbService.getClient();
     const lowerAddress = address ? address.toLowerCase() : null;
     const lower = email.toLowerCase();
     const query = `
@@ -31,9 +31,9 @@ export class UserRepository {
   }
 
   async findEmail(email: string) {
-    const client = this.dbService.getClient();
     const lower = email.toLowerCase();
     try {
+      await using client = await this.dbService.getClient();
       const res = await client.query<IUser>(
         `SELECT * FROM user_email WHERE email = $1`,
         [lower]
@@ -45,9 +45,9 @@ export class UserRepository {
   }
 
   async findAddress(address: string) {
-    const client = this.dbService.getClient();
     const lower = address.toLowerCase();
     try {
+      await using client = await this.dbService.getClient();
       const res = await client.query<IUser>(
         `SELECT * FROM user_email WHERE address = $1`,
         [lower]
@@ -59,10 +59,10 @@ export class UserRepository {
   }
 
   async findByAddress(address: string): Promise<IUser | null> {
-    const client = this.dbService.getClient();
     const lower = address.toLowerCase();
 
     try {
+      await using client = await this.dbService.getClient();
       const userResult = await client.query<IUser>(
         `SELECT *, COALESCE(points, 0) AS total_points, last_wallet_score_update FROM users WHERE address = $1`,
         [lower]
@@ -80,9 +80,9 @@ export class UserRepository {
         sum: number;
       }>(
         `
-        SELECT point_type, COALESCE(SUM(points), 0) AS sum 
-        FROM user_points 
-        WHERE user_address = $1 
+        SELECT point_type, COALESCE(SUM(points), 0) AS sum
+        FROM user_points
+        WHERE user_address = $1
         GROUP BY point_type
         `,
         [lower]
@@ -121,7 +121,7 @@ export class UserRepository {
   }
 
   async findByEmail(email: string): Promise<IUser | null> {
-    const client = this.dbService.getClient();
+    await using client = await this.dbService.getClient();
     const lower = email.toLowerCase();
     try {
       const res = await client.query<IUser>(
@@ -138,7 +138,7 @@ export class UserRepository {
     offset: number,
     limit: number
   ): Promise<any[]> {
-    const client = this.dbService.getClient();
+    await using client = await this.dbService.getClient();
     try {
       const query = `
         SELECT address AS id, twitter AS twitterHandle
@@ -155,7 +155,7 @@ export class UserRepository {
   }
 
   async updateTwitterPoints(userId: string, points: number): Promise<void> {
-    const client = this.dbService.getClient();
+    await using client = await this.dbService.getClient();
     try {
       const query = `
         UPDATE users
@@ -169,7 +169,7 @@ export class UserRepository {
   }
 
   async findByName(name: string): Promise<IUser | null> {
-    const client = this.dbService.getClient();
+    await using client = await this.dbService.getClient();
     const lower = name.toLowerCase();
     try {
       const res = await client.query<IUser>(
@@ -183,7 +183,7 @@ export class UserRepository {
   }
 
   async findByTelegramId(name: string): Promise<IUser | null> {
-    const client = this.dbService.getClient();
+    await using client = await this.dbService.getClient();
     const lower = name.toLowerCase();
     try {
       const res = await client.query<IUser>(
@@ -197,7 +197,7 @@ export class UserRepository {
   }
 
   async findByDiscordUsername(name: string): Promise<IUser | null> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     const lower = name.toLowerCase();
     try {
       const res = await client.query<IUser>(
@@ -211,7 +211,7 @@ export class UserRepository {
   }
 
   async findByTwitterUsername(name: string): Promise<IUser | null> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     try {
       const res = await client.query<IUser>(
         `SELECT * FROM users WHERE twitter = $1`,
@@ -224,7 +224,7 @@ export class UserRepository {
   }
 
   async findByGithubUsername(name: string): Promise<IUser | null> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     try {
       const res = await client.query<IUser>(
         `SELECT * FROM users WHERE github = $1`,
@@ -237,7 +237,7 @@ export class UserRepository {
   }
 
   async updateAvatar(address: string, avatarUrl: string) {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     try {
       await client.query(`UPDATE users SET avatar = $2 WHERE address = $1`, [
         address.toLowerCase(),
@@ -254,7 +254,7 @@ export class UserRepository {
     fieldName: keyof IUser,
     value: string | null
   ) {
-    const client = this.dbService.getClient();
+    await using client = await this.dbService.getClient();
     try {
       await client.query(
         `UPDATE users SET ${fieldName} = $2 WHERE address = $1`,
@@ -269,7 +269,7 @@ export class UserRepository {
   async updateUser(
     updateUserDto: UpdateUserDto
   ): Promise<IUser | { success: boolean }> {
-    const client = this.dbService.getClient();
+    await using client = await this.dbService.getClient();
     const { address, name, email } = updateUserDto;
 
     const lowerAddress = address.toLowerCase();
@@ -330,11 +330,11 @@ export class UserRepository {
   }
 
   async getCompletedQuestsCount(userAddress: string): Promise<number> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     const lowerAddress = userAddress.toLowerCase();
     try {
       const query = `
-        SELECT COUNT(*) AS count 
+        SELECT COUNT(*) AS count
         FROM quest_completions
         WHERE user_address = $1
       `;
@@ -348,11 +348,11 @@ export class UserRepository {
   }
 
   async getCompletedCampaignsCount(userAddress: string): Promise<number> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     const lowerAddress = userAddress.toLowerCase();
     try {
       const query = `
-        SELECT COUNT(*) AS count 
+        SELECT COUNT(*) AS count
         FROM campaign_completions
         WHERE user_address = $1
       `;
@@ -366,7 +366,7 @@ export class UserRepository {
   }
 
   async findByReferralCode(refCode: string): Promise<IUser | null> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     try {
       const res = await client.query<IUser>(
         `SELECT * FROM users WHERE referral_code = $1`,
@@ -405,7 +405,7 @@ export class UserRepository {
     const startIso = startDate.toISOString();
     const endIso = endDate.toISOString();
 
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
 
     const cte = `WITH user_points_aggregated AS (
     SELECT
@@ -578,7 +578,7 @@ export class UserRepository {
       rank: number;
     }>;
   }> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
 
     const now = new Date();
     let startDate: Date;
@@ -657,7 +657,7 @@ export class UserRepository {
 
     const top50sql = `
       ${cte}
-      SELECT 
+      SELECT
         address,
         name,
         avatar,
@@ -686,7 +686,7 @@ export class UserRepository {
 
     const userRankSql = `
       ${cte}
-      SELECT 
+      SELECT
         address,
         name,
         avatar,
@@ -751,8 +751,10 @@ export class UserRepository {
       do {
         refCode = this.generateShortCode(5);
       } while (await this.isReferralCodeExists(refCode));
+        await using client = await this.dbService.getClient();
 
-      const result = await this.dbService.getClient().query<IUser>(
+
+      const result = await client.query<IUser>(
         `INSERT INTO users (address, name, referral_code)
          VALUES ($1, $1, $2)
          RETURNING *`,
@@ -766,8 +768,8 @@ export class UserRepository {
   }
 
   private async isReferralCodeExists(code: string): Promise<boolean> {
-    const result = await this.dbService
-      .getClient()
+      await using client = await this.dbService.getClient();
+    const result = await client
       .query(`SELECT 1 FROM users WHERE referral_code = $1`, [code]);
     return result.rows.length > 0;
   }
@@ -780,7 +782,7 @@ export class UserRepository {
   }
 
   async findUsersWithPoints(): Promise<{ address: string; points: number }[]> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     const res = await client.query(`
       SELECT address, points
       FROM users
@@ -792,7 +794,7 @@ export class UserRepository {
   async findUsersWithPointAfterSpecificAddress(
     address: string
   ): Promise<{ address: string; points: number }[]> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     const res = await client.query(
       `
         SELECT address, points
@@ -814,7 +816,7 @@ export class UserRepository {
     const lower = address.toLowerCase();
     const user = await this.findByAddress(address);
     const userPoints = user.points.total;
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     try {
       await client.query('BEGIN');
       await client.query(
@@ -839,7 +841,8 @@ export class UserRepository {
   async getTotalPointsByType(address: string): Promise<Record<string, number>> {
     const lower = address.toLowerCase();
     try {
-      const result = await this.dbService.getClient().query(
+        await using client = await this.dbService.getClient();
+      const result = await client.query(
         `SELECT point_type, SUM(points) AS total
          FROM user_points
          WHERE user_address = $1
@@ -859,8 +862,8 @@ export class UserRepository {
   async getReferralsCount(address: string): Promise<number> {
     const lower = address.toLowerCase();
     try {
-      const result = await this.dbService
-        .getClient()
+        await using client = await this.dbService.getClient();
+      const result = await client
         .query(`SELECT COUNT(*) AS cnt FROM users WHERE ref_owner = $1`, [
           lower,
         ]);
@@ -874,7 +877,7 @@ export class UserRepository {
     const lowerRef = referredAddress.toLowerCase();
     const lowerOwner = refOwnerAddress.toLowerCase();
     try {
-      const client = this.dbService.getClient();
+        await using client = await this.dbService.getClient();
       await client.query(
         `
         UPDATE users
@@ -900,15 +903,15 @@ export class UserRepository {
 
   async incrementPyramid(address: string, type: PyramidType, chainId: number) {
     const lower = address.toLowerCase();
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
 
     await client.query(
       `
-      UPDATE users 
-      SET pyramids_info = COALESCE(pyramids_info, '{}') || 
-        jsonb_build_object($2::text, 
+      UPDATE users
+      SET pyramids_info = COALESCE(pyramids_info, '{}') ||
+        jsonb_build_object($2::text,
           jsonb_build_object(
-            $3::text, 
+            $3::text,
             COALESCE((pyramids_info->($2::text)->($3::text))::int, 0) + 1
           )
         )
@@ -922,7 +925,7 @@ export class UserRepository {
     offset: number,
     limit: number
   ): Promise<{ id: string; walletAddress: string }[]> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     try {
       const query = `
         SELECT address AS id, address AS walletAddress
@@ -939,7 +942,7 @@ export class UserRepository {
   }
 
   async updateWalletPoints(userId: string, points: number): Promise<void> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     try {
       const query = `
         UPDATE users
@@ -953,7 +956,7 @@ export class UserRepository {
   }
 
   async updateWalletAdditionalPoints(userId: string, points: number): Promise<void> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     try {
       const query = `
         UPDATE users
@@ -967,7 +970,7 @@ export class UserRepository {
   }
 
   async updateLastWalletScoreUpdate(userId: string, timestamp: Date): Promise<void> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     try {
       const query = `
         UPDATE users

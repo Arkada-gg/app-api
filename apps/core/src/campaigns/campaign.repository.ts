@@ -3,7 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CampaignType } from './dto/get-campaigns.dto';
@@ -11,7 +11,8 @@ import { UserCampaignStatus } from './dto/get-user-campaigns.dto';
 
 @Injectable()
 export class CampaignRepository {
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(private readonly dbService: DatabaseService) {
+  }
 
   private isUUID(str: string): boolean {
     const regex =
@@ -20,11 +21,11 @@ export class CampaignRepository {
   }
 
   async incrementParticipants(campaignId: string): Promise<void> {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     try {
       const updateQuery = `
-        UPDATE campaigns 
-        SET participants = participants + 1 
+        UPDATE campaigns
+        SET participants = participants + 1
         WHERE id = $1
       `;
       await client.query(updateQuery, [campaignId]);
@@ -37,17 +38,16 @@ export class CampaignRepository {
   }
 
   async getCampaignStatus(id: string, address: string) {
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
     try {
       const query = `
-        SELECT 
-          c.*,
-          CASE 
-            WHEN EXISTS (
-              SELECT 1 FROM campaign_completions cc
-              WHERE cc.campaign_id = c.id
-              AND cc.user_address = $2
-            ) THEN 'completed' ELSE 'incomplete' END AS status
+        SELECT c.*,
+               CASE
+                 WHEN EXISTS (SELECT 1
+                              FROM campaign_completions cc
+                              WHERE cc.campaign_id = c.id
+                                AND cc.user_address = $2) THEN 'completed'
+                 ELSE 'incomplete' END AS status
         FROM campaigns c
         WHERE c.id = $1
         LIMIT 1;
@@ -70,9 +70,8 @@ export class CampaignRepository {
         VALUES ($1, $2, NOW())
         ON CONFLICT (campaign_id, user_address) DO NOTHING
       `;
-      const result = await this.dbService
-        .getClient()
-        .query(query, [campaignId, lowerAddress]);
+        await using client = await this.dbService.getClient();
+      const result = await client.query(query, [campaignId, lowerAddress]);
       return { rowCount: result.rowCount };
     } catch (error) {
       throw new InternalServerErrorException(error.message);
@@ -85,7 +84,6 @@ export class CampaignRepository {
     type?: CampaignType,
     categoryDto?: string[]
   ): Promise<any[]> {
-    const client = this.dbService.getClient();
     try {
       const offset = (page - 1) * limit;
       let query = `
@@ -131,7 +129,8 @@ export class CampaignRepository {
         params.length
       }`;
 
-      const result = await client.query(query, params);
+        await using client = await this.dbService.getClient();
+      const result = await client.query(query);
       return result.rows;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
@@ -139,41 +138,33 @@ export class CampaignRepository {
   }
 
   async findCampaignByIdOrSlug(idOrSlug: string): Promise<any> {
-    const client = this.dbService.getClient();
     try {
       let query = '';
 
       if (this.isUUID(idOrSlug)) {
         query = `
-          SELECT 
-            c.*, 
-            COALESCE(json_agg(q) FILTER (WHERE q.id IS NOT NULL), '[]') AS quests
-          FROM 
-            campaigns c
-          LEFT JOIN 
-            quests q ON c.id = q.campaign_id
-          WHERE 
-            c.id = $1
-          GROUP BY 
-            c.id;
+          SELECT c.*,
+                 COALESCE(json_agg(q) FILTER (WHERE q.id IS NOT NULL), '[]') AS quests
+          FROM campaigns c
+                 LEFT JOIN
+               quests q ON c.id = q.campaign_id
+          WHERE c.id = $1
+          GROUP BY c.id;
         `;
       } else {
         query = `
-          SELECT 
-            c.*, 
-            COALESCE(json_agg(q) FILTER (WHERE q.id IS NOT NULL), '[]') AS quests
-          FROM 
-            campaigns c
-          LEFT JOIN 
-            quests q ON c.id = q.campaign_id
-          WHERE 
-            c.slug = $1
-          GROUP BY 
-            c.id;
+          SELECT c.*,
+                 COALESCE(json_agg(q) FILTER (WHERE q.id IS NOT NULL), '[]') AS quests
+          FROM campaigns c
+                 LEFT JOIN
+               quests q ON c.id = q.campaign_id
+          WHERE c.slug = $1
+          GROUP BY c.id;
         `;
       }
 
-      const result = await client.query(query, [idOrSlug]);
+        await using client = await this.dbService.getClient();
+      const result = await client.query(query);
 
       if (result.rows.length === 0) {
         throw new NotFoundException('Campaign not found');
@@ -190,16 +181,18 @@ export class CampaignRepository {
     address: string
   ): Promise<void> {
     const lowerAddress = address.toLowerCase();
-    const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
 
     try {
+
       await client.query('BEGIN');
 
       const campaignQuery = `
-          SELECT id FROM campaigns
-          WHERE id = $1
-          LIMIT 1;
-        `;
+        SELECT id
+        FROM campaigns
+        WHERE id = $1
+        LIMIT 1;
+      `;
 
       const campaignParams = [idOrSlug];
       const campaignResult = await client.query(campaignQuery, campaignParams);
@@ -211,13 +204,15 @@ export class CampaignRepository {
       const campaignId = campaignResult.rows[0].id;
 
       const checkQuery = `
-        SELECT 1 FROM campaign_completions
-        WHERE campaign_id = $1 AND user_address = $2
+        SELECT 1
+        FROM campaign_completions
+        WHERE campaign_id = $1
+          AND user_address = $2
         LIMIT 1;
       `;
       const checkResult = await client.query(checkQuery, [
         campaignId,
-        lowerAddress,
+        lowerAddress
       ]);
 
       if (checkResult.rows.length > 0) {
@@ -252,12 +247,14 @@ export class CampaignRepository {
 
     try {
       const campaignQuery = `
-          SELECT id FROM campaigns
-          WHERE id = $1
-          LIMIT 1;
-        `;
+        SELECT id
+        FROM campaigns
+        WHERE id = $1
+        LIMIT 1;
+      `;
 
       const campaignParams = [idOrSlug];
+        await using client = await this.dbService.getClient();
       const campaignResult = await client.query(campaignQuery, campaignParams);
 
       if (campaignResult.rows.length === 0) {
@@ -267,13 +264,15 @@ export class CampaignRepository {
       const campaignId = campaignResult.rows[0].id;
 
       const checkQuery = `
-        SELECT 1 FROM campaign_completions
-        WHERE campaign_id = $1 AND user_address = $2
+        SELECT 1
+        FROM campaign_completions
+        WHERE campaign_id = $1
+          AND user_address = $2
         LIMIT 1;
       `;
       const checkResult = await client.query(checkQuery, [
         campaignId,
-        lowerAddress,
+        lowerAddress
       ]);
 
       return checkResult.rows.length > 0;
@@ -286,30 +285,30 @@ export class CampaignRepository {
   }
 
   async getCampaignStatuses(campaignIds: string[], userAddress: string) {
-    const client = this.dbService.getClient();
-
     const idsList = campaignIds.map((id) => `'${id}'`).join(',');
 
     try {
       const query = `
-        SELECT
-          q.campaign_id,
-          COUNT(q.id)::int AS total_quest,
-          COUNT(qc.quest_id)::int AS quest_completed,
-          CASE WHEN EXISTS (
-            SELECT 1 FROM campaign_completions cc
-            WHERE cc.campaign_id = q.campaign_id
-            AND cc.user_address = $1
-          ) THEN 'completed' ELSE 'incomplete' END AS status
+        SELECT q.campaign_id,
+               COUNT(q.id)::int        AS total_quest,
+               COUNT(qc.quest_id)::int AS quest_completed,
+               CASE
+                 WHEN EXISTS (SELECT 1
+                              FROM campaign_completions cc
+                              WHERE cc.campaign_id = q.campaign_id
+                                AND cc.user_address = $1) THEN 'completed'
+                 ELSE 'incomplete' END AS status
         FROM quests q
-        LEFT JOIN quest_completions qc
-          ON q.id = qc.quest_id
-          AND qc.user_address = $1
+               LEFT JOIN quest_completions qc
+                         ON q.id = qc.quest_id
+                           AND qc.user_address = $1
         WHERE q.campaign_id IN (${idsList})
         GROUP BY q.campaign_id
       `;
 
+      await using client = await this.dbService.getClient();
       const res = await client.query(query, [userAddress.toLowerCase()]);
+
 
       const statsMap = new Map<
         string,
@@ -319,7 +318,7 @@ export class CampaignRepository {
         statsMap.set(row.campaign_id, {
           total_quest: row.total_quest,
           quest_completed: row.quest_completed,
-          status: row.status,
+          status: row.status
         });
       }
 
@@ -330,14 +329,14 @@ export class CampaignRepository {
             campaignId: cid,
             total_quest: 0,
             quest_completed: 0,
-            status: 'incomplete',
+            status: 'incomplete'
           };
         }
         return {
           campaignId: cid,
           total_quest: data.total_quest,
           quest_completed: data.quest_completed,
-          status: data.status,
+          status: data.status
         };
       });
 
@@ -380,7 +379,7 @@ export class CampaignRepository {
     page = 1,
     limit = 5
   ) {
-    const client = this.dbService.getClient();
+    await using client = await this.dbService.getClient();
     const lowercaseAddress = userAddress.toLowerCase();
     const offset = (page - 1) * limit;
 
@@ -388,12 +387,11 @@ export class CampaignRepository {
       // Handle completed campaigns separately for better ordering by completed_at
       if (status === UserCampaignStatus.COMPLETED) {
         let query = `
-          SELECT 
-            c.*,
-            cc.completed_at,
-            'completed' as user_status
+          SELECT c.*,
+                 cc.completed_at,
+                 'completed' as user_status
           FROM campaigns c
-          JOIN campaign_completions cc ON c.id = cc.campaign_id 
+                 JOIN campaign_completions cc ON c.id = cc.campaign_id
           WHERE cc.user_address = $1
         `;
 
@@ -413,33 +411,29 @@ export class CampaignRepository {
 
       // Base query for active and started campaigns
       const baseQuery = `
-        WITH campaign_status AS (
-          SELECT 
-            c.*,
-            CASE 
-              WHEN cc.user_address IS NOT NULL THEN 'completed'
-              WHEN EXISTS (
-                SELECT 1 
-                FROM quests q
-                JOIN quest_completions qc ON q.id = qc.quest_id
-                JOIN (
-                  SELECT campaign_id, MAX(sequence) AS max_seq
-                  FROM quests
-                  GROUP BY campaign_id
-                ) t ON q.campaign_id = t.campaign_id
-                WHERE q.campaign_id = c.id 
-                AND qc.user_address = $1
-                AND q.sequence <= t.max_seq
-              ) THEN 'started'
-              ELSE 'active'
-            END as user_status
-          FROM campaigns c
-          LEFT JOIN campaign_completions cc ON c.id = cc.campaign_id AND cc.user_address = $1
-          WHERE c.status = 'IN_PROGRESS'
-            AND c.started_at <= NOW()
-            AND c.finished_at >= NOW()
-        )
-        SELECT * FROM campaign_status WHERE user_status = $2`;
+        WITH campaign_status AS (SELECT c.*,
+                                        CASE
+                                          WHEN cc.user_address IS NOT NULL THEN 'completed'
+                                          WHEN EXISTS (SELECT 1
+                                                       FROM quests q
+                                                              JOIN quest_completions qc ON q.id = qc.quest_id
+                                                              JOIN (SELECT campaign_id, MAX(sequence) AS max_seq
+                                                                    FROM quests
+                                                                    GROUP BY campaign_id) t
+                                                                   ON q.campaign_id = t.campaign_id
+                                                       WHERE q.campaign_id = c.id
+                                                         AND qc.user_address = $1
+                                                         AND q.sequence <= t.max_seq) THEN 'started'
+                                          ELSE 'active'
+                                          END as user_status
+                                 FROM campaigns c
+                                        LEFT JOIN campaign_completions cc ON c.id = cc.campaign_id AND cc.user_address = $1
+                                 WHERE c.status = 'IN_PROGRESS'
+                                   AND c.started_at <= NOW()
+                                   AND c.finished_at >= NOW())
+        SELECT *
+        FROM campaign_status
+        WHERE user_status = $2`;
 
       const targetStatus =
         status === UserCampaignStatus.STARTED ? 'started' : 'active';

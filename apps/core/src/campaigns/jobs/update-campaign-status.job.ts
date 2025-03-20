@@ -13,7 +13,7 @@ export class CampaignStatusJob {
     this.logger.log('CampaignStatusJob started: updating FINISHED campaigns.');
 
     try {
-      const client = this.dbService.getClient();
+        await using client = await this.dbService.getClient();
       await client.query(`
         UPDATE campaigns
         SET status = 'FINISHED'

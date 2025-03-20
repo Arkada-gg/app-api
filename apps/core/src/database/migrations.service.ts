@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DatabaseService } from './database.service';
+import { DatabaseService, QueryClient } from './database.service';
 import { allMigrations } from './migrations';
 import { Client } from 'pg';
 
@@ -10,7 +10,7 @@ export class MigrationsService {
   constructor(private readonly dbService: DatabaseService) {}
 
   async runMigrations() {
-    const client = this.dbService.getClient();
+    await using client = await this.dbService.getClient();
 
     await this.ensureMigrationsTable(client);
 
@@ -31,6 +31,7 @@ export class MigrationsService {
 
       try {
         await client.query('BEGIN');
+        // @ts-expect-error only the query method is used, just to correct the type need to spend a lot of time
         await migration.up(client);
         await client.query(
           `INSERT INTO migrations (name, applied_at) VALUES ($1, NOW())`,
@@ -48,7 +49,7 @@ export class MigrationsService {
     this.logger.log(`All pending migrations applied.`);
   }
 
-  private async ensureMigrationsTable(client: Client) {
+  private async ensureMigrationsTable(client: QueryClient) {
     await client.query(`
       CREATE TABLE IF NOT EXISTS migrations (
         id SERIAL PRIMARY KEY,
@@ -58,7 +59,7 @@ export class MigrationsService {
     `);
   }
 
-  private async getAppliedMigrations(client: Client): Promise<string[]> {
+  private async getAppliedMigrations(client: QueryClient): Promise<string[]> {
     const result = await client.query<{ name: string }>(
       `SELECT name FROM migrations`
     );

@@ -7,7 +7,7 @@ export class AuthRepository {
   constructor(private readonly dbService: DatabaseService) {}
 
   async createOrUpdateUser(address: string): Promise<Partial<IUser>> {
-    const client = this.dbService.getClient();
+    await using client = await this.dbService.getClient();
     const lowerAddress: unknown = address.toLowerCase();
 
     try {

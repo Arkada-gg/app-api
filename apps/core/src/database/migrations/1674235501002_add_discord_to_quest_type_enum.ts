@@ -1,6 +1,6 @@
-import { Client } from 'pg';
+import { QueryClient } from '../database.service';
 export const name = '1674235501002_add_discord_to_quest_type_enum';
-export async function up(client: Client): Promise<void> {
+export async function up(client: QueryClient): Promise<void> {
   await client.query(`
     DO $$
     BEGIN

@@ -1,24 +1,27 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
-import { Client } from 'pg';
+import { Client, ClientBase, Pool, PoolClient } from 'pg';
 import { ConfigService } from '../_config/config.service';
 
+
+export type RaiiPoolClient = PoolClient & {[Symbol.asyncDispose](): Promise<void>};
+
+export type QueryFunction = Pick<ClientBase, "query">['query']
+
+export type QueryClient = {query: QueryFunction}
+
 @Injectable()
-export class DatabaseService implements OnModuleInit {
+export class DatabaseService {
   private readonly logger = new Logger(DatabaseService.name);
   private client: Client;
+  private pool: Pool;
 
   constructor(private readonly configService: ConfigService) {
-    this.client = new Client({
+    this.pool = new Pool({
+      max: 25, //TODO: env
       connectionString:
         this.configService.get('DATABASE_URL') ||
         'postgres://user:password@localhost:5432/arkada_db',
     });
-  }
-
-  async onModuleInit() {
-    await this.client.connect();
-    this.logger.log('Connected to PostgreSQL');
-    await this.initializeSchema();
   }
 
   private async initializeSchema() {
@@ -39,7 +42,14 @@ export class DatabaseService implements OnModuleInit {
     `);
   }
 
-  getClient(): Client {
-    return this.client;
+
+  private makeRaiiPoolClient(client: PoolClient): RaiiPoolClient {
+    client[Symbol.asyncDispose] = () =>  client.release();
+    return client as RaiiPoolClient;
+  }
+
+  async getClient(): Promise<RaiiPoolClient> {
+    const client = await this.pool.connect();
+    return this.makeRaiiPoolClient(client);
   }
 }

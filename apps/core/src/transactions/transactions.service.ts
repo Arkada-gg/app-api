@@ -13,9 +13,9 @@ export class TransactionsService {
   constructor(private readonly dbService: DatabaseService) {}
 
   async findByHash(hash: string): Promise<ITransaction | null> {
-    const client = this.dbService.getClient();
-
     try {
+        await using client = await this.dbService.getClient();
+
       // Query the database to get the transaction by its hash
       const transactionResult = await client.query<ITransaction>(
         `SELECT * FROM transactions WHERE hash = $1`,
@@ -34,9 +34,9 @@ export class TransactionsService {
   }
 
   async createTx(txData: Omit<ITransaction, 'created_at'>): Promise<boolean> {
-    const client = this.dbService.getClient();
-
     try {
+        await using client = await this.dbService.getClient();
+
       // Check if the transaction with the same hash already exists
       const transactionResult = await client.query<ITransaction>(
         `SELECT * FROM transactions WHERE hash = $1`,
@@ -50,7 +50,7 @@ export class TransactionsService {
 
       // Insert the new transaction into the database
       await client.query(
-        `INSERT INTO transactions (hash, event_name, block_number, args, created_at) 
+        `INSERT INTO transactions (hash, event_name, block_number, args, created_at)
          VALUES ($1, $2, $3, $4, $5)`,
         [
           txData.hash,

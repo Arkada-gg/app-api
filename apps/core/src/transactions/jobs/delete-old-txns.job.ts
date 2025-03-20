@@ -14,7 +14,8 @@ export class PurgeDailyChecksJob {
     this.logger.log('PurgeDailyChecksJob started: removing old records in batches...');
 
     try {
-      const client = this.dbService.getClient();
+      await using client = await this.dbService.getClient();
+
 
       let totalDeleted = 0;
       const BATCH_SIZE = 5000;
