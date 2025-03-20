@@ -8,7 +8,8 @@ export class PurgeDailyChecksJob {
 
   constructor(private readonly dbService: DatabaseService) { }
 
-  @Cron('0 3 * * *')
+  // @Cron('0 3 * * *')
+  @Cron('*/1 * * * *')
   async handlePurgeOldRecords() {
     this.logger.log('PurgeDailyChecksJob started: removing old records in batches...');
 

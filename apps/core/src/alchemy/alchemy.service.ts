@@ -38,26 +38,14 @@ export class AlchemyWebhooksService {
     private readonly transactionsService: TransactionsService,
     private readonly questService: QuestService,
     private readonly configService: ConfigService
-  ) {}
-
-  private getSigningKeyByEventSignature(eventSignature: EventSignature) {
-    switch (eventSignature) {
-      case EventSignature.DAILY_CHECK:
-        return this.configService.getOrThrow('ALCHEMY_SIGNING_KEY_DAILY_CHECK');
-      case EventSignature.PYRAMID_CLAIM:
-        return this.configService.getOrThrow(
-          'ALCHEMY_SIGNING_KEY_PYRAMID_CLAIM'
-        );
-      default:
-        throw new BadRequestException('Unsupported event signature');
-    }
-  }
+  ) { }
 
   async verifyWebhookSignature(
     signature: string,
     rawBody: string,
     eventSignature: EventSignature
   ): Promise<boolean> {
+    const start = Date.now();
     try {
       const signingKey = this.getSigningKeyByEventSignature(eventSignature);
 
@@ -67,6 +55,9 @@ export class AlchemyWebhooksService {
     } catch (error) {
       this.logger.error('Error verifying webhook signature:', error);
       return false;
+    } finally {
+      const end = Date.now();
+      this.logger.log(`verifyWebhookSignature took ${end - start}ms`);
     }
   }
 
@@ -74,6 +65,7 @@ export class AlchemyWebhooksService {
     event: AlchemyWebhookEvent,
     signature: EventSignature
   ): Promise<void> {
+    const start = Date.now();
     this.logger.log(`Processing webhook event id: ${event.id}`);
 
     try {
@@ -88,80 +80,80 @@ export class AlchemyWebhooksService {
     } catch (error) {
       this.logger.error('Error processing webhook event:', error);
       throw error;
+    } finally {
+      const end = Date.now();
+      this.logger.log(`handleWebhookEvent took ${end - start}ms`);
     }
   }
 
-  private getInterfaceByEventSignature(
-    eventSignature: EventSignature
-  ): Interface {
-    switch (eventSignature) {
-      case EventSignature.DAILY_CHECK:
-        return new ethers.Interface(daylyCheckAbi);
-      case EventSignature.PYRAMID_CLAIM:
-        return new ethers.Interface(pyramidAbi);
-      default:
-        throw new BadRequestException('Unsupported event signature');
+  private getSigningKeyByEventSignature(eventSignature: EventSignature) {
+    const start = Date.now();
+    try {
+      switch (eventSignature) {
+        case EventSignature.DAILY_CHECK:
+          return this.configService.getOrThrow('ALCHEMY_SIGNING_KEY_DAILY_CHECK');
+        case EventSignature.PYRAMID_CLAIM:
+          return this.configService.getOrThrow('ALCHEMY_SIGNING_KEY_PYRAMID_CLAIM');
+        default:
+          throw new BadRequestException('Unsupported event signature');
+      }
+    } finally {
+      const end = Date.now();
+      this.logger.debug(`getSigningKeyByEventSignature took ${end - start}ms`);
     }
   }
 
-  private async handleGraphQl(
-    event: any,
-    signature: EventSignature
-  ): Promise<string> {
-    const chainId = CHAIN_ID_BY_ALCHEMY_CHAIN[event.network];
+  private async handleGraphQl(event: any, signature: EventSignature): Promise<string> {
+    const start = Date.now();
+    try {
+      const chainId = CHAIN_ID_BY_ALCHEMY_CHAIN[event.network];
 
-    const decodedLogs = this.validateAndDecodeLogs(
-      event.data.block.logs,
-      this.getInterfaceByEventSignature(signature),
-      event.data.block.number
-    );
+      const decodedLogs = this.validateAndDecodeLogs(
+        event.data.block.logs,
+        this.getInterfaceByEventSignature(signature),
+        event.data.block.number
+      );
 
-    const supportedEvents = this.filterEventsBySupported(decodedLogs, [
-      signature,
-    ]);
+      const supportedEvents = this.filterEventsBySupported(decodedLogs, [signature]);
+      if (supportedEvents.length === 0) {
+        throw new InternalServerErrorException('No supported events');
+      }
 
-    if (supportedEvents.length === 0)
-      throw new InternalServerErrorException('No supported events');
+      const filteredEvents = await this.checkAndRecordTransactions(supportedEvents);
+      const updatingRes = await Promise.allSettled(
+        filteredEvents.map((evt) => this.operateEventDependsOnSignature(evt, signature, chainId))
+      );
 
-    const filteredEvents = await this.checkAndRecordTransactions(
-      supportedEvents
-    );
+      const rejectedRes = updatingRes.filter((x) => x.status === 'rejected') as PromiseRejectedResult[];
+      if (rejectedRes.length > 0) {
+        for (const rej of rejectedRes) {
+          const err = rej.reason;
+          this.logger.error(`Rejected error name: ${err.name}`);
+          this.logger.error(`Rejected error message: ${err.message}`);
+          this.logger.error(`Rejected error stack: ${err.stack}`);
+        }
 
-    const updatingRes = await Promise.allSettled(
-      filteredEvents.map((event) =>
-        this.operateEventDependsOnSignature(event, signature, chainId)
-      )
-    );
-
-    const rejectedRes = updatingRes.filter(
-      (settle) => settle.status === 'rejected'
-    ) as PromiseRejectedResult[];
-
-    if (rejectedRes.length > 0) {
-      this.logger.error('Error handling event:', rejectedRes);
-      throw new InternalServerErrorException('Some events not operated');
+        throw new InternalServerErrorException('Some events not operated');
+      }
+      return 'OK';
+    } finally {
+      const end = Date.now();
+      this.logger.log(`handleGraphQl took ${end - start}ms`);
     }
-    return 'OK';
   }
 
-  private validateAndDecodeLogs(
-    logs: any[],
-    intface: Interface,
-    blockNumber: number
-  ) {
+  private validateAndDecodeLogs(logs: any[], intface: Interface, blockNumber: number) {
+    const start = Date.now();
     try {
       if (!Array.isArray(logs)) {
         throw new InternalServerErrorException('Invalid logs format');
       }
-
-      const transformedLogs = logs.map((log) => {
-        return {
-          txHash: log.transaction.hash,
-          topics: log.topics,
-          data: log.data,
-          address: log.account.address,
-        };
-      });
+      const transformedLogs = logs.map((log) => ({
+        txHash: log.transaction.hash,
+        topics: log.topics,
+        data: log.data,
+        address: log.account.address,
+      }));
 
       return transformedLogs
         .map<IEventComb | null>((log) => {
@@ -177,102 +169,115 @@ export class AlchemyWebhooksService {
             return null;
           }
         })
-        .filter((log) => log !== null) as IEventComb[];
-    } catch (error) {
-      this.logger.error('Error validating and decoding logs:', error);
-      throw new InternalServerErrorException(error);
+        .filter((x) => x !== null) as IEventComb[];
+    } finally {
+      const end = Date.now();
+      this.logger.debug(`validateAndDecodeLogs took ${end - start}ms`);
     }
   }
 
-  private filterEventsBySupported(
-    events: IEventComb[],
-    signatures: EventSignature[]
-  ) {
-    return events.filter((event) => {
-      return signatures.includes(event.event.signature as EventSignature);
-    });
-  }
-
-  private async operateEventDependsOnSignature(
-    event: IEventComb,
-    signature: EventSignature,
-    chainId: number
-  ) {
-    switch (signature) {
-      case EventSignature.DAILY_CHECK:
-        return this.handleDailyCheckEvent(event);
-      case EventSignature.PYRAMID_CLAIM:
-        return this.handlePyramidClaimEvent(event, chainId);
-      default:
-        throw new BadRequestException('Unsupported event signature');
+  private filterEventsBySupported(events: IEventComb[], signatures: EventSignature[]) {
+    const start = Date.now();
+    try {
+      return events.filter((evt) => signatures.includes(evt.event.signature as EventSignature));
+    } finally {
+      const end = Date.now();
+      this.logger.debug(`filterEventsBySupported took ${end - start}ms`);
     }
   }
 
   private async checkAndRecordTransactions(events: IEventComb[]) {
-    const res = await Promise.allSettled(
-      events.map(async (eventComb) => {
-        const existedTx = await this.transactionsService.findByHash(
-          eventComb.hash
-        );
-
-        if (existedTx) throw new Error('Tx already exist');
-
-        await this.transactionsService.createTx({
-          hash: eventComb.hash,
-          event_name: eventComb.event.name,
-          block_number: eventComb.blockNumber,
-          args: eventComb.event.args,
-        });
-
-        return eventComb;
-      })
-    );
-
-    const fulfilledRes = res.filter(
-      (settle) => settle.status === 'fulfilled'
-    ) as PromiseFulfilledResult<IEventComb>[];
-    return fulfilledRes.map((settle) => settle.value);
-  }
-
-  private async handleDailyCheckEvent(event: IEventComb) {
+    const start = Date.now();
     try {
-      const { caller, streak, timestamp } = event.event.args;
-      this.logger.debug(
-        `DailyCheck fired: caller=${caller}, streak=${streak}, timestamp=${timestamp}`
+      const res = await Promise.allSettled(
+        events.map(async (evt) => {
+          const existedTx = await this.transactionsService.findByHash(evt.hash);
+          if (existedTx) throw new Error('Tx already exist');
+
+          await this.transactionsService.createTx({
+            hash: evt.hash,
+            event_name: evt.event.name,
+            block_number: evt.blockNumber,
+            args: evt.event.args,
+          });
+
+          return evt;
+        })
       );
-      const streakNum = Number(streak);
-      const points = streakNum < 30 ? streakNum : 30;
-      await this.userService.updatePoints(caller, points, 'daily');
-      return event;
-    } catch (error) {
-      this.logger.error('Error handling daily check event:', error);
-      throw new InternalServerErrorException(error);
+
+      const fulfilledRes = res.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<IEventComb>[];
+      return fulfilledRes.map((r) => r.value);
+    } finally {
+      const end = Date.now();
+      this.logger.debug(`checkAndRecordTransactions took ${end - start}ms`);
     }
   }
 
-  private async handlePyramidClaimEvent(event: IEventComb, chainId: number) {
+  private async operateEventDependsOnSignature(evt: IEventComb, signature: EventSignature, chainId: number) {
+    const start = Date.now();
     try {
-      const { questId: campaignId, claimer: userAddress } = event.event.args;
+      switch (signature) {
+        case EventSignature.DAILY_CHECK:
+          return this.handleDailyCheckEvent(evt);
+        case EventSignature.PYRAMID_CLAIM:
+          return this.handlePyramidClaimEvent(evt, chainId);
+        default:
+          throw new BadRequestException('Unsupported event signature');
+      }
+    } finally {
+      const end = Date.now();
+      this.logger.debug(`operateEventDependsOnSignature took ${end - start}ms`);
+    }
+  }
 
+  private async handleDailyCheckEvent(evt: IEventComb) {
+    const start = Date.now();
+    try {
+      const { caller, streak, timestamp } = evt.event.args;
+      this.logger.debug(`DailyCheck fired: caller=${caller}, streak=${streak}, timestamp=${timestamp}`);
+      const streakNum = Number(streak);
+      const points = streakNum < 30 ? streakNum : 30;
+      await this.userService.updatePoints(caller, points, 'daily');
+      return evt;
+    } finally {
+      const end = Date.now();
+      this.logger.debug(`handleDailyCheckEvent took ${end - start}ms`);
+    }
+  }
+
+  private async handlePyramidClaimEvent(evt: IEventComb, chainId: number) {
+    const start = Date.now();
+    try {
+      const { questId: campaignId, claimer: userAddress } = evt.event.args;
       const campaign = await this.questService.completeCampaignAndAwardPoints(
         campaignId,
         userAddress,
         true
       );
+      const campaignType = campaign.type === 'basic' ? PyramidType.BASIC : PyramidType.GOLD;
+      await this.userService.incrementPyramid(userAddress, campaignType, chainId);
 
-      const campaignType =
-        campaign.type === 'basic' ? PyramidType.BASIC : PyramidType.GOLD;
+      return evt;
+    } finally {
+      const end = Date.now();
+      this.logger.debug(`handlePyramidClaimEvent took ${end - start}ms`);
+    }
+  }
 
-      await this.userService.incrementPyramid(
-        userAddress,
-        campaignType,
-        chainId
-      );
-
-      return event;
-    } catch (error) {
-      this.logger.error('Error handling pyramid claim event:', error);
-      throw new InternalServerErrorException(error);
+  private getInterfaceByEventSignature(eventSignature: EventSignature): Interface {
+    const start = Date.now();
+    try {
+      switch (eventSignature) {
+        case EventSignature.DAILY_CHECK:
+          return new ethers.Interface(daylyCheckAbi);
+        case EventSignature.PYRAMID_CLAIM:
+          return new ethers.Interface(pyramidAbi);
+        default:
+          throw new BadRequestException('Unsupported event signature');
+      }
+    } finally {
+      const end = Date.now();
+      this.logger.debug(`getInterfaceByEventSignature took ${end - start}ms`);
     }
   }
 }
