@@ -8,12 +8,17 @@ import basicAuth from 'express-basic-auth';
 import session from 'express-session';
 import { AppModule } from './app.module';
 
+
 import "./instrument";
 
+
+import * as Sentry from "@sentry/nestjs"
+
 async function bootstrap() {
-  // const server = express();
-  // const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
-  const app = await NestFactory.create(AppModule);
+  const server = express();
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
+
+  Sentry.setupExpressErrorHandler(app);
 
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
   app.useGlobalPipes(

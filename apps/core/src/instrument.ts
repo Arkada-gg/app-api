@@ -1,6 +1,5 @@
 import * as Sentry from "@sentry/nestjs"
 import { nodeProfilingIntegration, } from "@sentry/profiling-node";
-import { Integrations } from '@sentry/tracing';
 
 const span = Sentry.getActiveSpan();
 if (span) {
