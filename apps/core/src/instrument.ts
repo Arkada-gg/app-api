@@ -1,6 +1,5 @@
-import * as Sentry from "@sentry/nestjs"
-import { nodeProfilingIntegration, } from "@sentry/profiling-node";
-
+import * as Sentry from '@sentry/nestjs';
+import { nodeProfilingIntegration } from '@sentry/profiling-node';
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
@@ -11,10 +10,10 @@ Sentry.init({
 
   // Add Tracing by setting tracesSampleRate
   // We recommend adjusting this value in production
-  tracesSampleRate: 1.0,
+  tracesSampleRate: 0.1,
 
   // Set sampling rate for profiling
   // This is relative to tracesSampleRate
-  profilesSampleRate: 1.0,
+  profilesSampleRate: 0.1,
   debug: true,
 });
