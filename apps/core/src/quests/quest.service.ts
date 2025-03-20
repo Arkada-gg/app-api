@@ -1178,7 +1178,7 @@ export class QuestService {
       const ignoreStart = campaign.ignore_campaign_start;
       let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
       if (startTs < 0) startTs = 0;
-      const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=1000&sort=desc`;
+      const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=500&sort=desc`;
       console.log('scout------>', url);
       const r = await fetch(url);
       if (!r.ok) return [];
