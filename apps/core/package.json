@@ -5,7 +5,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "build": "nest build && npm run sentry:sourcemaps",
-    "sentry:sourcemaps": "sentry-cli sourcemaps inject --org polus-fn --project arkada-backend ../../dist/apps/core && sentry-cli sourcemaps upload --org polus-fn --project arkada-backend ../../dist/apps/core"
+    "sentry:sourcemaps": "sentry-cli sourcemaps inject --org arkada --project arkada-nestjs ../../dist/apps/core && sentry-cli sourcemaps upload --org arkada --project arkada-nestjs ../../dist/apps/core"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
