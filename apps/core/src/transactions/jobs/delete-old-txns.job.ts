@@ -13,8 +13,8 @@ export class PurgeDailyChecksJob {
   async handlePurgeOldRecords() {
     this.logger.log('PurgeDailyChecksJob started: removing old records in batches...');
 
+    const client = await this.dbService.getClient();
     try {
-      const client = this.dbService.getClient();
 
       let totalDeleted = 0;
       const BATCH_SIZE = 5000;
@@ -45,6 +45,8 @@ export class PurgeDailyChecksJob {
       this.logger.log(`PurgeDailyChecksJob completed: removed ${totalDeleted} old records.`);
     } catch (error) {
       this.logger.error(`PurgeDailyChecksJob failed: ${error.message}`);
+    } finally {
+      client.release();
     }
   }
 }

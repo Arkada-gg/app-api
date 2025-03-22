@@ -5,7 +5,7 @@ import { UserCampaignStatus } from './dto/get-user-campaigns.dto';
 
 @Injectable()
 export class CampaignService {
-  constructor(private readonly campaignRepository: CampaignRepository) {}
+  constructor(private readonly campaignRepository: CampaignRepository) { }
 
   async getActiveCampaigns(
     page: number,
@@ -19,6 +19,10 @@ export class CampaignService {
       type,
       category
     );
+  }
+
+  async getCampaignStats(startAt?: string, endAt?: string): Promise<any> {
+    return this.campaignRepository.getCampaignStats(startAt, endAt);
   }
 
   async getCampaignByIdOrSlug(idOrSlug: string): Promise<any> {

@@ -4,10 +4,10 @@ import { IUser } from '../shared/interfaces';
 
 @Injectable()
 export class AuthRepository {
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(private readonly dbService: DatabaseService) { }
 
   async createOrUpdateUser(address: string): Promise<Partial<IUser>> {
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
     const lowerAddress: unknown = address.toLowerCase();
 
     try {
@@ -28,6 +28,8 @@ export class AuthRepository {
       }
     } catch (error) {
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release()
     }
   }
 }

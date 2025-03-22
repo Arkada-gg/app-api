@@ -1,54 +1,51 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from './database.service';
 import { allMigrations } from './migrations';
-import { Client } from 'pg';
+import { Client, Pool, PoolClient } from 'pg';
 
 @Injectable()
 export class MigrationsService {
   private readonly logger = new Logger(MigrationsService.name);
 
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(private readonly dbService: DatabaseService) { }
 
   async runMigrations() {
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
+    try {
+      // await this.ensureMigrationsTable(client);
+      // const applied = await this.getAppliedMigrations(client);
+      // const pending = allMigrations.filter((m) => !applied.includes(m.name));
 
-    await this.ensureMigrationsTable(client);
+      // pending.sort((a, b) => a.name.localeCompare(b.name));
 
-    const applied = await this.getAppliedMigrations(client);
+      // this.logger.log(`Found ${pending.length} pending migration(s).`);
 
-    const pending = allMigrations.filter((m) => !applied.includes(m.name));
+      // for (const migration of pending) {
+      //   this.logger.log(`Applying migration: ${migration.name}...`);
+      //   try {
+      //     // await client.query('BEGIN');
+      //     // await migration.up(client);
+      //     await client.query(
+      //       `INSERT INTO migrations (name, applied_at) VALUES ($1, NOW())`,
+      //       [migration.name]
+      //     );
+      //     // await client.query('COMMIT');
+      //     this.logger.log(`Migration ${migration.name} applied successfully.`);
+      //   } catch (err) {
+      //     // await client.query('ROLLBACK');
+      //     this.logger.error(`Failed to apply migration ${migration.name}`, err);
+      //     throw err;
+      //   }
+      // }
 
-    pending.sort((a, b) => {
-      if (a.name < b.name) return -1;
-      if (a.name > b.name) return 1;
-      return 0;
-    });
-
-    this.logger.log(`Found ${pending.length} pending migration(s).`);
-
-    for (const migration of pending) {
-      this.logger.log(`Applying migration: ${migration.name}...`);
-
-      try {
-        await client.query('BEGIN');
-        await migration.up(client);
-        await client.query(
-          `INSERT INTO migrations (name, applied_at) VALUES ($1, NOW())`,
-          [migration.name]
-        );
-        await client.query('COMMIT');
-        this.logger.log(`Migration ${migration.name} applied successfully.`);
-      } catch (err) {
-        await client.query('ROLLBACK');
-        this.logger.error(`Failed to apply migration ${migration.name}`, err);
-        throw err;
-      }
+      // this.logger.log(`All pending migrations applied.`);
+    } finally {
+      client.release();
     }
-
-    this.logger.log(`All pending migrations applied.`);
   }
 
-  private async ensureMigrationsTable(client: Client) {
+
+  private async ensureMigrationsTable(client: PoolClient) {
     await client.query(`
       CREATE TABLE IF NOT EXISTS migrations (
         id SERIAL PRIMARY KEY,
@@ -58,7 +55,7 @@ export class MigrationsService {
     `);
   }
 
-  private async getAppliedMigrations(client: Client): Promise<string[]> {
+  private async getAppliedMigrations(client: PoolClient): Promise<string[]> {
     const result = await client.query<{ name: string }>(
       `SELECT name FROM migrations`
     );

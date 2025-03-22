@@ -9,8 +9,7 @@ import { QuestTask, QuestType } from './interface';
 
 @Injectable()
 export class QuestRepository {
-  constructor(private readonly dbService: DatabaseService) {}
-  private readonly client = this.dbService.getClient();
+  constructor(private readonly dbService: DatabaseService) { }
 
   private isUUID(str: string): boolean {
     const regex =
@@ -22,6 +21,7 @@ export class QuestRepository {
     questId: string,
     userAddress: string
   ): Promise<boolean> {
+    const client = await this.dbService.getClient();
     const lowerAddress = userAddress.toLowerCase();
     try {
       const query = `
@@ -29,35 +29,42 @@ export class QuestRepository {
         WHERE quest_id = $1 AND user_address = $2
         LIMIT 1
       `;
-      const result = await this.client.query(query, [questId, lowerAddress]);
+      const result = await client.query(query, [questId, lowerAddress]);
       return result.rowCount > 0;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release();
     }
   }
 
   async completeQuest(questId: string, userAddress: string): Promise<void> {
     const lowerAddress = userAddress.toLowerCase();
+    const client = await this.dbService.getClient();
     try {
       const query = `
         INSERT INTO quest_completions (quest_id, user_address, completed_at)
         VALUES ($1, $2, NOW())
         ON CONFLICT (quest_id, user_address) DO NOTHING
       `;
-      await this.client.query(query, [questId, lowerAddress]);
+      await client.query(query, [questId, lowerAddress]);
     } catch (error) {
       throw new InternalServerErrorException(error.message);
+    }
+    finally {
+      client.release();
     }
   }
 
   async getQuest(id: string): Promise<QuestType> {
+    const client = await this.dbService.getClient();
     try {
       const query = `
         SELECT * FROM quests
         WHERE id = $1
         LIMIT 1
       `;
-      const result = await this.client.query(query, [id]);
+      const result = await client.query(query, [id]);
 
       if (result.rowCount === 0) {
         throw new NotFoundException(`Квест с id ${id} не найден`);
@@ -89,6 +96,8 @@ export class QuestRepository {
       throw new InternalServerErrorException(
         `Ошибка при получении квеста: ${error.message}`
       );
+    } finally {
+      client.release();
     }
   }
 
@@ -96,7 +105,7 @@ export class QuestRepository {
     campaignIdOrSlug: string,
     userAddress: string
   ): Promise<QuestCompletionDto[]> {
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
     const lower = userAddress.toLowerCase();
     try {
       const all = await this.getAllCompletedQuestsByUser(lower);
@@ -139,6 +148,8 @@ export class QuestRepository {
       throw new InternalServerErrorException(
         `Ошибка при получении выполненных квестов пользователя внутри кампании: ${error.message}`
       );
+    } finally {
+      client.release();
     }
   }
 
@@ -146,6 +157,7 @@ export class QuestRepository {
     userAddress: string
   ): Promise<QuestCompletionDto[]> {
     const lowerAddress = userAddress.toLowerCase();
+    const client = await this.dbService.getClient();
     try {
       const query = `
         SELECT qc.id, q.name AS quest_name, qc.completed_at, qc.transaction_hash
@@ -154,7 +166,7 @@ export class QuestRepository {
         WHERE qc.user_address = $1
         ORDER BY qc.completed_at DESC
       `;
-      const result = await this.client.query(query, [lowerAddress]);
+      const result = await client.query(query, [lowerAddress]);
       return result.rows.map((row) => ({
         id: row.id,
         quest_name: row.quest_name,
@@ -165,17 +177,20 @@ export class QuestRepository {
       throw new InternalServerErrorException(
         `Ошибка при получении выполненных квестов пользователя: ${error.message}`
       );
+    } finally {
+      client.release();
     }
   }
 
   async getQuestsByCampaign(campaignId: string): Promise<QuestType[]> {
+    const client = await this.dbService.getClient();
     try {
       const query = `
         SELECT * FROM quests
         WHERE campaign_id = $1
         ORDER BY sequence ASC
       `;
-      const result = await this.client.query(query, [campaignId]);
+      const result = await client.query(query, [campaignId]);
 
       if (result.rowCount === 0) {
         throw new NotFoundException(
@@ -209,6 +224,8 @@ export class QuestRepository {
       throw new InternalServerErrorException(
         `Ошибка при получении квестов кампании: ${error.message}`
       );
+    } finally {
+      client.release();
     }
   }
 

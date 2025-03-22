@@ -10,10 +10,10 @@ import { ITransaction } from '../shared/interfaces';
 export class TransactionsService {
   private readonly logger = new Logger(TransactionsService.name);
 
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(private readonly dbService: DatabaseService) { }
 
   async findByHash(hash: string): Promise<ITransaction | null> {
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
 
     try {
       // Query the database to get the transaction by its hash
@@ -30,11 +30,13 @@ export class TransactionsService {
       return transactionResult.rows[0];
     } catch (error) {
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release();
     }
   }
 
   async createTx(txData: Omit<ITransaction, 'created_at'>): Promise<boolean> {
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
 
     try {
       // Check if the transaction with the same hash already exists
@@ -67,6 +69,8 @@ export class TransactionsService {
       return true; // Transaction created successfully
     } catch (error) {
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release();
     }
   }
 }

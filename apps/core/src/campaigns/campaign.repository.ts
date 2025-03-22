@@ -8,10 +8,11 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { CampaignType } from './dto/get-campaigns.dto';
 import { UserCampaignStatus } from './dto/get-user-campaigns.dto';
+import { PoolClient } from 'pg';
 
 @Injectable()
 export class CampaignRepository {
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(private readonly dbService: DatabaseService) { }
 
   private isUUID(str: string): boolean {
     const regex =
@@ -19,8 +20,75 @@ export class CampaignRepository {
     return regex.test(str);
   }
 
+  async getCampaignStats(startAt?: string, endAt?: string): Promise<any> {
+    const client: PoolClient = await this.dbService.getClient();
+    try {
+      const totalCampaignsResult = await client.query(
+        `SELECT COUNT(*) as total FROM campaigns`
+      );
+      const totalCampaigns = Number(totalCampaignsResult.rows[0].total);
+
+      const campaignsCompletedResult = await client.query(
+        `SELECT COUNT(*) as total FROM campaign_completions
+         WHERE ($1::timestamp IS NULL OR completed_at >= $1)
+           AND ($2::timestamp IS NULL OR completed_at <= $2)`,
+        [startAt || null, endAt || null]
+      );
+      const campaignsCompleted = Number(campaignsCompletedResult.rows[0].total);
+
+      const notCompletedResult = await client.query(
+        `SELECT SUM(c.participants - COALESCE(cc.completed, 0)) as total_not_completed
+         FROM campaigns c
+         LEFT JOIN (
+           SELECT campaign_id, COUNT(*) as completed
+           FROM campaign_completions
+           WHERE ($1::timestamp IS NULL OR completed_at >= $1)
+             AND ($2::timestamp IS NULL OR completed_at <= $2)
+           GROUP BY campaign_id
+         ) cc ON c.id = cc.campaign_id
+         WHERE ($1::timestamp IS NULL OR c.started_at >= $1)
+           AND ($2::timestamp IS NULL OR c.finished_at <= $2)`,
+        [startAt || null, endAt || null]
+      );
+      const notCompletedCampaigns = Number(notCompletedResult.rows[0].total_not_completed);
+
+      const completedFirstQuestResult = await client.query(
+        `SELECT SUM(COALESCE(qc.first_completed, 0)) as total_completed_first
+         FROM campaigns c
+         LEFT JOIN (
+           SELECT q.campaign_id, COUNT(DISTINCT qc.user_address) as first_completed
+           FROM quests q
+           LEFT JOIN quest_completions qc ON q.id = qc.quest_id
+           WHERE q.sequence = 1
+           GROUP BY q.campaign_id
+         ) qc ON c.id = qc.campaign_id
+         WHERE ($1::timestamp IS NULL OR c.started_at >= $1)
+           AND ($2::timestamp IS NULL OR c.started_at <= $2)`,
+        [startAt || null, endAt || null]
+      );
+      const participated = Number(completedFirstQuestResult.rows[0].total_completed_first);
+
+      const averageCompletion = notCompletedCampaigns > 0 ? campaignsCompleted / totalCampaigns : 0;
+      const averageParticipated = notCompletedCampaigns > 0 ? participated / totalCampaigns : 0;
+
+      return {
+        totalCampaigns,
+        notCompletedCampaigns,
+        campaignsCompleted,
+        averageCompletion,
+        averageParticipated,
+        participated
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release();
+    }
+  }
+
+
   async incrementParticipants(campaignId: string): Promise<void> {
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
     try {
       const updateQuery = `
         UPDATE campaigns 
@@ -33,11 +101,13 @@ export class CampaignRepository {
       throw new InternalServerErrorException(
         `Error incrementing participants: ${error.message}`
       );
+    } finally {
+      client.release()
     }
   }
 
   async getCampaignStatus(id: string, address: string) {
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
     try {
       const query = `
         SELECT 
@@ -56,6 +126,8 @@ export class CampaignRepository {
       return result.rows[0];
     } catch (error) {
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release()
     }
   }
 
@@ -63,6 +135,7 @@ export class CampaignRepository {
     campaignId: string,
     userAddress: string
   ): Promise<{ rowCount: number }> {
+    const client = await this.dbService.getClient();
     const lowerAddress = userAddress.toLowerCase();
     try {
       const query = `
@@ -70,12 +143,13 @@ export class CampaignRepository {
         VALUES ($1, $2, NOW())
         ON CONFLICT (campaign_id, user_address) DO NOTHING
       `;
-      const result = await this.dbService
-        .getClient()
+      const result = await client
         .query(query, [campaignId, lowerAddress]);
       return { rowCount: result.rowCount };
     } catch (error) {
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release()
     }
   }
 
@@ -85,7 +159,7 @@ export class CampaignRepository {
     type?: CampaignType,
     categoryDto?: string[]
   ): Promise<any[]> {
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
     try {
       const offset = (page - 1) * limit;
       let query = `
@@ -127,19 +201,20 @@ export class CampaignRepository {
 
       params.push(limit);
       params.push(offset);
-      query += ` ORDER BY started_at DESC LIMIT $${params.length - 1} OFFSET $${
-        params.length
-      }`;
+      query += ` ORDER BY started_at DESC LIMIT $${params.length - 1} OFFSET $${params.length
+        }`;
 
       const result = await client.query(query, params);
       return result.rows;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release()
     }
   }
 
   async findCampaignByIdOrSlug(idOrSlug: string): Promise<any> {
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
     try {
       let query = '';
 
@@ -182,6 +257,8 @@ export class CampaignRepository {
     } catch (error) {
       Logger.error(`Error in findCampaignByIdOrSlug: ${error.message}`);
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release()
     }
   }
 
@@ -190,7 +267,7 @@ export class CampaignRepository {
     address: string
   ): Promise<void> {
     const lowerAddress = address.toLowerCase();
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
 
     try {
       await client.query('BEGIN');
@@ -240,6 +317,8 @@ export class CampaignRepository {
         throw error;
       }
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release()
     }
   }
 
@@ -248,7 +327,7 @@ export class CampaignRepository {
     address: string
   ): Promise<boolean> {
     const lowerAddress = address.toLowerCase();
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
 
     try {
       const campaignQuery = `
@@ -282,11 +361,13 @@ export class CampaignRepository {
         throw error;
       }
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release()
     }
   }
 
   async getCampaignStatuses(campaignIds: string[], userAddress: string) {
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
 
     const idsList = campaignIds.map((id) => `'${id}'`).join(',');
 
@@ -344,6 +425,8 @@ export class CampaignRepository {
       return results;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release()
     }
   }
 
@@ -380,7 +463,7 @@ export class CampaignRepository {
     page = 1,
     limit = 5
   ) {
-    const client = this.dbService.getClient();
+    const client = await this.dbService.getClient();
     const lowercaseAddress = userAddress.toLowerCase();
     const offset = (page - 1) * limit;
 
@@ -458,6 +541,8 @@ export class CampaignRepository {
       return (await client.query(query, params)).rows;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
+    } finally {
+      client.release()
     }
   }
 }

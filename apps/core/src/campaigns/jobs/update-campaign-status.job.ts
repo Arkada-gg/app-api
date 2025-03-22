@@ -6,14 +6,14 @@ import { DatabaseService } from '../../database/database.service';
 export class CampaignStatusJob {
   private readonly logger = new Logger(CampaignStatusJob.name);
 
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(private readonly dbService: DatabaseService) { }
 
   @Cron('*/3 * * * *')
   async handleCampaignFinishStatus() {
     this.logger.log('CampaignStatusJob started: updating FINISHED campaigns.');
-
+    const client = await this.dbService.getClient();
     try {
-      const client = this.dbService.getClient();
+
       await client.query(`
         UPDATE campaigns
         SET status = 'FINISHED'
@@ -24,6 +24,8 @@ export class CampaignStatusJob {
       this.logger.log('CampaignStatusJob completed: statuses updated.');
     } catch (error) {
       this.logger.error(`CampaignStatusJob failed: ${error.message}`);
+    } finally {
+      client.release()
     }
   }
 }

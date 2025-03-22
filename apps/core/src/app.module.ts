@@ -17,6 +17,7 @@ import { HealthzModule } from './healthz/healthz.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { TransactionsModule } from './transactions/transactions.module';
 import { AlchemyQueueModule } from './queues/alchemy-queue.module';
+import { StatsModule } from './stats/stats.module';
 @Module({
   imports: [
     SentryModule.forRoot(),
@@ -36,7 +37,8 @@ import { AlchemyQueueModule } from './queues/alchemy-queue.module';
     IpfsModule,
     HealthzModule,
     TransactionsModule,
-    AlchemyQueueModule
+    AlchemyQueueModule,
+    StatsModule
   ],
 })
 export class AppModule { }

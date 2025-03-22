@@ -32,6 +32,10 @@ export class UserService {
     return this.userRepository.findByAddress(address);
   }
 
+  async getUserPointsHistory(page: number, limit: number, address?: string) {
+    return this.userRepository.getUserPointsHistory(page, limit, address);
+  }
+
   async createUserEmail(dto: CreateUserEmailDto) {
     const email = await this.userRepository.findEmail(dto.email);
     if (email) {
@@ -410,10 +414,12 @@ export class UserService {
       if (bonus > 0 && bonus < 1) bonus = 1;
       await this.updatePoints(user.ref_owner, bonus, EPointsType.Referral);
     }
+    return
   }
 
   async updatePoints(address: string, points: number, pointType: any) {
     await this.userRepository.updatePoints(address, points, pointType);
+    return
   }
 
   async findUsersWithTwitterChunk(offset: number, batch_size: number) {
