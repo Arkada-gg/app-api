@@ -67,7 +67,7 @@ export class UserService {
     return this.userRepository.createUserWithReferral(lower);
   }
 
-  async bindReferral(refCode: string, address: string): Promise<IUser> {
+  async bindReferral(refCode: string, address: string): Promise<{ success: boolean }> {
     const lower = address.toLowerCase();
     const existingUser = await this.findByAddress(lower);
     if (!existingUser) {
@@ -84,8 +84,8 @@ export class UserService {
       throw new BadRequestException('Cannot refer yourself');
     }
     await this.userRepository.setRefOwner(lower, owner.address);
-    const updatedUser = await this.findByAddress(lower);
-    return updatedUser;
+
+    return { success: true };
   }
 
   async getLeaderboardCustom(
@@ -406,9 +406,9 @@ export class UserService {
     return { success: true };
   }
 
-  async awardCampaignCompletion(address: string, basePoints: number) {
+  async awardCampaignCompletion(address: string, basePoints: number, campaignId?: string) {
     const user = await this.findByAddress(address);
-    await this.updatePoints(address, basePoints, EPointsType.Campaign);
+    await this.updatePoints(address, basePoints, EPointsType.Campaign, campaignId);
     if (user?.ref_owner) {
       let bonus = Math.floor(basePoints * 0.01);
       if (bonus > 0 && bonus < 1) bonus = 1;
@@ -417,8 +417,8 @@ export class UserService {
     return
   }
 
-  async updatePoints(address: string, points: number, pointType: any) {
-    await this.userRepository.updatePoints(address, points, pointType);
+  async updatePoints(address: string, points: number, pointType: any, campaignId?: string) {
+    await this.userRepository.updatePoints(address, points, pointType, campaignId);
     return
   }
 

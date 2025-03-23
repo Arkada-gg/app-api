@@ -1,8 +1,8 @@
-import { Client } from 'pg';
+import { PoolClient } from 'pg';
 
 export const name = '1674235300002_create_campaigns_table';
 
-export async function up(client: Client): Promise<void> {
+export async function up(client: PoolClient): Promise<void> {
   await client.query(`
 CREATE TYPE public.campaign_type AS ENUM (
      'basic',
@@ -28,7 +28,7 @@ CREATE TYPE public.campaign_type AS ENUM (
   `);
 }
 
-export async function down(client: Client): Promise<void> {
+export async function down(client: PoolClient): Promise<void> {
   await client.query(`
     DROP TABLE IF EXISTS campaigns;
   `);

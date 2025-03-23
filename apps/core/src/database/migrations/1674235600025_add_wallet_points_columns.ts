@@ -1,8 +1,8 @@
-import { Client } from 'pg';
+import { PoolClient } from 'pg';
 
 export const name = '1674235600025_add_wallet_points_columns';
 
-export async function up(client: Client): Promise<void> {
+export async function up(client: PoolClient): Promise<void> {
   await client.query(`
     ALTER TABLE users
     ADD COLUMN IF NOT EXISTS wallet_points INTEGER DEFAULT 0,
@@ -10,7 +10,7 @@ export async function up(client: Client): Promise<void> {
   `);
 }
 
-export async function down(client: Client): Promise<void> {
+export async function down(client: PoolClient): Promise<void> {
   await client.query(`
     ALTER TABLE users
     DROP COLUMN IF EXISTS wallet_points,

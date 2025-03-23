@@ -1,8 +1,8 @@
-import { Client } from 'pg';
+import { PoolClient } from 'pg';
 
 export const name = '1674235300020_assign_ref_codes_to_existing_users';
 
-export async function up(client: Client): Promise<void> {
+export async function up(client: PoolClient): Promise<void> {
   console.log('Fetching users without referral codes...');
   const { rows: users } = await client.query(
     `SELECT address FROM users WHERE referral_code IS NULL`
@@ -60,7 +60,7 @@ export async function up(client: Client): Promise<void> {
   console.log('Migration complete.');
 }
 
-export async function down(client: Client): Promise<void> {
+export async function down(client: PoolClient): Promise<void> {
   await client.query(`UPDATE users SET referral_code = NULL`);
 }
 

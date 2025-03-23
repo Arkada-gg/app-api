@@ -1,8 +1,8 @@
-import { Client } from 'pg';
+import { PoolClient } from 'pg';
 
 export const name = '1674235300014_add_unique_constraint_campaign_completions';
 
-export async function up(client: Client): Promise<void> {
+export async function up(client: PoolClient): Promise<void> {
   try {
     await client.query(`
       ALTER TABLE campaign_completions
@@ -23,7 +23,7 @@ export async function up(client: Client): Promise<void> {
   }
 }
 
-export async function down(client: Client): Promise<void> {
+export async function down(client: PoolClient): Promise<void> {
   try {
     await client.query(`
       ALTER TABLE campaign_completions

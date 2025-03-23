@@ -43,7 +43,7 @@ import { CreateUserEmailDto } from './dto/create-user-email.dto';
 @Controller('user')
 @ApiTags('User')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) { }
 
   @Post('create-email')
   @ApiOperation({ summary: 'Создать запись (email + опционально address)' })
@@ -200,7 +200,7 @@ export class UserController {
     description: 'Успешно получен профиль',
     type: GetUserResponse,
   })
-  async bindReferral(@Body() dto: BindRefDto): Promise<IUser> {
+  async bindReferral(@Body() dto: BindRefDto): Promise<{ success: boolean }> {
     const { refCode, address } = dto;
     return this.userService.bindReferral(refCode, address);
   }

@@ -222,7 +222,8 @@ export class QuestService {
           const effectivePoints = totalPoints * userMultiplier;
           await this.userService.awardCampaignCompletion(
             lowerAddress,
-            effectivePoints
+            effectivePoints,
+            campaignId
           );
         }
       }

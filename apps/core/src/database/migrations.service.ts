@@ -11,34 +11,35 @@ export class MigrationsService {
 
   async runMigrations() {
     const client = await this.dbService.getClient();
+    const soloClient = await this.dbService.getSoloClient();
     try {
-      // await this.ensureMigrationsTable(client);
-      // const applied = await this.getAppliedMigrations(client);
-      // const pending = allMigrations.filter((m) => !applied.includes(m.name));
+      await this.ensureMigrationsTable(client);
+      const applied = await this.getAppliedMigrations(client);
+      const pending = allMigrations.filter((m) => !applied.includes(m.name));
 
-      // pending.sort((a, b) => a.name.localeCompare(b.name));
+      pending.sort((a, b) => a.name.localeCompare(b.name));
 
-      // this.logger.log(`Found ${pending.length} pending migration(s).`);
+      this.logger.log(`Found ${pending.length} pending migration(s).`);
 
-      // for (const migration of pending) {
-      //   this.logger.log(`Applying migration: ${migration.name}...`);
-      //   try {
-      //     // await client.query('BEGIN');
-      //     // await migration.up(client);
-      //     await client.query(
-      //       `INSERT INTO migrations (name, applied_at) VALUES ($1, NOW())`,
-      //       [migration.name]
-      //     );
-      //     // await client.query('COMMIT');
-      //     this.logger.log(`Migration ${migration.name} applied successfully.`);
-      //   } catch (err) {
-      //     // await client.query('ROLLBACK');
-      //     this.logger.error(`Failed to apply migration ${migration.name}`, err);
-      //     throw err;
-      //   }
-      // }
+      for (const migration of pending) {
+        this.logger.log(`Applying migration: ${migration.name}...`);
+        try {
+          await client.query('BEGIN');
+          await migration.up(client);
+          await client.query(
+            `INSERT INTO migrations (name, applied_at) VALUES ($1, NOW())`,
+            [migration.name]
+          );
+          await client.query('COMMIT');
+          this.logger.log(`Migration ${migration.name} applied successfully.`);
+        } catch (err) {
+          await client.query('ROLLBACK');
+          this.logger.error(`Failed to apply migration ${migration.name}`, err);
+          throw err;
+        }
+      }
 
-      // this.logger.log(`All pending migrations applied.`);
+      this.logger.log(`All pending migrations applied.`);
     } finally {
       client.release();
     }

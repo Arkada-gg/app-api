@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
-import { Pool, PoolClient } from 'pg';
+import { Client, Pool, PoolClient } from 'pg';
 import { ConfigService } from '../_config/config.service';
 
 const arrOfIdsCtx = new Map()
@@ -48,6 +48,7 @@ class PgClientWrapper {
 export class DatabaseService implements OnModuleInit {
   private readonly logger = new Logger(DatabaseService.name);
   private pool: Pool;
+  private soloClient: Client
 
   constructor(private readonly configService: ConfigService) {
     this.pool = new Pool({
@@ -55,6 +56,10 @@ export class DatabaseService implements OnModuleInit {
         'postgres://user:password@localhost:5432/arkada_db',
       idleTimeoutMillis: 5000,
       max: 20
+    })
+    this.soloClient = new Client({
+      connectionString: this.configService.get('DATABASE_URL') ||
+        'postgres://user:password@localhost:5432/arkada_db'
     });
   }
 
@@ -102,5 +107,9 @@ export class DatabaseService implements OnModuleInit {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     //@ts-ignore
     return wrappedPg satisfies PoolClient;
+  }
+
+  async getSoloClient(): Promise<Client> {
+    return this.soloClient
   }
 }

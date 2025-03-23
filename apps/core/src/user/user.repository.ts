@@ -717,17 +717,24 @@ export class UserRepository {
     `;
 
     if (!userAddress) {
-      const topRes = await client.query(top50sql, [startIso, endIso]);
-      const top = topRes.rows.map((row) => ({
-        address: row.address,
-        name: row.name,
-        avatar: row.avatar,
-        twitter: row.twitter,
-        points: Number(row.total_points),
-        campaigns_completed: Number(row.campaigns_completed),
-        rank: Number(row.rank),
-      }));
-      return { top };
+      try {
+        const topRes = await client.query(top50sql, [startIso, endIso]);
+        const top = topRes.rows.map((row) => ({
+          address: row.address,
+          name: row.name,
+          avatar: row.avatar,
+          twitter: row.twitter,
+          points: Number(row.total_points),
+          campaigns_completed: Number(row.campaigns_completed),
+          rank: Number(row.rank),
+        }));
+        return { top };
+      } catch (error) {
+        console.log('------>', error);
+      } finally {
+        client.release();
+      }
+
     }
 
     const userRankSql = `
@@ -753,7 +760,6 @@ export class UserRepository {
           userAddress.toLowerCase(),
         ]),
       ]);
-      console.log('------>', userRes);
       const top = topRes.rows.map((r) => ({
         address: r.address,
         name: r.name,
@@ -880,19 +886,29 @@ export class UserRepository {
   async updatePoints(
     address: string,
     points: number,
-    pointType: 'base_campaign' | 'base_quest' | 'referral'
+    pointType: 'base_campaign' | 'base_quest' | 'referral',
+    campaignId?: string
   ) {
     const lower = address.toLowerCase();
     const user = await this.findByAddress(address);
     const userPoints = user.points.total;
     const client = await this.dbService.getClient();
+
     try {
-      // await client.query('BEGIN');
-      await client.query(
-        `INSERT INTO user_points (user_address, points, point_type)
-         VALUES ($1, $2, $3)`,
-        [lower, points, pointType]
-      );
+      if (pointType === 'base_campaign' && campaignId) {
+        await client.query(
+          `INSERT INTO user_points (user_address, points, point_type, campaign_id, points_before, points_after)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [lower, points, pointType, campaignId, user.points.total, userPoints + points]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO user_points (user_address, points, point_type, points_before, points_after)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [lower, points, pointType, user.points.total, userPoints + points]
+        );
+      }
+
       const totalPoints = userPoints + points;
       await client.query(
         `UPDATE users
@@ -900,14 +916,14 @@ export class UserRepository {
          WHERE address = $2`,
         [totalPoints, lower]
       );
-      // await client.query('COMMIT');
+
     } catch (error) {
-      // await client.query('ROLLBACK');
       throw new InternalServerErrorException(error.message);
     } finally {
       client.release();
     }
   }
+
 
   async getTotalPointsByType(address: string): Promise<Record<string, number>> {
     const lower = address.toLowerCase();

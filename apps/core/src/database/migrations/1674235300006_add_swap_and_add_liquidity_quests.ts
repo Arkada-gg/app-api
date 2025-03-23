@@ -1,9 +1,9 @@
-import { Client } from 'pg';
+import { PoolClient } from 'pg';
 import { v4 as uuidv4 } from 'uuid';
 
 export const name = '1674235300006_add_swap_and_add_liquidity_quests';
 
-export async function up(client: Client): Promise<void> {
+export async function up(client: PoolClient): Promise<void> {
   await client.query(`
     INSERT INTO quests (id, name, description, image, value, campaign_id, quest_type, created_at, updated_at, sequence)
     VALUES
@@ -55,7 +55,7 @@ export async function up(client: Client): Promise<void> {
   `);
 }
 
-export async function down(client: Client): Promise<void> {
+export async function down(client: PoolClient): Promise<void> {
   await client.query(`
     DELETE FROM quests
     WHERE id IN (
