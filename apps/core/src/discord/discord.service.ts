@@ -37,10 +37,9 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.discordClientOther.on('guildCreate', async (guild: Guild) => {
-      const pgClient = await this.dbService.getClient();
       this.logger.log(`Bot added to guild: ${guild.id} (${guild.name})`);
       try {
-        await pgClient.query(
+        await this.dbService.query(
           `INSERT INTO discord_guilds (guild_id, project_id)
            VALUES ($1, $2)
            ON CONFLICT (guild_id) DO NOTHING`,
@@ -49,8 +48,6 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`Guild ${guild.id} saved in database`);
       } catch (error) {
         this.logger.error(`Error saving guild ${guild.id}: ${error.message}`);
-      } finally {
-        pgClient.release();
       }
     });
 

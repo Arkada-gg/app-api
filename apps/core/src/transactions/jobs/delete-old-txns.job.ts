@@ -10,17 +10,16 @@ export class PurgeDailyChecksJob {
 
   @Cron('0 0,12 * * *')
   async handlePurgeOldRecords() {
+    // TODO: cron job in postgres
     this.logger.log('PurgeDailyChecksJob started: removing old records in batches...');
 
-    const client = await this.dbService.getClient();
     try {
 
       let totalDeleted = 0;
       const BATCH_SIZE = 5000;
 
       while (true) {
-
-        const res = await client.query(`
+        const res = await this.dbService.query(`
           WITH to_delete AS (
             SELECT hash
             FROM transactions
@@ -40,12 +39,9 @@ export class PurgeDailyChecksJob {
           break;
         }
       }
-
       this.logger.log(`PurgeDailyChecksJob completed: removed ${totalDeleted} old records.`);
     } catch (error) {
       this.logger.error(`PurgeDailyChecksJob failed: ${error.message}`);
-    } finally {
-      client.release();
     }
   }
 }
