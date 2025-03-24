@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { GetUserResponse, IUser, SessionRequest } from '../shared/interfaces';
+import { GetUserPointsResponse, GetUserResponse, IUser, SessionRequest } from '../shared/interfaces';
 import { Multer } from 'multer';
 import { MulterExceptionFilter } from '../common/multer-exception.filter';
 import { ethers } from 'ethers';
@@ -174,6 +174,24 @@ export class UserController {
       quests_completed: questsCompleted,
       campaigns_completed: campaignsCompleted,
     };
+  }
+
+  @Post('/points/:address')
+  @ApiOperation({ summary: 'Получить поинты по адресу' })
+  @ApiParam({
+    name: 'address',
+    description: 'Адрес пользователя',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Успешно получен профиль',
+    type: GetUserPointsResponse,
+  })
+  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
+  async getUserPointsByHash(@Param('address') address: string) {
+    const userPoints = await this.userService.getUserPoints(address);
+    return userPoints
   }
 
   @Put('/ref/bind')

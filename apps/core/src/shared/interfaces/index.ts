@@ -269,6 +269,26 @@ export class GetCampaignByIdOrSlugResponse extends GetCampaignResponse {
   quests: QuestDto[];
 }
 
+export class GetUserPointsResponse {
+  @ApiProperty({ example: '100', description: 'Поинты за реферальную систему' })
+  ref: number;
+
+  @ApiProperty({ example: '100', description: 'Поинты за daily начисления' })
+  daily: number;
+
+  @ApiProperty({ example: '100', description: 'Поинты за кампании' })
+  base_campaign: number;
+
+  @ApiProperty({ example: '100', description: 'wallet_additional поинтов' })
+  wallet_additional: number;
+
+  @ApiProperty({ example: '100', description: 'wallet поинтов' })
+  wallet: number;
+
+  @ApiProperty({ example: '100', description: 'Всего поинтов' })
+  total: number;
+}
+
 export class GetUserResponse {
   @ApiProperty({ example: '0x12345...', description: 'Адрес пользователя' })
   address: string;
