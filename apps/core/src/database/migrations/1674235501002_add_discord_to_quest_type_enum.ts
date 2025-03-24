@@ -1,6 +1,6 @@
-import { Client } from 'pg';
+import { PoolClient } from 'pg';
 export const name = '1674235501002_add_discord_to_quest_type_enum';
-export async function up(client: Client): Promise<void> {
+export async function up(client: PoolClient): Promise<void> {
   await client.query(`
     DO $$
     BEGIN

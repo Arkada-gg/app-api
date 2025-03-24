@@ -1,8 +1,8 @@
-import { Client } from 'pg';
+import { PoolClient } from 'pg';
 
 export const name = '1674235300026_add_daily_point_type_enum_recreate';
 
-export async function up(client: Client): Promise<void> {
+export async function up(client: PoolClient): Promise<void> {
   await client.query(`
     CREATE TYPE point_type_enum_new AS ENUM (
       'base_campaign',
@@ -29,7 +29,7 @@ export async function up(client: Client): Promise<void> {
   `);
 }
 
-export async function down(client: Client): Promise<void> {
+export async function down(client: PoolClient): Promise<void> {
   await client.query(`
     CREATE TYPE point_type_enum_old AS ENUM (
       'base_campaign',

@@ -13,7 +13,7 @@ export const PREMIUM_QUEST_MINT_PRICE =
 
 export const MAX_BPS = 10000; // 100%
 export const REF_OWNER_BPS = 1000; // 10%
-export const USER_REWARD_BPS = 2000; // 20%
+export const USER_REWARD_BPS = 0; // 0%
 
 export const ARKADA_NFTS_MULTIPLIER_BPS: Record<ARKADA_NFTS, number> = {
   [ARKADA_NFTS.BUSHI]: 1000, // 10%

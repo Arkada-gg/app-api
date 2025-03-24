@@ -1,0 +1,73 @@
+services:
+  core:
+    build:
+      context: ../../
+      dockerfile: ./docker/core/Dockerfile
+      args:
+        APP: core
+    container_name: arkada-backend
+    command: ['npm', 'run', 'dev:core']
+    restart: unless-stopped
+    init: true
+    ports:
+      - '3000:3000/tcp'
+      - '9229:9229/tcp' # debugger
+    env_file:
+      - .env.local
+    volumes:
+      - './src:/app'
+    networks:
+      - internal
+    depends_on:
+      - redis
+      - postgres
+
+  redis:
+    image: redis/redis-stack:7.2.0-v2
+    container_name: redis-arkada
+    restart: unless-stopped
+    hostname: redis
+    ports:
+      - '8001:8001/tcp'
+      - '6379:6379'
+    volumes:
+      - 'redis_data:/data'
+    networks:
+      - internal
+
+  postgres:
+    image: postgres:16.2-alpine
+    container_name: postgres-arkada
+    restart: unless-stopped
+    hostname: postgres
+    env_file:
+      - .env.postgres
+    ports:
+      - '5432:5432/tcp'
+    volumes:
+      - 'postgres_data:/var/lib/postgresql/data'
+    networks:
+      - internal
+
+#  pgadmin:
+#    build:
+#      context: ../..
+#      dockerfile: docker/pgadmin4/Dockerfile
+#      args:
+#        POSTGRES_DB: arkada
+#        POSTGRES_USER: arkada
+#        POSTGRES_PASSWORD: arkada
+#    container_name: arkada-api-pgadmin
+#    restart: unless-stopped
+#    env_file:
+#      - .env.pgadmin
+#    ports:
+#      - '5050:80/tcp'
+#    networks:
+#      - internal
+
+volumes:
+  redis_data:
+  postgres_data:
+networks:
+  internal:

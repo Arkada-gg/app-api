@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   InternalServerErrorException,
+  Logger,
   Param,
   Post,
   UseGuards,
@@ -26,10 +27,12 @@ import { QuestService } from './quest.service';
 @ApiTags('Quests')
 @Controller('quests')
 export class QuestController {
+  private readonly logger = new Logger(QuestController.name)
+
   constructor(
     private readonly questService: QuestService,
-    private readonly userService: UserService
-  ) {}
+    private readonly userService: UserService,
+  ) { }
 
   @Post('check-quest')
   @UseGuards(ConditionalSignatureAuthGuard)
@@ -39,6 +42,7 @@ export class QuestController {
     description: 'Задание не выполнено или некорректные данные',
   })
   async checkQuest(@Body() checkQuestDto: CheckQuestDto) {
+    const startTime = Date.now();
     const { id, address } = checkQuestDto;
 
     const quest = await this.questService.getQuest(id);
@@ -66,6 +70,8 @@ export class QuestController {
     if (!isCompleted) {
       throw new BadRequestException('Quest not completed');
     }
+    const endTime = Date.now();
+    this.logger.log(`check-quest done. latency: ${endTime - startTime}ms`);
     return { id, address, isCompleted };
   }
 
@@ -77,6 +83,7 @@ export class QuestController {
     description: 'Задание не выполнено или некорректные данные',
   })
   async completeQuest(@Body() completeQuestDto: CompleteQuestDto) {
+    const startTime = Date.now();
     const { id, address } = completeQuestDto;
 
     const quest = await this.questService.getQuest(id);
@@ -105,6 +112,8 @@ export class QuestController {
     }
 
     const isCompleted = await this.questService.completeQuestQuiz(id, address);
+    const endTime = Date.now();
+    this.logger.log(`complete-quest done. latency: ${endTime - startTime}ms`);
 
     return { id, address, isCompleted };
   }
@@ -192,10 +201,10 @@ export class QuestController {
     type: GetMintDataResponse,
   })
   async getSignedMintData(@Body() body: GetMintDataDto) {
-    const { campaignIdOrSlug, userAddress } = body;
+    const { campaignIdOrSlug, address } = body;
     return await this.questService.getSignedMintData(
       campaignIdOrSlug,
-      userAddress
+      address
     );
   }
 }

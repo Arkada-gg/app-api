@@ -49,6 +49,7 @@ import { QuestRepository } from './quest.repository';
 
 @Injectable()
 export class QuestService {
+  private readonly logger = new Logger(QuestService.name);
   private readonly contractAbiMap: { [addr: string]: any } = {
     '0xdef357d505690f1b0032a74c3b581163c23d1535': SwapRouterABI,
     '0x6f5f9d55f727928b644b04d987b1c0cf50af8c0b': UniswapV3ABI,
@@ -192,9 +193,37 @@ export class QuestService {
           rewards.forEach((r: any) => {
             if (r.type === 'tokens') totalPoints += parseInt(r.value, 10);
           });
+
+          const nftConfigs = [
+            {
+              address:
+                '0x2877Da93f3b2824eEF206b3B313d4A61E01e5698'.toLowerCase(),
+              multiplier: 1.1,
+            },
+            {
+              address:
+                '0x181b42ca4856237AE76eE8c67F8FF112491eCB9e'.toLowerCase(),
+              multiplier: 1.2,
+            },
+          ];
+          let userMultiplier = 1;
+          for (const nft of nftConfigs) {
+            const contract = new ethers.Contract(
+              nft.address,
+              ['function balanceOf(address owner) view returns (uint256)'],
+              soneiumProvider
+            );
+            const balance = await contract.balanceOf(lowerAddress);
+            if (balance && +balance.toString() > 0) {
+              userMultiplier = Math.max(userMultiplier, nft.multiplier);
+            }
+          }
+
+          const effectivePoints = totalPoints * userMultiplier;
           await this.userService.awardCampaignCompletion(
             lowerAddress,
-            totalPoints
+            effectivePoints,
+            campaignId
           );
         }
       }
@@ -306,6 +335,7 @@ export class QuestService {
   }
 
   private async handleQuestLogic(quest: QuestType, userAddr: string) {
+    const startTime = Date.now();
     if (quest.type === 'link') {
       return this.handleLinkQuest(quest, userAddr);
     }
@@ -328,6 +358,8 @@ export class QuestService {
     if (quest.value.type === 'checkOnchainMethod') {
       return this.handleCheckOnchainMethodQuest(quest, userAddr);
     }
+    const endTime = Date.now();
+    this.logger.log(`UserTRansactionFromBlockscout ---> latency: ${endTime - startTime}ms`);
     return this.checkOnChainQuest(quest, userAddr);
   }
 
@@ -717,7 +749,6 @@ export class QuestService {
         tx.to.toLowerCase() === quest.value.contracts[1]?.toLowerCase() ||
         tx.to.toLowerCase() === quest.value.contracts[2]?.toLowerCase()
     );
-    console.log('--txnsToAddress.length---->', txnsToAddress.length);
 
     for (const tx of txnsToAddress) {
       if (!data.minAmountUSD && !data.actions && data.methodSignatures) {
@@ -937,6 +968,7 @@ export class QuestService {
             parsedTx,
             parentTx
           );
+          console.log('sumUSD------>', sumUSD, parentTx.hash);
           if (sumUSD >= (action.minUsdTotal || 0)) {
             return true;
           } else {
@@ -1075,7 +1107,7 @@ export class QuestService {
           const token1Index = parsedTx.args[0][
             action.tokens[i + 1].paramIndexToken
           ].indexOf(action.tokens[i + 1]?.address);
-          if (token0Index < token1Index) {
+          if (token1Index && (token0Index < token1Index)) {
             return 0;
           }
           const usdVal = await this.convertToUSD(
@@ -1084,15 +1116,16 @@ export class QuestService {
           );
           return (totalUsd += usdVal);
         } else {
-          if (!actual) return 0;
+          if (!actual) totalUsd += 0;
           if (def.address.toLowerCase() !== actual.address.toLowerCase()) {
-            return 0;
+            totalUsd += 0;
           }
           if ((def.minAmountToken || 0) > 0) {
-            //свериться с минимальным кол-вом если есть
+            totalUsd += 0;
           }
           const usdVal = await this.convertToUSD(actual.address, actual.amount);
           totalUsd += usdVal;
+          return totalUsd
         }
       }
     } else {
@@ -1127,7 +1160,6 @@ export class QuestService {
         ? 6
         : 18;
     const floatAmount = parseFloat(ethers.formatUnits(amountBN, decimals));
-    console.log('floatAmount------>', floatAmount);
     if (
       tokenAddr.toLowerCase() ===
       '0xba9986d2381edf1da03b0b9c1f8b00dc4aacc369' ||
@@ -1145,18 +1177,20 @@ export class QuestService {
 
   private async getUserTransactions(chain: any, addr: string, campaign: any) {
     if (chain === 'Soneium' || chain === 1868) {
-      console.log('------>', 123);
+      const startTime = Date.now();
       const now = Math.floor(Date.now() / 1000);
       const startedAt = Math.floor(campaign.started_at / 1000);
       const ignoreStart = campaign.ignore_campaign_start;
       let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
       if (startTs < 0) startTs = 0;
       const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=1000&sort=desc`;
-      console.log('scout------>', url);
+      console.log(url)
       const r = await fetch(url);
       if (!r.ok) return [];
       const data = await r.json();
       if (!data || !Array.isArray(data.result)) return [];
+      const endTime = Date.now();
+      this.logger.log(`UserTRansactionFromBlockscout ---> latency: ${endTime - startTime}ms`);
       return data.result;
     }
     if (chain === 146) {
@@ -1167,10 +1201,7 @@ export class QuestService {
       );
       const ignoreStart = campaign.ignore_campaign_start;
       let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
-      console.log('-startedAt----->', startedAt);
-      console.log('-startTs----->', startTs);
       if (startTs < 0) startTs = 0;
-      console.log('Etherscan startTs:', startTs);
       const apiKey = this.configService.get('ETHERSCAN_API_KEY') || '';
       const urlForBlock = `https://api.sonicscan.org/api?module=block&action=getblocknobytime&timestamp=${startTs}&closest=before&apikey=${apiKey}`;
       const rBlock = await fetch(urlForBlock);
@@ -1181,8 +1212,6 @@ export class QuestService {
       }
       const block = dataBlock.result;
       const url = `https://api.sonicscan.org/api?module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`;
-      console.log('scan------>', url);
-      console.log('Etherscan URL:', url);
       const r = await fetch(url);
       if (!r.ok) return [];
       const data = await r.json();
@@ -1274,8 +1303,8 @@ export class QuestService {
         { trait_type: 'Transaction Chain', value: 'Soneium' },
         { trait_type: 'Transaction Count', value: transactions.length },
         { trait_type: 'Community', value: campaign.project_name },
-        ...(campaign.tags[0]
-          ? [{ trait_type: 'Tag', value: campaign.tags[0] }]
+        ...(campaign.tags
+          ? [{ trait_type: 'Tags', value: campaign.tags.join(",") }]
           : []),
         { trait_type: 'Difficulty', value: campaign.difficulty },
       ],
@@ -1294,33 +1323,35 @@ export class QuestService {
       keyvalues
     );
 
-    const hasMintedNfts = await this.hasMintedNfts(
-      userAddress,
-      Object.values(ARKADA_NFTS)
-    );
-
-    const highestNftMultiplierBPS = Object.values(ARKADA_NFTS).reduce(
-      (acc, nft) => {
-        // Only consider multiplier if NFT is minted
-        if (hasMintedNfts[nft]) {
-          return Math.max(acc, ARKADA_NFTS_MULTIPLIER_BPS[nft]);
-        }
-        return acc;
-      },
-      0
-    );
-
     // mint price depends on campaign type
     const mintPrice = MINT_PRICE[pyramidType];
 
-    // reward amount is 20% of mint price
-    const rewardAmountBase =
+    // reward amount is 0% of mint price, was 20% erlier
+    let rewardAmount =
       (mintPrice * BigInt(USER_REWARD_BPS)) / BigInt(MAX_BPS);
 
-    // reward amount is 20% of mint price + some BPS of base rewards depending on highest NFT multiplier
-    const rewardAmount =
-      rewardAmountBase +
-      (rewardAmountBase * BigInt(highestNftMultiplierBPS)) / BigInt(MAX_BPS);
+    if (rewardAmount > BigInt(0)) {
+      const hasMintedNfts = await this.hasMintedNfts(
+        userAddress,
+        Object.values(ARKADA_NFTS)
+      );
+
+      const highestNftMultiplierBPS = Object.values(ARKADA_NFTS).reduce(
+        (acc, nft) => {
+          // Only consider multiplier if NFT is minted
+          if (hasMintedNfts[nft]) {
+            return Math.max(acc, ARKADA_NFTS_MULTIPLIER_BPS[nft]);
+          }
+          return acc;
+        },
+        0
+      );
+
+      // reward amount is 20% of mint price + some BPS of base rewards depending on highest NFT multiplier
+      rewardAmount =
+        rewardAmount +
+        (rewardAmount * BigInt(highestNftMultiplierBPS)) / BigInt(MAX_BPS);
+    }
 
     const reward: IRewardData = {
       tokenAddress: ethers.ZeroAddress,
@@ -1332,7 +1363,7 @@ export class QuestService {
       factoryAddress: ethers.ZeroAddress,
     };
 
-    const nonce = Math.floor(Date.now() / 1000); // Current timestamp as nonce
+    const nonce = Date.now();
 
     const pyramidData: IMintPyramidData = {
       questId: campaign.id,

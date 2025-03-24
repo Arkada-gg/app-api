@@ -1,9 +1,9 @@
-import { Client } from 'pg';
+import { PoolClient } from 'pg';
 import { v4 as uuidv4 } from 'uuid';
 
 export const name = '1674235300013_seed_sonnex_campaign_and_quiz_quest';
 
-export async function up(client: Client): Promise<void> {
+export async function up(client: PoolClient): Promise<void> {
   // 1. Удаление всех кампаний, кроме 'sonnex'
   await client.query(`
     DELETE FROM campaigns
@@ -142,7 +142,7 @@ export async function up(client: Client): Promise<void> {
   `);
 }
 
-export async function down(client: Client): Promise<void> {
+export async function down(client: PoolClient): Promise<void> {
   await client.query(`
     DELETE FROM quests
     WHERE id = (

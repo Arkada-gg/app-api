@@ -13,7 +13,7 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
   private discordClientArkada: Client;
   private discordClientOther: Client;
 
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(private readonly dbService: DatabaseService) { }
 
   async onModuleInit() {
     this.discordClientArkada = new Client({
@@ -39,8 +39,7 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     this.discordClientOther.on('guildCreate', async (guild: Guild) => {
       this.logger.log(`Bot added to guild: ${guild.id} (${guild.name})`);
       try {
-        const pgClient = await this.dbService.getClient();
-        await pgClient.query(
+        await this.dbService.query(
           `INSERT INTO discord_guilds (guild_id, project_id)
            VALUES ($1, $2)
            ON CONFLICT (guild_id) DO NOTHING`,

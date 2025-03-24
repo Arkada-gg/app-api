@@ -1,6 +1,6 @@
-import { Client } from 'pg';
+import { PoolClient } from 'pg';
 export const name = '1674235501003_add_event_type_to_campaigns';
-export async function up(client: Client): Promise<void> {
+export async function up(client: PoolClient): Promise<void> {
   await client.query(`
     DO $$
     BEGIN

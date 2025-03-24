@@ -14,8 +14,13 @@ import { DiscordModule } from './discord/discord.module';
 import { AlchemyModule } from './alchemy/alchemy.module';
 import { IpfsModule } from './ipfs/ipfs.module';
 import { HealthzModule } from './healthz/healthz.module';
+import { SentryModule } from '@sentry/nestjs/setup';
+import { TransactionsModule } from './transactions/transactions.module';
+import { AlchemyQueueModule } from './queues/alchemy-queue.module';
+import { StatsModule } from './stats/stats.module';
 @Module({
   imports: [
+    SentryModule.forRoot(),
     ScheduleModule.forRoot(),
     DatabaseModule,
     _ConfigModule,
@@ -30,7 +35,10 @@ import { HealthzModule } from './healthz/healthz.module';
     DiscordModule,
     AlchemyModule,
     IpfsModule,
-    HealthzModule
+    HealthzModule,
+    TransactionsModule,
+    AlchemyQueueModule,
+    StatsModule
   ],
 })
 export class AppModule { }

@@ -6,15 +6,14 @@ import { DatabaseService } from '../../database/database.service';
 export class CampaignStatusJob {
   private readonly logger = new Logger(CampaignStatusJob.name);
 
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(private readonly dbService: DatabaseService) { }
 
   @Cron('*/3 * * * *')
   async handleCampaignFinishStatus() {
     this.logger.log('CampaignStatusJob started: updating FINISHED campaigns.');
-
     try {
-      const client = this.dbService.getClient();
-      await client.query(`
+
+      await this.dbService.query(`
         UPDATE campaigns
         SET status = 'FINISHED'
         WHERE finished_at < NOW()

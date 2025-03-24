@@ -1,8 +1,8 @@
-import { Client } from 'pg';
+import { PoolClient } from 'pg';
 
 export const name = '1674235500026_add_transactions_table';
 
-export async function up(client: Client): Promise<void> {
+export async function up(client: PoolClient): Promise<void> {
   await client.query(`
     CREATE TABLE IF NOT EXISTS transactions (
       hash VARCHAR(66) PRIMARY KEY,
@@ -14,7 +14,7 @@ export async function up(client: Client): Promise<void> {
   `);
 }
 
-export async function down(client: Client): Promise<void> {
+export async function down(client: PoolClient): Promise<void> {
   await client.query(`
     DROP TABLE IF EXISTS transactions;
   `);

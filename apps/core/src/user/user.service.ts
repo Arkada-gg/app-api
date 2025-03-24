@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 import { Multer } from 'multer';
 import { EPointsType } from '../quests/interface';
 import { S3Service } from '../s3/s3.service';
@@ -15,6 +15,7 @@ import { UnbindSocialDto } from './dto/unbind-social.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ESocialPlatform, SocialFieldMap } from './user.constants';
 import { UserRepository } from './user.repository';
+import * as Sentry from '@sentry/node';
 
 @Injectable()
 export class UserService {
@@ -23,8 +24,16 @@ export class UserService {
     private readonly s3Service: S3Service
   ) { }
 
+  onModuleInit() {
+    Sentry.captureMessage('Hello from Sentry manually!');
+  }
+
   async findByAddress(address: string): Promise<IUser | null> {
     return this.userRepository.findByAddress(address);
+  }
+
+  async getUserPointsHistory(page: number, limit: number, address?: string) {
+    return this.userRepository.getUserPointsHistory(page, limit, address);
   }
 
   async createUserEmail(dto: CreateUserEmailDto) {
@@ -58,7 +67,7 @@ export class UserService {
     return this.userRepository.createUserWithReferral(lower);
   }
 
-  async bindReferral(refCode: string, address: string): Promise<IUser> {
+  async bindReferral(refCode: string, address: string): Promise<{ success: boolean }> {
     const lower = address.toLowerCase();
     const existingUser = await this.findByAddress(lower);
     if (!existingUser) {
@@ -75,8 +84,8 @@ export class UserService {
       throw new BadRequestException('Cannot refer yourself');
     }
     await this.userRepository.setRefOwner(lower, owner.address);
-    const updatedUser = await this.findByAddress(lower);
-    return updatedUser;
+
+    return { success: true };
   }
 
   async getLeaderboardCustom(
@@ -397,18 +406,20 @@ export class UserService {
     return { success: true };
   }
 
-  async awardCampaignCompletion(address: string, basePoints: number) {
+  async awardCampaignCompletion(address: string, basePoints: number, campaignId?: string) {
     const user = await this.findByAddress(address);
-    await this.updatePoints(address, basePoints, EPointsType.Campaign);
+    await this.updatePoints(address, basePoints, EPointsType.Campaign, campaignId);
     if (user?.ref_owner) {
       let bonus = Math.floor(basePoints * 0.01);
       if (bonus > 0 && bonus < 1) bonus = 1;
       await this.updatePoints(user.ref_owner, bonus, EPointsType.Referral);
     }
+    return
   }
 
-  async updatePoints(address: string, points: number, pointType: any) {
-    await this.userRepository.updatePoints(address, points, pointType);
+  async updatePoints(address: string, points: number, pointType: any, campaignId?: string) {
+    await this.userRepository.updatePoints(address, points, pointType, campaignId);
+    return
   }
 
   async findUsersWithTwitterChunk(offset: number, batch_size: number) {
