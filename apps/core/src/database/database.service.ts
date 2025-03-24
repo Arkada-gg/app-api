@@ -11,10 +11,16 @@ export type RaiiPoolClient = PoolClient & { [Symbol.asyncDispose](): Promise<voi
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
   private pool: Pool;
+  private poolRead: Pool;
 
   constructor(private readonly configService: ConfigService) {
     this.pool = new Pool({
       connectionString: this.configService.get('DATABASE_URL') ||
+        'postgres://user:password@localhost:5432/arkada_db',
+      max: 25
+    });
+    this.poolRead = new Pool({
+      connectionString: this.configService.get('DATABASE_URL_READ') ||
         'postgres://user:password@localhost:5432/arkada_db',
       max: 25
     });
@@ -23,6 +29,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     await using client = await this.getClient();
     this.logger.log('Connected to PostgreSQL');
+    await this.getReplicaClient()
+    this.logger.log('Connected to PostgreSQL Replica');
     return this.initializeSchema(client);
   }
 
@@ -66,9 +74,26 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     return this.makeRaiiPoolClient(client);
   }
 
+  async getReplicaClient(): Promise<RaiiPoolClient> {
+    const client = await this.poolRead.connect();
+    client['id'] = randomUUID();
+    this.logger.log('take connection: ', client['id'])
+    return this.makeRaiiPoolClient(client);
+  }
+
   async query<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
     const start = performance.now();
     const res = await this.pool.query<R>(text, params);
+    const duration = performance.now() - start;
+    this.logger.log('executed query', { text, duration, rows: res.rowCount })
+    const { totalCount, waitingCount, idleCount } = this.pool
+    this.logger.log('pool stats:', { totalCount, waitingCount, idleCount })
+    return res;
+  }
+
+  async querySelect<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
+    const start = performance.now();
+    const res = await this.poolRead.query<R>(text, params);
     const duration = performance.now() - start;
     this.logger.log('executed query', { text, duration, rows: res.rowCount })
     const { totalCount, waitingCount, idleCount } = this.pool
