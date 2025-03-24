@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import Redis, { RedisOptions } from 'ioredis';
 import fetch from 'node-fetch';
+import { CacheService } from '../redis/cache.service';
 
 @Injectable()
 export class PriceService {
@@ -16,31 +17,7 @@ export class PriceService {
     swapx: 'swapx-2'
   };
 
-  constructor() {
-    const port = parseInt(process.env.REDIS_PORT?.trim() || '', 10);
-
-    if (isNaN(port)) {
-      throw new Error(
-        `Invalid REDIS_PORT value: "${process.env.REDIS_PORT}". Must be a valid number.`
-      );
-    }
-
-
-    const redisConfig: RedisOptions = {
-      host: process.env.REDIS_HOST,
-      port: +process.env.REDIS_PORT
-    };
-
-    console.log(process.env.IS_LOCAL_DEV);
-
-    if (!process.env.IS_LOCAL_DEV) {
-      redisConfig.username = process.env.REDIS_USERNAME;
-      redisConfig.password = process.env.REDIS_PASSWORD;
-      redisConfig.tls = { rejectUnauthorized: false };
-    }
-
-    this.redisClient = new Redis(redisConfig);
-  }
+  constructor(private readonly cacheService: CacheService) { }
 
   @Cron(CronExpression.EVERY_30_MINUTES)
   async updatePrices() {
@@ -62,7 +39,7 @@ export class PriceService {
       for (const [tokenId, priceObj] of Object.entries(data)) {
         if (priceObj?.usd) {
           const key = `coin:price:${tokenId}`;
-          await this.redisClient.set(key, priceObj.usd.toString());
+          await this.cacheService.set(key, priceObj.usd.toString());
           this.logger.debug(`Updated price in Redis: ${key} = ${priceObj.usd}`);
         }
       }
@@ -79,7 +56,7 @@ export class PriceService {
   async getTokenPrice(tokenId: string): Promise<number> {
     try {
       const key = `coin:price:${tokenId}`;
-      const priceStr = await this.redisClient.get(key);
+      const priceStr = await this.cacheService.get(key);
       if (!priceStr) {
         this.logger.warn(`Price not found in Redis for token: ${tokenId}`);
         return 0;

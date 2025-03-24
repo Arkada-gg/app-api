@@ -8,7 +8,7 @@ import { IpfsModule } from '../ipfs/ipfs.module';
 import { PriceModule } from '../price/price.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { UserModule } from '../user/user.module';
-import { NftController } from './nft.controller';
+import { NftController } from './quest-nft.controller';
 import { QuestController } from './quest.controller';
 import { QuestRepository } from './quest.repository';
 import { QuestService } from './quest.service';
@@ -29,4 +29,4 @@ import { QuestService } from './quest.service';
   providers: [QuestService, QuestRepository],
   exports: [QuestService],
 })
-export class QuestModule {}
+export class QuestModule { }

@@ -16,12 +16,14 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { ESocialPlatform, SocialFieldMap } from './user.constants';
 import { UserRepository } from './user.repository';
 import * as Sentry from '@sentry/node';
+import { CacheService } from '../redis/cache.service';
 
 @Injectable()
 export class UserService {
   constructor(
     private readonly userRepository: UserRepository,
-    private readonly s3Service: S3Service
+    private readonly s3Service: S3Service,
+    private readonly cacheService: CacheService,
   ) { }
 
   onModuleInit() {
@@ -97,29 +99,38 @@ export class UserService {
     userAddress?: string,
     doIncludeRefWithTwScore?: boolean,
   ) {
-    return this.userRepository.getLeaderboardCustom(
-      startAt,
-      endAt,
-      doExcludeRef,
-      limitNum,
-      sortBy,
-      userAddress,
-      doIncludeRefWithTwScore,
-    );
-  }
+    try {
+      const isTotal =
+        startAt === '2025-01-01T00:00:00.000Z' ||
+        startAt === '2025-01-01T00:00:00.000Z';
 
-  async getLeaderboard(
-    period: 'week' | 'month',
-    includeRef: boolean,
-    last: boolean,
-    userAddress?: string
-  ) {
-    return this.userRepository.getLeaderboard(
-      period,
-      includeRef,
-      last,
-      userAddress
-    );
+      const ttlSeconds = isTotal ? 15 * 60 : 5 * 60;
+
+      const cacheKey = `leaderboard:${startAt}:${endAt}:${doExcludeRef}:${limitNum}:${sortBy}:${userAddress || ''}:${doIncludeRefWithTwScore}`;
+
+      const cached = await this.cacheService.get<any>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      const result = await this.userRepository.getLeaderboardCustom(
+        startAt,
+        endAt,
+        doExcludeRef,
+        limitNum,
+        sortBy,
+        userAddress,
+        doIncludeRefWithTwScore,
+      );
+
+      await this.cacheService.set(cacheKey, result, ttlSeconds);
+
+      return result;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `getLeaderboardCustom failed: ${error.message}`
+      );
+    }
   }
 
   async getUsersWithPoints(): Promise<{ address: string; points: number }[]> {
