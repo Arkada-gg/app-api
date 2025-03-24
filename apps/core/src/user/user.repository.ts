@@ -24,9 +24,9 @@ export class UserRepository {
       VALUES ($1, $2)
       RETURNING email, address, created_at, updated_at
     `;
-      const values = [lower, lowerAddress || null];
-      const result = await this.dbService.query(query, values);
-      return result.rows[0];
+    const values = [lower, lowerAddress || null];
+    const result = await this.dbService.query(query, values);
+    return result.rows[0];
   }
 
   async findEmail(email: string) {
@@ -541,186 +541,6 @@ export class UserRepository {
     }
   }
 
-
-  async getLeaderboard(
-    period: 'week' | 'month',
-    includeRef = true,
-    last = false,
-    userAddress?: string
-  ): Promise<{
-    top: Array<{
-      address: string;
-      name: string | null;
-      avatar: string | null;
-      twitter: string | null;
-      points: number;
-      campaigns_completed: number;
-      rank: number;
-    }>;
-  }> {
-
-    const now = new Date();
-    let startDate: Date;
-    let endDate: Date;
-    if (period === 'week') {
-      const dayOfWeek = (now.getDay() + 6) % 7;
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - dayOfWeek);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6);
-      endDate.setHours(23, 59, 59, 999);
-
-      if (last) {
-        startDate.setDate(startDate.getDate() - 7);
-        endDate.setDate(endDate.getDate() - 7);
-      }
-    } else {
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      startDate = new Date(year, month, 1, 0, 0, 0, 0);
-      endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
-      if (last) {
-        startDate.setMonth(startDate.getMonth() - 1);
-        endDate = new Date(
-          startDate.getFullYear(),
-          startDate.getMonth() + 1,
-          0,
-          23,
-          59,
-          59,
-          999
-        );
-      }
-    }
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
-
-    const excludeReferral = includeRef ? '' : `AND up.point_type != 'referral'`;
-
-    const cte = `
-      WITH user_points_aggregated AS (
-        SELECT
-          up.user_address,
-          COALESCE(SUM(up.points), 0) AS total_points
-        FROM user_points up
-        WHERE up.created_at BETWEEN $1 AND $2
-          ${excludeReferral}
-        GROUP BY up.user_address
-      ),
-      campaigns_completed_aggregated AS (
-        SELECT
-          cc.user_address,
-          COUNT(*) AS campaigns_completed
-        FROM campaign_completions cc
-        WHERE cc.completed_at BETWEEN $1 AND $2
-        GROUP BY cc.user_address
-      ),
-      ranked_users AS (
-        SELECT
-          u.address,
-          u.name,
-          u.avatar,
-          u.twitter,
-          COALESCE(upa.total_points, 0) AS total_points,
-          COALESCE(cca.campaigns_completed, 0) AS campaigns_completed,
-          ROW_NUMBER() OVER (ORDER BY COALESCE(upa.total_points, 0) DESC) AS rank
-        FROM users u
-        LEFT JOIN user_points_aggregated upa
-          ON u.address = upa.user_address
-        LEFT JOIN campaigns_completed_aggregated cca
-          ON u.address = cca.user_address
-        WHERE COALESCE(upa.total_points, 0) > 0
-      )
-    `;
-
-    const top50sql = `
-      ${cte}
-      SELECT
-        address,
-        name,
-        avatar,
-        twitter,
-        total_points,
-        campaigns_completed,
-        rank
-      FROM ranked_users
-      WHERE rank <= 50
-      ORDER BY rank
-    `;
-
-    if (!userAddress) {
-        const topRes = await this.dbService.query(top50sql, [startIso, endIso]);
-        const top = topRes.rows.map((row) => ({
-          address: row.address,
-          name: row.name,
-          avatar: row.avatar,
-          twitter: row.twitter,
-          points: Number(row.total_points),
-          campaigns_completed: Number(row.campaigns_completed),
-          rank: Number(row.rank),
-        }));
-        return { top };
-    }
-
-    const userRankSql = `
-      ${cte}
-      SELECT
-        address,
-        name,
-        avatar,
-        twitter,
-        total_points,
-        campaigns_completed,
-        rank
-      FROM ranked_users
-      WHERE address = $3
-    `;
-
-    try {
-      const [topRes, userRes] = await Promise.all([
-        this.dbService.query(top50sql, [startIso, endIso]),
-        this.dbService.query(userRankSql, [
-          startIso,
-          endIso,
-          userAddress.toLowerCase(),
-        ]),
-      ]);
-      const top = topRes.rows.map((r) => ({
-        address: r.address,
-        name: r.name,
-        avatar: r.avatar,
-        twitter: r.twitter,
-        points: Number(r.total_points),
-        campaigns_completed: Number(r.campaigns_completed),
-        rank: Number(r.rank),
-      }));
-
-      if (userRes.rows.length === 0) {
-        return { top };
-      }
-
-      const userRow = userRes.rows[0];
-      const userRank = Number(userRow.rank);
-
-      if (userRank > 50) {
-        top.push({
-          address: userRow.address,
-          name: userRow.name,
-          avatar: userRow.avatar,
-          twitter: userRow.twitter,
-          points: Number(userRow.total_points),
-          campaigns_completed: Number(userRow.campaigns_completed),
-          rank: userRank,
-        });
-      }
-
-      return { top };
-    } catch (error) {
-      throw new InternalServerErrorException(error.message);
-    }
-  }
-
   async createUserWithReferral(address: string): Promise<IUser> {
     const lower = address.toLowerCase();
     try {
@@ -743,9 +563,9 @@ export class UserRepository {
   }
 
   private async isReferralCodeExists(code: string): Promise<boolean> {
-      const result = await this.dbService
-        .query(`SELECT 1 FROM users WHERE referral_code = $1`, [code]);
-      return result.rows.length > 0;
+    const result = await this.dbService
+      .query(`SELECT 1 FROM users WHERE referral_code = $1`, [code]);
+    return result.rows.length > 0;
   }
 
   private generateShortCode(length: number): string {
@@ -756,28 +576,28 @@ export class UserRepository {
   }
 
   async findUsersWithPoints(): Promise<{ address: string; points: number }[]> {
-      const res = await this.dbService.query(`
+    const res = await this.dbService.query(`
         SELECT address, points
         FROM users
         WHERE points > 0
       `);
-      return res.rows;
+    return res.rows;
   }
 
   async findUsersWithPointAfterSpecificAddress(
     address: string
   ): Promise<{ address: string; points: number }[]> {
-      const res = await this.dbService.query(
-        `
+    const res = await this.dbService.query(
+      `
           SELECT address, points
           FROM users
           WHERE points > 0
             AND address > $1
           ORDER BY address;
       `,
-        [address]
-      );
-      return res.rows;
+      [address]
+    );
+    return res.rows;
   }
 
   async updatePoints(
@@ -881,8 +701,8 @@ export class UserRepository {
 
   async incrementPyramid(address: string, type: PyramidType, chainId: number) {
     const lower = address.toLowerCase();
-      await this.dbService.query(
-        `
+    await this.dbService.query(
+      `
         UPDATE users
         SET pyramids_info = COALESCE(pyramids_info, '{}') ||
           jsonb_build_object($2::text,
@@ -893,8 +713,8 @@ export class UserRepository {
           )
         WHERE address = $1
         `,
-        [lower, chainId, type.toLowerCase()]
-      );
+      [lower, chainId, type.toLowerCase()]
+    );
   }
 
   async findUsersWithWalletChunk(
@@ -936,7 +756,7 @@ export class UserRepository {
         SET wallet_additional_points = $1
         WHERE address = $2
       `;
-       await this.dbService.query(query, [points, userId.toLowerCase()]);
+      await this.dbService.query(query, [points, userId.toLowerCase()]);
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }

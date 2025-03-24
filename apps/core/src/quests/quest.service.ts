@@ -46,6 +46,7 @@ import {
   SIGN_TYPES,
 } from './interface/sign';
 import { QuestRepository } from './quest.repository';
+import { error } from 'console';
 
 @Injectable()
 export class QuestService {
@@ -391,9 +392,7 @@ export class QuestService {
         return createdAt > campaignStart;
       }).length;
 
-      console.log(
-        `Найдено записей после начала кампании: ${matchingCount} (требуется: ${task.minTxns})`
-      );
+      this.logger.debug(`Найдено записей после начала кампании: ${matchingCount} (требуется: ${task.minTxns})`);
 
       if (matchingCount >= task.minTxns) {
         return true;
@@ -904,6 +903,7 @@ export class QuestService {
         if (!parsedTx) {
           continue;
         }
+        console.log('------>', parsedTx);
         const methodName = parsedTx.name.toLowerCase();
         if (methodName === 'multicall') {
           const subcalls: string[] = parsedTx.args[0];
@@ -968,7 +968,6 @@ export class QuestService {
             parsedTx,
             parentTx
           );
-          console.log('sumUSD------>', sumUSD, parentTx.hash);
           if (sumUSD >= (action.minUsdTotal || 0)) {
             return true;
           } else {
@@ -1036,7 +1035,6 @@ export class QuestService {
       );
       return usdVal;
     }
-
     for (const tokenDef of action.tokens || []) {
       const tokenAddr = (tokenDef.address || '').toLowerCase();
       let amountBN = 0n;
@@ -1061,14 +1059,20 @@ export class QuestService {
             : parsedTx.args[0][tokenIdx];
         }
       } else {
-        argVal = parsedTx.args[idx];
-        tokenVal = parsedTx.args[tokenIdx];
-        if (Array.isArray(tokenVal)) {
-          tokenVal = parsedTx.args[tokenIdx][0][1];
+        try {
+          argVal = parsedTx.args[idx];
+          tokenVal = parsedTx.args[tokenIdx];
+          if (Array.isArray(tokenVal)) {
+            tokenVal = parsedTx.args[tokenIdx][0][1];
+          }
+        } catch {
+          console.log('------>', error);
         }
       }
       if (!tokenIdx && !tokenVal) {
-        actualTokens.push({ address: tokenDef.address, amount: argVal });
+        if (argVal) {
+          actualTokens.push({ address: tokenDef.address, amount: argVal });
+        }
       }
       if (
         tokenVal &&
@@ -1079,7 +1083,9 @@ export class QuestService {
       if (typeof argVal === 'bigint') {
         amountBN = argVal;
       }
-      actualTokens.push({ address: tokenVal, amount: amountBN });
+      if (tokenVal && amountBN) {
+        actualTokens.push({ address: tokenVal, amount: amountBN });
+      }
     }
 
     if (action.orderedTokens) {
@@ -1134,8 +1140,9 @@ export class QuestService {
           (t) =>
             t.address && t.address.toLowerCase() === def.address.toLowerCase()
         );
+
         if (!found) {
-          return 0;
+          continue
         }
         if ((def.minAmountToken || 0) > 0) {
           // 466 same
@@ -1151,6 +1158,7 @@ export class QuestService {
     tokenAddr: string,
     amountBN: bigint
   ): Promise<number> {
+    console.log('------>', amountBN, tokenAddr);
     if (!amountBN || amountBN === 0n) return 0;
     const decimals =
       tokenAddr.toLowerCase() ===
@@ -1159,6 +1167,7 @@ export class QuestService {
         '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
         ? 6
         : 18;
+    console.log('------>', amountBN, tokenAddr);
     const floatAmount = parseFloat(ethers.formatUnits(amountBN, decimals));
     if (
       tokenAddr.toLowerCase() ===
@@ -1177,25 +1186,21 @@ export class QuestService {
 
   private async getUserTransactions(chain: any, addr: string, campaign: any) {
     if (chain === 'Soneium' || chain === 1868) {
-      const startTime = Date.now();
       const now = Math.floor(Date.now() / 1000);
       const startedAt = Math.floor(campaign.started_at / 1000);
       const ignoreStart = campaign.ignore_campaign_start;
       let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
       if (startTs < 0) startTs = 0;
       const url = `https://soneium.blockscout.com/api?module=account&action=txlist&address=${addr}&start_timestamp=${startTs}&end_timestamp=${now}&page=0&offset=1000&sort=desc`;
-      console.log(url)
       const r = await fetch(url);
       if (!r.ok) return [];
       const data = await r.json();
       if (!data || !Array.isArray(data.result)) return [];
-      const endTime = Date.now();
-      this.logger.log(`UserTRansactionFromBlockscout ---> latency: ${endTime - startTime}ms`);
+      this.logger.log(`Txns length from bs ---> ${data.result.length}`);
       return data.result;
     }
     if (chain === 146) {
       const now = Math.floor(Date.now() / 1000);
-
       const startedAt = Math.floor(
         new Date(campaign.started_at + 'Z').getTime() / 1000
       );
@@ -1216,6 +1221,7 @@ export class QuestService {
       if (!r.ok) return [];
       const data = await r.json();
       if (!data || !Array.isArray(data.result)) return [];
+      this.logger.log(`Txns length from sonic ---> ${data.result.length}`);
       return data.result;
     }
 

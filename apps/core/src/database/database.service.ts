@@ -28,7 +28,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy(): Promise<void> {
     return this.pool.end()
-}
+  }
 
 
   private async initializeSchema(client: PoolClient) {
@@ -70,9 +70,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const start = performance.now();
     const res = await this.pool.query<R>(text, params);
     const duration = performance.now() - start;
-    this.logger.log('executed query', {text, duration, rows: res.rowCount})
-    const {totalCount, waitingCount, idleCount} = this.pool
-    this.logger.log('pool stats:', {totalCount, waitingCount, idleCount})
+    this.logger.log('executed query', { text, duration, rows: res.rowCount })
+    const { totalCount, waitingCount, idleCount } = this.pool
+    this.logger.log('pool stats:', { totalCount, waitingCount, idleCount })
     return res;
   }
 }
