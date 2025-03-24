@@ -650,7 +650,6 @@ export class UserRepository {
     `;
 
     if (!userAddress) {
-      try {
         const topRes = await this.dbService.query(top50sql, [startIso, endIso]);
         const top = topRes.rows.map((row) => ({
           address: row.address,
@@ -662,9 +661,6 @@ export class UserRepository {
           rank: Number(row.rank),
         }));
         return { top };
-      } catch (error) {
-        console.log('------>', error);
-      }
     }
 
     const userRankSql = `
