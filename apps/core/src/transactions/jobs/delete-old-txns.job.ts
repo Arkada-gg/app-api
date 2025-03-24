@@ -8,8 +8,7 @@ export class PurgeDailyChecksJob {
 
   constructor(private readonly dbService: DatabaseService) { }
 
-  // @Cron('0 3 * * *')
-  @Cron('*/1 * * * *')
+  @Cron('0 0,12 * * *')
   async handlePurgeOldRecords() {
     this.logger.log('PurgeDailyChecksJob started: removing old records in batches...');
 
@@ -23,15 +22,15 @@ export class PurgeDailyChecksJob {
 
         const res = await client.query(`
           WITH to_delete AS (
-            SELECT id
-            FROM daily_checks
+            SELECT hash
+            FROM transactions
             WHERE created_at < NOW() - INTERVAL '24 hours'
             LIMIT ${BATCH_SIZE}
           )
-          DELETE FROM daily_checks d
+          DELETE FROM transactions d
           USING to_delete
-          WHERE d.id = to_delete.id
-          RETURNING d.id
+          WHERE d.hash = to_delete.hash
+          RETURNING d.hash
         `);
 
         const deletedCount = res.rowCount;

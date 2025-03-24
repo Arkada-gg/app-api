@@ -1363,7 +1363,7 @@ export class QuestService {
       factoryAddress: ethers.ZeroAddress,
     };
 
-    const nonce = Math.floor(Date.now() / 1000); // Current timestamp as nonce
+    const nonce = Date.now();
 
     const pyramidData: IMintPyramidData = {
       questId: campaign.id,

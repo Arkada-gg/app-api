@@ -14,9 +14,7 @@ class PgClientWrapper {
   }
 
   async query(text, params?) {
-    // console.log(`Executing query: ${text} with parameters:`, params);
     const res = await this.client.query(text, params);
-    // console.log(`Query result:`, res.rows);
     return res;
   }
 
@@ -55,7 +53,7 @@ export class DatabaseService implements OnModuleInit {
       connectionString: this.configService.get('DATABASE_URL') ||
         'postgres://user:password@localhost:5432/arkada_db',
       idleTimeoutMillis: 5000,
-      max: 20
+      max: 100
     })
     this.soloClient = new Client({
       connectionString: this.configService.get('DATABASE_URL') ||

@@ -8,11 +8,11 @@ import * as express from 'express';
 import * as basicAuth from 'express-basic-auth';
 import * as session from 'express-session';
 import { AppModule } from './app.module';
-
-
-
-
+import { ExpressAdapter as BullBoardExpressAdapter } from '@bull-board/express';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import * as Sentry from "@sentry/nestjs"
+import { Queue } from "bullmq";
+import { createBullBoard } from "@bull-board/api";
 
 async function bootstrap() {
   const server = express();
@@ -20,6 +20,24 @@ async function bootstrap() {
 
   Sentry.setupExpressErrorHandler(app);
 
+  const serverAdapter = new BullBoardExpressAdapter();
+  serverAdapter.setBasePath('/admin/queues');
+
+  const alchemyQueue = new Queue('alchemy-webhooks', {
+    connection: {
+      host: process.env.REDIS_HOST,
+      port: +process.env.REDIS_PORT,
+      username: process.env.REDIS_USERNAME,
+      password: process.env.REDIS_PASSWORD,
+      tls: {
+        rejectUnauthorized: false,
+      },
+    },
+  });
+  createBullBoard({
+    queues: [new BullMQAdapter(alchemyQueue)],
+    serverAdapter,
+  });
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
   app.useGlobalPipes(
     new ValidationPipe({
@@ -91,6 +109,14 @@ async function bootstrap() {
   //     message: 'Too many requests from this IP, please try again later.',
   //   })
   // );
+  app.use(
+    '/admin/queues',
+    basicAuth({
+      users: { [process.env.SWAGGER_USER || 'admin']: process.env.SWAGGER_PASS || 'secret' },
+      challenge: true,
+    }),
+    serverAdapter.getRouter(),
+  );
 
   await app.listen(process.env.CORE_PORT, () => {
     Logger.log(`Core Service is running on port ${process.env.CORE_PORT}`);

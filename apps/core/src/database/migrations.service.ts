@@ -40,7 +40,8 @@ export class MigrationsService {
       }
 
       this.logger.log(`All pending migrations applied.`);
-    } finally {
+    }
+    finally {
       client.release();
     }
   }

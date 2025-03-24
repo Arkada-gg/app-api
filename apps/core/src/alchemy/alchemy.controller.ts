@@ -44,7 +44,7 @@ export class AlchemyWebhooksController {
         eventSignature: EventSignature.DAILY_CHECK,
         webhookEvent,
       },
-      { removeOnComplete: true, removeOnFail: true }
+      { removeOnComplete: true }
     );
 
     const endTime = Date.now();
@@ -59,7 +59,9 @@ export class AlchemyWebhooksController {
     @Headers('x-alchemy-signature') signature: string,
     @Body() webhookEvent: any,
   ) {
+    console.log('------>', JSON.stringify(webhookEvent));
     const startTime = Date.now();
+    console.log('------>', `webhookEvent started at ${startTime}`);
 
     const isValid = await this.alchemyWebhooksService.verifyWebhookSignature(
       signature,
