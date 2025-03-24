@@ -11,10 +11,9 @@ export class CampaignStatusJob {
   @Cron('*/3 * * * *')
   async handleCampaignFinishStatus() {
     this.logger.log('CampaignStatusJob started: updating FINISHED campaigns.');
-    const client = await this.dbService.getClient();
     try {
 
-      await client.query(`
+      await this.dbService.query(`
         UPDATE campaigns
         SET status = 'FINISHED'
         WHERE finished_at < NOW()
@@ -24,8 +23,6 @@ export class CampaignStatusJob {
       this.logger.log('CampaignStatusJob completed: statuses updated.');
     } catch (error) {
       this.logger.error(`CampaignStatusJob failed: ${error.message}`);
-    } finally {
-      client.release()
     }
   }
 }

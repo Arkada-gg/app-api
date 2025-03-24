@@ -1,93 +1,48 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
-import { Client, Pool, PoolClient } from 'pg';
+import { Injectable, OnModuleInit, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Client, ClientBase, Pool, PoolClient, QueryConfig, QueryConfigValues, QueryResult, Submittable } from 'pg';
 import { ConfigService } from '../_config/config.service';
 
-const arrOfIdsCtx = new Map()
-class PgClientWrapper {
-  private client: any
-  private id: any
-  private ctx: any
-  constructor(client, id, ctx) {
-    this.client = client;
-    this.id = id
-    this.ctx = ctx
-  }
+export type RaiiPoolClient = PoolClient & { [Symbol.asyncDispose](): Promise<void> };
 
-  async query(text, params?) {
-    const res = await this.client.query(text, params);
-    return res;
-  }
-
-  release() {
-    arrOfIdsCtx.delete(this.id)
-    return this.client.release();
-  }
-
-  async [Symbol.asyncIterator]() {
-    return this.client[Symbol.asyncIterator]();
-  }
-
-  get methods() {
-    const clientMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(this.client));
-    const wrapper = {};
-
-    clientMethods.forEach((method) => {
-      if (method !== 'query' && method !== 'release') {
-        wrapper[method] = (...args) => this.client[method](...args);
-      }
-    });
-
-    return wrapper;
-  }
-}
 
 
 @Injectable()
-export class DatabaseService implements OnModuleInit {
+export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
   private pool: Pool;
-  private soloClient: Client
 
   constructor(private readonly configService: ConfigService) {
     this.pool = new Pool({
       connectionString: this.configService.get('DATABASE_URL') ||
         'postgres://user:password@localhost:5432/arkada_db',
-      idleTimeoutMillis: 5000,
       max: 100
-    })
-    this.soloClient = new Client({
-      connectionString: this.configService.get('DATABASE_URL') ||
-        'postgres://user:password@localhost:5432/arkada_db'
     });
   }
 
-  async onModuleInit() {
-    const client = await this.pool.connect();
-    try {
-      this.logger.log('Connected to PostgreSQL');
-      try {
-        await this.initializeSchema(client);
-      } catch (error) {
-        console.log('--error---->', error);
-      }
-      client.release()
-    } catch (error) {
-      console.log('------>', error);
-    }
+  async onModuleInit(): Promise<void> {
+    await using client = await this.getClient();
+    this.logger.log('Connected to PostgreSQL');
+    return this.initializeSchema(client);
   }
+
+  onModuleDestroy(): Promise<void> {
+    return this.pool.end()
+}
+
 
   private async initializeSchema(client: PoolClient) {
     await client.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        address VARCHAR(255) PRIMARY KEY,
-        name VARCHAR(255) UNIQUE,
-        avatar VARCHAR(255),
-        twitter VARCHAR(255),
-        discord VARCHAR(255),
-        telegram VARCHAR(255),
-        github VARCHAR(255),
-        email VARCHAR(255) UNIQUE,
-        points INTEGER DEFAULT 0,
+      CREATE TABLE IF NOT EXISTS users
+      (
+        address    VARCHAR(255) PRIMARY KEY,
+        name       VARCHAR(255) UNIQUE,
+        avatar     VARCHAR(255),
+        twitter    VARCHAR(255),
+        discord    VARCHAR(255),
+        telegram   VARCHAR(255),
+        github     VARCHAR(255),
+        email      VARCHAR(255) UNIQUE,
+        points     INTEGER                     DEFAULT 0,
         created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
       );
@@ -95,19 +50,21 @@ export class DatabaseService implements OnModuleInit {
   }
 
 
-
-  async getClient(): Promise<PoolClient> {
-    const x = crypto.randomUUID()
-    const ctx = new Error().stack
-    arrOfIdsCtx.set(x, ctx)
-    // console.log('------>', arrOfIdsCtx);
-    const wrappedPg = new PgClientWrapper(await this.pool.connect(), x, ctx);
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    //@ts-ignore
-    return wrappedPg satisfies PoolClient;
+  private makeRaiiPoolClient(client: PoolClient): RaiiPoolClient {
+    client[Symbol.asyncDispose] = () => client.release();
+    return client as RaiiPoolClient;
   }
 
-  async getSoloClient(): Promise<Client> {
-    return this.soloClient
+  async getClient(): Promise<RaiiPoolClient> {
+    const client = await this.pool.connect();
+    return this.makeRaiiPoolClient(client);
+  }
+
+  async query<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
+    const start = performance.now();
+    const res = await this.pool.query<R>(text, params);
+    const duration = performance.now() - start;
+    this.logger.log('executed query', {text, duration, rows: res.rowCount})
+    return res;
   }
 }

@@ -10,9 +10,7 @@ export class MigrationsService {
   constructor(private readonly dbService: DatabaseService) { }
 
   async runMigrations() {
-    const client = await this.dbService.getClient();
-    const soloClient = await this.dbService.getSoloClient();
-    try {
+      await using client = await this.dbService.getClient();
       await this.ensureMigrationsTable(client);
       const applied = await this.getAppliedMigrations(client);
       const pending = allMigrations.filter((m) => !applied.includes(m.name));
@@ -40,10 +38,6 @@ export class MigrationsService {
       }
 
       this.logger.log(`All pending migrations applied.`);
-    }
-    finally {
-      client.release();
-    }
   }
 
 

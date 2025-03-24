@@ -21,14 +21,13 @@ export class CampaignRepository {
   }
 
   async getCampaignStats(startAt?: string, endAt?: string): Promise<any> {
-    const client: PoolClient = await this.dbService.getClient();
     try {
-      const totalCampaignsResult = await client.query(
+      const totalCampaignsResult = await this.dbService.query(
         `SELECT COUNT(*) as total FROM campaigns`
       );
       const totalCampaigns = Number(totalCampaignsResult.rows[0].total);
 
-      const campaignsCompletedResult = await client.query(
+      const campaignsCompletedResult = await this.dbService.query(
         `SELECT COUNT(*) as total FROM campaign_completions
          WHERE ($1::timestamp IS NULL OR completed_at >= $1)
            AND ($2::timestamp IS NULL OR completed_at <= $2)`,
@@ -36,7 +35,7 @@ export class CampaignRepository {
       );
       const campaignsCompleted = Number(campaignsCompletedResult.rows[0].total);
 
-      const notCompletedResult = await client.query(
+      const notCompletedResult = await this.dbService.query(
         `SELECT SUM(c.participants - COALESCE(cc.completed, 0)) as total_not_completed
          FROM campaigns c
          LEFT JOIN (
@@ -52,7 +51,7 @@ export class CampaignRepository {
       );
       const notCompletedCampaigns = Number(notCompletedResult.rows[0].total_not_completed);
 
-      const completedFirstQuestResult = await client.query(
+      const completedFirstQuestResult = await this.dbService.query(
         `SELECT SUM(COALESCE(qc.first_completed, 0)) as total_completed_first
          FROM campaigns c
          LEFT JOIN (
@@ -81,38 +80,32 @@ export class CampaignRepository {
       };
     } catch (error) {
       throw new InternalServerErrorException(error.message);
-    } finally {
-      client.release();
     }
   }
 
 
   async incrementParticipants(campaignId: string): Promise<void> {
-    const client = await this.dbService.getClient();
     try {
       const updateQuery = `
-        UPDATE campaigns 
-        SET participants = participants + 1 
+        UPDATE campaigns
+        SET participants = participants + 1
         WHERE id = $1
       `;
-      await client.query(updateQuery, [campaignId]);
+      await this.dbService.query(updateQuery, [campaignId]);
       Logger.debug(`Participants incremented for campaign ${campaignId}`);
     } catch (error) {
       throw new InternalServerErrorException(
         `Error incrementing participants: ${error.message}`
       );
-    } finally {
-      client.release()
     }
   }
 
   async getCampaignStatus(id: string, address: string) {
-    const client = await this.dbService.getClient();
     try {
       const query = `
-        SELECT 
+        SELECT
           c.*,
-          CASE 
+          CASE
             WHEN EXISTS (
               SELECT 1 FROM campaign_completions cc
               WHERE cc.campaign_id = c.id
@@ -122,12 +115,10 @@ export class CampaignRepository {
         WHERE c.id = $1
         LIMIT 1;
       `;
-      const result = await client.query(query, [id, address.toLowerCase()]);
+      const result = await this.dbService.query(query, [id, address.toLowerCase()]);
       return result.rows[0];
     } catch (error) {
       throw new InternalServerErrorException(error.message);
-    } finally {
-      client.release()
     }
   }
 
@@ -135,7 +126,6 @@ export class CampaignRepository {
     campaignId: string,
     userAddress: string
   ): Promise<{ rowCount: number }> {
-    const client = await this.dbService.getClient();
     const lowerAddress = userAddress.toLowerCase();
     try {
       const query = `
@@ -143,13 +133,11 @@ export class CampaignRepository {
         VALUES ($1, $2, NOW())
         ON CONFLICT (campaign_id, user_address) DO NOTHING
       `;
-      const result = await client
+      const result = await this.dbService
         .query(query, [campaignId, lowerAddress]);
       return { rowCount: result.rowCount };
     } catch (error) {
       throw new InternalServerErrorException(error.message);
-    } finally {
-      client.release()
     }
   }
 
@@ -159,7 +147,6 @@ export class CampaignRepository {
     type?: CampaignType,
     categoryDto?: string[]
   ): Promise<any[]> {
-    const client = await this.dbService.getClient();
     try {
       const offset = (page - 1) * limit;
       let query = `
@@ -204,51 +191,48 @@ export class CampaignRepository {
       query += ` ORDER BY started_at DESC LIMIT $${params.length - 1} OFFSET $${params.length
         }`;
 
-      const result = await client.query(query, params);
+      const result = await this.dbService.query(query, params);
       return result.rows;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
-    } finally {
-      client.release()
     }
   }
 
   async findCampaignByIdOrSlug(idOrSlug: string): Promise<any> {
-    const client = await this.dbService.getClient();
     try {
       let query = '';
 
       if (this.isUUID(idOrSlug)) {
         query = `
-          SELECT 
-            c.*, 
+          SELECT
+            c.*,
             COALESCE(json_agg(q) FILTER (WHERE q.id IS NOT NULL), '[]') AS quests
-          FROM 
+          FROM
             campaigns c
-          LEFT JOIN 
+          LEFT JOIN
             quests q ON c.id = q.campaign_id
-          WHERE 
+          WHERE
             c.id = $1
-          GROUP BY 
+          GROUP BY
             c.id;
         `;
       } else {
         query = `
-          SELECT 
-            c.*, 
+          SELECT
+            c.*,
             COALESCE(json_agg(q) FILTER (WHERE q.id IS NOT NULL), '[]') AS quests
-          FROM 
+          FROM
             campaigns c
-          LEFT JOIN 
+          LEFT JOIN
             quests q ON c.id = q.campaign_id
-          WHERE 
+          WHERE
             c.slug = $1
-          GROUP BY 
+          GROUP BY
             c.id;
         `;
       }
 
-      const result = await client.query(query, [idOrSlug]);
+      const result = await this.dbService.query(query, [idOrSlug]);
 
       if (result.rows.length === 0) {
         throw new NotFoundException('Campaign not found');
@@ -257,8 +241,6 @@ export class CampaignRepository {
     } catch (error) {
       Logger.error(`Error in findCampaignByIdOrSlug: ${error.message}`);
       throw new InternalServerErrorException(error.message);
-    } finally {
-      client.release()
     }
   }
 
@@ -267,7 +249,7 @@ export class CampaignRepository {
     address: string
   ): Promise<void> {
     const lowerAddress = address.toLowerCase();
-    const client = await this.dbService.getClient();
+    await using client = await this.dbService.getClient();
 
     try {
       await client.query('BEGIN');
@@ -317,8 +299,6 @@ export class CampaignRepository {
         throw error;
       }
       throw new InternalServerErrorException(error.message);
-    } finally {
-      client.release()
     }
   }
 
@@ -327,8 +307,6 @@ export class CampaignRepository {
     address: string
   ): Promise<boolean> {
     const lowerAddress = address.toLowerCase();
-    const client = await this.dbService.getClient();
-
     try {
       const campaignQuery = `
           SELECT id FROM campaigns
@@ -337,7 +315,7 @@ export class CampaignRepository {
         `;
 
       const campaignParams = [idOrSlug];
-      const campaignResult = await client.query(campaignQuery, campaignParams);
+      const campaignResult = await this.dbService.query(campaignQuery, campaignParams);
 
       if (campaignResult.rows.length === 0) {
         throw new NotFoundException('Campaign not found');
@@ -350,7 +328,7 @@ export class CampaignRepository {
         WHERE campaign_id = $1 AND user_address = $2
         LIMIT 1;
       `;
-      const checkResult = await client.query(checkQuery, [
+      const checkResult = await this.dbService.query(checkQuery, [
         campaignId,
         lowerAddress,
       ]);
@@ -361,14 +339,10 @@ export class CampaignRepository {
         throw error;
       }
       throw new InternalServerErrorException(error.message);
-    } finally {
-      client.release()
     }
   }
 
   async getCampaignStatuses(campaignIds: string[], userAddress: string) {
-    const client = await this.dbService.getClient();
-
     const idsList = campaignIds.map((id) => `'${id}'`).join(',');
 
     try {
@@ -390,7 +364,7 @@ export class CampaignRepository {
         GROUP BY q.campaign_id
       `;
 
-      const res = await client.query(query, [userAddress.toLowerCase()]);
+      const res = await this.dbService.query(query, [userAddress.toLowerCase()]);
 
       const statsMap = new Map<
         string,
@@ -425,8 +399,6 @@ export class CampaignRepository {
       return results;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
-    } finally {
-      client.release()
     }
   }
 
@@ -463,7 +435,6 @@ export class CampaignRepository {
     page = 1,
     limit = 5
   ) {
-    const client = await this.dbService.getClient();
     const lowercaseAddress = userAddress.toLowerCase();
     const offset = (page - 1) * limit;
 
@@ -471,12 +442,12 @@ export class CampaignRepository {
       // Handle completed campaigns separately for better ordering by completed_at
       if (status === UserCampaignStatus.COMPLETED) {
         let query = `
-          SELECT 
+          SELECT
             c.*,
             cc.completed_at,
             'completed' as user_status
           FROM campaigns c
-          JOIN campaign_completions cc ON c.id = cc.campaign_id 
+          JOIN campaign_completions cc ON c.id = cc.campaign_id
           WHERE cc.user_address = $1
         `;
 
@@ -491,18 +462,18 @@ export class CampaignRepository {
           'cc.completed_at DESC'
         ));
 
-        return (await client.query(query, params)).rows;
+        return (await this.dbService.query(query, params)).rows;
       }
 
       // Base query for active and started campaigns
       const baseQuery = `
         WITH campaign_status AS (
-          SELECT 
+          SELECT
             c.*,
-            CASE 
+            CASE
               WHEN cc.user_address IS NOT NULL THEN 'completed'
               WHEN EXISTS (
-                SELECT 1 
+                SELECT 1
                 FROM quests q
                 JOIN quest_completions qc ON q.id = qc.quest_id
                 JOIN (
@@ -510,7 +481,7 @@ export class CampaignRepository {
                   FROM quests
                   GROUP BY campaign_id
                 ) t ON q.campaign_id = t.campaign_id
-                WHERE q.campaign_id = c.id 
+                WHERE q.campaign_id = c.id
                 AND qc.user_address = $1
                 AND q.sequence <= t.max_seq
               ) THEN 'started'
@@ -538,11 +509,9 @@ export class CampaignRepository {
         'started_at DESC'
       ));
 
-      return (await client.query(query, params)).rows;
+      return (await this.dbService.query(query, params)).rows;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
-    } finally {
-      client.release()
     }
   }
 }
