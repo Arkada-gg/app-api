@@ -52,6 +52,26 @@ export class CampaignRepository {
       );
       const notCompletedCampaigns = Number(notCompletedResult.rows[0].total_not_completed);
 
+      const startedOneQuestResult = await client.query(
+        `SELECT COUNT(DISTINCT qc.user_address) AS count
+         FROM quest_completions qc
+         JOIN quests q ON q.id = qc.quest_id
+         WHERE q.sequence = 1
+           AND ($1::timestamp IS NULL OR qc.completed_at >= $1)
+           AND ($2::timestamp IS NULL OR qc.completed_at <= $2)`,
+        [startAt || null, endAt || null]
+      );
+      const uniqueWalletsStartedOneQuest = Number(startedOneQuestResult.rows[0]?.count || 0);
+
+      const completedOneQuestResult = await client.query(
+        `SELECT COUNT(DISTINCT qc.user_address) AS count
+         FROM quest_completions qc
+         WHERE ($1::timestamp IS NULL OR qc.completed_at >= $1)
+           AND ($2::timestamp IS NULL OR qc.completed_at <= $2)`,
+        [startAt || null, endAt || null]
+      );
+      const uniqueWalletsCompletedOneQuest = Number(completedOneQuestResult.rows[0]?.count || 0);
+
       const completedFirstQuestResult = await client.query(
         `SELECT SUM(COALESCE(qc.first_completed, 0)) as total_completed_first
          FROM campaigns c
@@ -66,7 +86,7 @@ export class CampaignRepository {
            AND ($2::timestamp IS NULL OR c.started_at <= $2)`,
         [startAt || null, endAt || null]
       );
-      const participated = Number(completedFirstQuestResult.rows[0].total_completed_first);
+      const participated = Number(completedFirstQuestResult.rows[0].total_completed_first || 0);
 
       const averageCompletion = notCompletedCampaigns > 0 ? campaignsCompleted / totalCampaigns : 0;
       const averageParticipated = notCompletedCampaigns > 0 ? participated / totalCampaigns : 0;
@@ -77,7 +97,9 @@ export class CampaignRepository {
         campaignsCompleted,
         averageCompletion,
         averageParticipated,
-        participated
+        participated,
+        uniqueWalletsStartedOneQuest,
+        uniqueWalletsCompletedOneQuest,
       };
     } catch (error) {
       throw new InternalServerErrorException(error.message);
@@ -85,6 +107,7 @@ export class CampaignRepository {
       client.release();
     }
   }
+
 
 
   async incrementParticipants(campaignId: string): Promise<void> {
