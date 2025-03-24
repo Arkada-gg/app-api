@@ -53,6 +53,7 @@ jobs:
      docker pull '${{ secrets.DOCKER_USERNAME }}/arkada-core:latest' && \
      docker stop core-dev || true && \
      docker rm core-dev || true && \
+     docker system prune -af && \
      docker run --restart=always -d \
        --name core-dev \
        -p 3000:3000 \
