@@ -105,8 +105,12 @@ export class UserService {
         startAt === '2025-01-01T00:00:00.000Z';
 
       const ttlSeconds = isTotal ? 15 * 60 : 5 * 60;
-
-      const cacheKey = `leaderboard:${startAt}:${endAt}:${doExcludeRef}:${limitNum}:${sortBy}:${userAddress || ''}:${doIncludeRefWithTwScore}`;
+      let cacheKey
+      if (isTotal) {
+        cacheKey = `leaderboard:total:${doExcludeRef}:${limitNum}:${sortBy}:${userAddress || ''}:${doIncludeRefWithTwScore}`;
+      } else {
+        cacheKey = `leaderboard:monthly:${doExcludeRef}:${limitNum}:${sortBy}:${userAddress || ''}:${doIncludeRefWithTwScore}`;
+      }
 
       const cached = await this.cacheService.get<any>(cacheKey);
       if (cached) {
