@@ -1195,7 +1195,7 @@ export class QuestService {
     }
     if (chain === 146) {
       const now = Math.floor(Date.now() / 1000);
-
+      console.log('------>',);
       const startedAt = Math.floor(
         new Date(campaign.started_at + 'Z').getTime() / 1000
       );
