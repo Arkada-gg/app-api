@@ -1,6 +1,7 @@
-import { Injectable, OnModuleInit, Logger, OnModuleDestroy } from '@nestjs/common';
-import { Client, ClientBase, Pool, PoolClient, QueryConfig, QueryConfigValues, QueryResult, Submittable } from 'pg';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Pool, PoolClient, QueryResult } from 'pg';
 import { ConfigService } from '../_config/config.service';
+import { randomUUID } from 'node:crypto';
 
 export type RaiiPoolClient = PoolClient & { [Symbol.asyncDispose](): Promise<void> };
 
@@ -15,7 +16,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     this.pool = new Pool({
       connectionString: this.configService.get('DATABASE_URL') ||
         'postgres://user:password@localhost:5432/arkada_db',
-      max: 100
+      max: 25
     });
   }
 
@@ -51,12 +52,17 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
 
   private makeRaiiPoolClient(client: PoolClient): RaiiPoolClient {
-    client[Symbol.asyncDispose] = () => client.release();
+    client[Symbol.asyncDispose] = () => {
+      client.release()
+      this.logger.log('free connection: ', client['id'])
+    };
     return client as RaiiPoolClient;
   }
 
   async getClient(): Promise<RaiiPoolClient> {
     const client = await this.pool.connect();
+    client['id'] = randomUUID();
+    this.logger.log('take connection: ', client['id'])
     return this.makeRaiiPoolClient(client);
   }
 
@@ -64,7 +70,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const start = performance.now();
     const res = await this.pool.query<R>(text, params);
     const duration = performance.now() - start;
-    // this.logger.log('executed query', {text, duration, rows: res.rowCount})
+    this.logger.log('executed query', { text, duration, rows: res.rowCount })
+    const { totalCount, waitingCount, idleCount } = this.pool
+    this.logger.log('pool stats:', { totalCount, waitingCount, idleCount })
     return res;
   }
 }

@@ -541,7 +541,6 @@ export class UserRepository {
     }
   }
 
-
   async createUserWithReferral(address: string): Promise<IUser> {
     const lower = address.toLowerCase();
     try {
