@@ -49,12 +49,20 @@ jobs:
       - name: Pull and Run Docker on Staging
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} << 'EOF'
+            # 1) Логинимся в Docker Registry (Docker Hub), если нужно
             docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
 
+            # 2) Тянем последний образ из Docker Hub
             docker pull ${{ secrets.DOCKER_USERNAME }}/arkada-core:latest
 
-            docker stop dev-core || true
-            docker rm dev-core || true
+            # 3) Останавливаем и удаляем старый контейнер, если он есть
+            docker stop core-dev || true
+            docker rm core-dev || true
 
-            docker run -d --name dev-core -p 3000:3000 ${{ secrets.DOCKER_USERNAME }}/arkada-core:latest
+            # 4) Запускаем новый контейнер
+            docker run --restart=always -d \
+              --name core-dev \
+              -p 3000:3000 \
+              --env-file /home/core-dev.env \
+              ${{ secrets.DOCKER_USERNAME }}/arkada-core:latest
           EOF
