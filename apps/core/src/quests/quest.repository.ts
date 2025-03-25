@@ -28,7 +28,7 @@ export class QuestRepository {
         WHERE quest_id = $1 AND user_address = $2
         LIMIT 1
       `;
-      const result = await this.dbService.querySelect(query, [questId, lowerAddress]);
+      const result = await this.dbService.query(query, [questId, lowerAddress]);
       return result.rowCount > 0;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
@@ -56,7 +56,7 @@ export class QuestRepository {
         WHERE id = $1
         LIMIT 1
       `;
-      const result = await this.dbService.querySelect(query, [id]);
+      const result = await this.dbService.query(query, [id]);
 
       if (result.rowCount === 0) {
         throw new NotFoundException(`Квест с id ${id} не найден`);
@@ -125,7 +125,7 @@ export class QuestRepository {
         params.push(campaignIdOrSlug);
       }
 
-      const result = await this.dbService.querySelect(query, params);
+      const result = await this.dbService.query(query, params);
 
       return result.rows.map((row) => ({
         id: row.id,
@@ -152,7 +152,7 @@ export class QuestRepository {
         WHERE qc.user_address = $1
         ORDER BY qc.completed_at DESC
       `;
-      const result = await this.dbService.querySelect(query, [lowerAddress]);
+      const result = await this.dbService.query(query, [lowerAddress]);
       return result.rows.map((row) => ({
         id: row.id,
         quest_name: row.quest_name,
@@ -173,7 +173,7 @@ export class QuestRepository {
         WHERE campaign_id = $1
         ORDER BY sequence ASC
       `;
-      const result = await this.dbService.querySelect(query, [campaignId]);
+      const result = await this.dbService.query(query, [campaignId]);
 
       if (result.rowCount === 0) {
         throw new NotFoundException(

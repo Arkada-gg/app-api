@@ -32,7 +32,7 @@ export class UserRepository {
   async findEmail(email: string) {
     const lower = email.toLowerCase();
     try {
-      const res = await this.dbService.querySelect<IUser>(
+      const res = await this.dbService.query<IUser>(
         `SELECT * FROM user_email WHERE email = $1`,
         [lower]
       );
@@ -45,7 +45,7 @@ export class UserRepository {
   async findAddress(address: string) {
     const lower = address.toLowerCase();
     try {
-      const res = await this.dbService.querySelect<IUser>(
+      const res = await this.dbService.query<IUser>(
         `SELECT * FROM user_email WHERE address = $1`,
         [lower]
       );
@@ -59,7 +59,7 @@ export class UserRepository {
     const lower = address.toLowerCase();
 
     try {
-      const userResult = await this.dbService.querySelect<IUser>(
+      const userResult = await this.dbService.query<IUser>(
         `SELECT *, COALESCE(points, 0) AS total_points, last_wallet_score_update FROM users WHERE address = $1`,
         [lower]
       );
@@ -71,7 +71,7 @@ export class UserRepository {
       const user = userResult.rows[0];
       // user.address = user.address.toString();
 
-      // const pointsResult = await this.dbService.querySelect<{
+      // const pointsResult = await this.dbService.query<{
       //   point_type: string;
       //   sum: number;
       // }>(
@@ -122,7 +122,7 @@ export class UserRepository {
     }
     const lower = user.address.toLowerCase();
 
-    const pointsResult = await this.dbService.querySelect<{
+    const pointsResult = await this.dbService.query<{
       point_type: string;
       sum: number;
     }>(
@@ -164,7 +164,7 @@ export class UserRepository {
   async findByEmail(email: string): Promise<IUser | null> {
     const lower = email.toLowerCase();
     try {
-      const res = await this.dbService.querySelect<IUser>(
+      const res = await this.dbService.query<IUser>(
         `SELECT * FROM users WHERE email = $1`,
         [lower]
       );
@@ -186,7 +186,7 @@ export class UserRepository {
         ORDER BY address
         LIMIT $1 OFFSET $2
       `;
-      const result = await this.dbService.querySelect(query, [limit, offset]);
+      const result = await this.dbService.query(query, [limit, offset]);
       return result.rows;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
@@ -209,7 +209,7 @@ export class UserRepository {
   async findByName(name: string): Promise<IUser | null> {
     const lower = name.toLowerCase();
     try {
-      const res = await this.dbService.querySelect<IUser>(
+      const res = await this.dbService.query<IUser>(
         `SELECT * FROM users WHERE name = $1`,
         [lower]
       );
@@ -222,7 +222,7 @@ export class UserRepository {
   async findByTelegramId(name: string): Promise<IUser | null> {
     const lower = name.toLowerCase();
     try {
-      const res = await this.dbService.querySelect<IUser>(
+      const res = await this.dbService.query<IUser>(
         `SELECT * FROM users WHERE telegram->>'id' = $1`,
         [lower]
       );
@@ -235,7 +235,7 @@ export class UserRepository {
   async findByDiscordUsername(name: string): Promise<IUser | null> {
     const lower = name.toLowerCase();
     try {
-      const res = await this.dbService.querySelect<IUser>(
+      const res = await this.dbService.query<IUser>(
         `SELECT * FROM users WHERE discord = $1`,
         [lower]
       );
@@ -247,7 +247,7 @@ export class UserRepository {
 
   async findByTwitterUsername(name: string): Promise<IUser | null> {
     try {
-      const res = await this.dbService.querySelect<IUser>(
+      const res = await this.dbService.query<IUser>(
         `SELECT * FROM users WHERE twitter = $1`,
         [name]
       );
@@ -259,7 +259,7 @@ export class UserRepository {
 
   async findByGithubUsername(name: string): Promise<IUser | null> {
     try {
-      const res = await this.dbService.querySelect<IUser>(
+      const res = await this.dbService.query<IUser>(
         `SELECT * FROM users WHERE github = $1`,
         [name]
       );
@@ -367,7 +367,7 @@ export class UserRepository {
         FROM quest_completions
         WHERE user_address = $1
       `;
-      const result = await this.dbService.querySelect(query, [lowerAddress]);
+      const result = await this.dbService.query(query, [lowerAddress]);
       return parseInt(result.rows[0].count, 10);
     } catch (error) {
       throw new InternalServerErrorException(
@@ -384,7 +384,7 @@ export class UserRepository {
         FROM campaign_completions
         WHERE user_address = $1
       `;
-      const result = await this.dbService.querySelect(query, [lowerAddress]);
+      const result = await this.dbService.query(query, [lowerAddress]);
       return parseInt(result.rows[0].count, 10);
     } catch (error) {
       throw new InternalServerErrorException(
@@ -395,7 +395,7 @@ export class UserRepository {
 
   async findByReferralCode(refCode: string): Promise<IUser | null> {
     try {
-      const res = await this.dbService.querySelect<IUser>(
+      const res = await this.dbService.query<IUser>(
         `SELECT * FROM users WHERE referral_code = $1`,
         [refCode]
       );
@@ -507,7 +507,7 @@ export class UserRepository {
 
     if (!userAddress) {
       try {
-        const topRes = await this.dbService.querySelect(topNsql, [startIso, endIso, limit]);
+        const topRes = await this.dbService.query(topNsql, [startIso, endIso, limit]);
         const top = topRes.rows.map((row) => ({
           address: row.address,
           name: row.name,
@@ -543,8 +543,8 @@ export class UserRepository {
 
     try {
       const [topRes, userRes] = await Promise.all([
-        this.dbService.querySelect(topNsql, [startIso, endIso, limit]),
-        this.dbService.querySelect(userRankSql, [startIso, endIso, userAddress.toLowerCase()]),
+        this.dbService.query(topNsql, [startIso, endIso, limit]),
+        this.dbService.query(userRankSql, [startIso, endIso, userAddress.toLowerCase()]),
       ]);
 
       const top = topRes.rows.map((r) => ({
@@ -609,7 +609,7 @@ export class UserRepository {
 
   private async isReferralCodeExists(code: string): Promise<boolean> {
     const result = await this.dbService
-      .querySelect(`SELECT 1 FROM users WHERE referral_code = $1`, [code]);
+      .query(`SELECT 1 FROM users WHERE referral_code = $1`, [code]);
     return result.rows.length > 0;
   }
 
@@ -621,7 +621,7 @@ export class UserRepository {
   }
 
   async findUsersWithPoints(): Promise<{ address: string; points: number }[]> {
-    const res = await this.dbService.querySelect(`
+    const res = await this.dbService.query(`
         SELECT address, points
         FROM users
         WHERE points > 0
@@ -632,7 +632,7 @@ export class UserRepository {
   async findUsersWithPointAfterSpecificAddress(
     address: string
   ): Promise<{ address: string; points: number }[]> {
-    const res = await this.dbService.querySelect(
+    const res = await this.dbService.query(
       `
           SELECT address, points
           FROM users
@@ -687,7 +687,7 @@ export class UserRepository {
   async getTotalPointsByType(address: string): Promise<Record<string, number>> {
     const lower = address.toLowerCase();
     try {
-      const result = await this.dbService.querySelect(
+      const result = await this.dbService.query(
         `SELECT point_type, SUM(points) AS total
          FROM user_points
          WHERE user_address = $1
@@ -708,7 +708,7 @@ export class UserRepository {
     const lower = address.toLowerCase();
     try {
       const result = await this.dbService
-        .querySelect(`SELECT COUNT(*) AS cnt FROM users WHERE ref_owner = $1`, [
+        .query(`SELECT COUNT(*) AS cnt FROM users WHERE ref_owner = $1`, [
           lower,
         ]);
       return parseInt(result.rows[0].cnt, 10) || 0;
@@ -774,7 +774,7 @@ export class UserRepository {
         ORDER BY address
         LIMIT $1 OFFSET $2
       `;
-      const result = await this.dbService.querySelect(query, [limit, offset]);
+      const result = await this.dbService.query(query, [limit, offset]);
       return result.rows;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
@@ -851,7 +851,7 @@ export class UserRepository {
         params = [limit, offset];
       }
 
-      const result = await this.dbService.querySelect(query, params);
+      const result = await this.dbService.query(query, params);
       return result.rows;
     } catch (error) {
       throw new InternalServerErrorException(error.message);

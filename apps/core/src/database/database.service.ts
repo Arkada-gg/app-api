@@ -19,18 +19,18 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         'postgres://user:password@localhost:5432/arkada_db',
       // max: core_count * 2
     });
-    this.poolRead = new Pool({
-      connectionString: this.configService.get('DATABASE_URL_READ') ||
-        'postgres://user:password@localhost:5432/arkada_db',
-      max: 25
-    });
+    // this.poolRead = new Pool({
+    //   connectionString: this.configService.get('DATABASE_URL_READ') ||
+    //     'postgres://user:password@localhost:5432/arkada_db',
+    //   max: 25
+    // });
   }
 
   async onModuleInit(): Promise<void> {
     await using client = await this.getClient();
     this.logger.log('Connected to PostgreSQL');
-    await this.getReplicaClient()
-    this.logger.log('Connected to PostgreSQL Replica');
+    // await this.getReplicaClient()
+    // this.logger.log('Connected to PostgreSQL Replica');
     return this.initializeSchema(client);
   }
 
@@ -74,12 +74,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     return this.makeRaiiPoolClient(client);
   }
 
-  async getReplicaClient(): Promise<RaiiPoolClient> {
-    const client = await this.poolRead.connect();
-    client['id'] = randomUUID();
-    this.logger.log('take connection: ', client['id'])
-    return this.makeRaiiPoolClient(client);
-  }
+  // async getReplicaClient(): Promise<RaiiPoolClient> {
+  //   const client = await this.poolRead.connect();
+  //   client['id'] = randomUUID();
+  //   this.logger.log('take connection: ', client['id'])
+  //   return this.makeRaiiPoolClient(client);
+  // }
 
   async query<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
     const start = performance.now();

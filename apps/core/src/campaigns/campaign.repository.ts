@@ -22,12 +22,12 @@ export class CampaignRepository {
 
   async getCampaignStats(startAt?: string, endAt?: string): Promise<any> {
     try {
-      const totalCampaignsResult = await this.dbService.querySelect(
+      const totalCampaignsResult = await this.dbService.query(
         `SELECT COUNT(*) as total FROM campaigns`
       );
       const totalCampaigns = Number(totalCampaignsResult.rows[0].total);
 
-      const campaignsCompletedResult = await this.dbService.querySelect(
+      const campaignsCompletedResult = await this.dbService.query(
         `SELECT COUNT(*) as total FROM campaign_completions
          WHERE ($1::timestamp IS NULL OR completed_at >= $1)
            AND ($2::timestamp IS NULL OR completed_at <= $2)`,
@@ -35,7 +35,7 @@ export class CampaignRepository {
       );
       const campaignsCompleted = Number(campaignsCompletedResult.rows[0].total);
 
-      const notCompletedResult = await this.dbService.querySelect(
+      const notCompletedResult = await this.dbService.query(
         `SELECT SUM(c.participants - COALESCE(cc.completed, 0)) as total_not_completed
          FROM campaigns c
          LEFT JOIN (
@@ -51,7 +51,7 @@ export class CampaignRepository {
       );
       const notCompletedCampaigns = Number(notCompletedResult.rows[0].total_not_completed);
 
-      const startedOneQuestResult = await this.dbService.querySelect(
+      const startedOneQuestResult = await this.dbService.query(
         `SELECT COUNT(DISTINCT qc.user_address) AS count
          FROM quest_completions qc
          JOIN quests q ON q.id = qc.quest_id
@@ -62,7 +62,7 @@ export class CampaignRepository {
       );
       const uniqueWalletsStartedOneQuest = Number(startedOneQuestResult.rows[0]?.count || 0);
 
-      const completedOneQuestResult = await this.dbService.querySelect(
+      const completedOneQuestResult = await this.dbService.query(
         `SELECT COUNT(DISTINCT qc.user_address) AS count
          FROM quest_completions qc
          WHERE ($1::timestamp IS NULL OR qc.completed_at >= $1)
@@ -71,7 +71,7 @@ export class CampaignRepository {
       );
       const uniqueWalletsCompletedOneQuest = Number(completedOneQuestResult.rows[0]?.count || 0);
 
-      const completedFirstQuestResult = await this.dbService.querySelect(
+      const completedFirstQuestResult = await this.dbService.query(
         `SELECT SUM(COALESCE(qc.first_completed, 0)) as total_completed_first
          FROM campaigns c
          LEFT JOIN (
@@ -138,7 +138,7 @@ export class CampaignRepository {
         WHERE c.id = $1
         LIMIT 1;
       `;
-      const result = await this.dbService.querySelect(query, [id, address.toLowerCase()]);
+      const result = await this.dbService.query(query, [id, address.toLowerCase()]);
       return result.rows[0];
     } catch (error) {
       throw new InternalServerErrorException(error.message);
@@ -214,7 +214,7 @@ export class CampaignRepository {
       query += ` ORDER BY started_at DESC LIMIT $${params.length - 1} OFFSET $${params.length
         }`;
 
-      const result = await this.dbService.querySelect(query, params);
+      const result = await this.dbService.query(query, params);
       return result.rows;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
@@ -351,7 +351,7 @@ export class CampaignRepository {
         WHERE campaign_id = $1 AND user_address = $2
         LIMIT 1;
       `;
-      const checkResult = await this.dbService.querySelect(checkQuery, [
+      const checkResult = await this.dbService.query(checkQuery, [
         campaignId,
         lowerAddress,
       ]);
@@ -387,7 +387,7 @@ export class CampaignRepository {
         GROUP BY q.campaign_id
       `;
 
-      const res = await this.dbService.querySelect(query, [userAddress.toLowerCase()]);
+      const res = await this.dbService.query(query, [userAddress.toLowerCase()]);
 
       const statsMap = new Map<
         string,
@@ -485,7 +485,7 @@ export class CampaignRepository {
           'cc.completed_at DESC'
         ));
 
-        return (await this.dbService.querySelect(query, params)).rows;
+        return (await this.dbService.query(query, params)).rows;
       }
 
       // Base query for active and started campaigns
@@ -532,7 +532,7 @@ export class CampaignRepository {
         'started_at DESC'
       ));
 
-      return (await this.dbService.querySelect(query, params)).rows;
+      return (await this.dbService.query(query, params)).rows;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
