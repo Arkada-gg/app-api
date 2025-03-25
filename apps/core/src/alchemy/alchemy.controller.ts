@@ -1,16 +1,16 @@
+import { InjectQueue } from '@nestjs/bullmq';
 import {
   Body,
   Controller,
   Headers,
   HttpCode,
+  Logger,
   Post,
   UnauthorizedException,
-  Logger,
 } from '@nestjs/common';
+import { Queue } from 'bullmq';
 import { AlchemyWebhooksService } from './alchemy.service';
 import { EventSignature } from './config/signatures';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 
 @Controller('alchemy')
 export class AlchemyWebhooksController {
@@ -33,7 +33,8 @@ export class AlchemyWebhooksController {
     const isValid = await this.alchemyWebhooksService.verifyWebhookSignature(
       signature,
       JSON.stringify(webhookEvent),
-      EventSignature.DAILY_CHECK
+      EventSignature.DAILY_CHECK,
+      webhookEvent.event.network
     );
     if (!isValid) {
       throw new UnauthorizedException('Invalid webhook signature');
@@ -59,14 +60,14 @@ export class AlchemyWebhooksController {
     @Headers('x-alchemy-signature') signature: string,
     @Body() webhookEvent: any,
   ) {
-    console.log('------>', JSON.stringify(webhookEvent));
     const startTime = Date.now();
     console.log('------>', `webhookEvent started at ${startTime}`);
 
     const isValid = await this.alchemyWebhooksService.verifyWebhookSignature(
       signature,
       JSON.stringify(webhookEvent),
-      EventSignature.PYRAMID_CLAIM
+      EventSignature.PYRAMID_CLAIM,
+      webhookEvent.event.network
     );
     if (!isValid) {
       throw new UnauthorizedException('Invalid webhook signature');

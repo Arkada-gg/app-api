@@ -24,6 +24,7 @@ export interface ITransaction {
   event_name: string;
   block_number: number;
   args: Record<string, any>; // JSONB can be any key-value object
+  chain_id: number;
   created_at: Date;
 }
 
