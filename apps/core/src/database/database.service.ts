@@ -76,6 +76,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   // }
 
   async query<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
+    if (this.pool.waitingCount > 0) {
+      const {totalCount, waitingCount, idleCount} = this.pool
+      this.logger.warn('this query is waiting!!!', { text, totalCount, waitingCount, idleCount, timestamp: performance.now(), expiredCount: this.pool.expiredCount });
+    }
     return this.pool.query<R>(text, params);
   }
 
