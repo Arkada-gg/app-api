@@ -700,7 +700,11 @@ export class QuestService {
       } else {
         newBalance = await contract.balanceOf(userAddr);
       }
-      return newBalance > 0;
+      if (task.minAmountToken) {
+        return newBalance > task.minAmountToken
+      } else {
+        return newBalance > 0;
+      }
     } catch (e) {
       return false;
     }
