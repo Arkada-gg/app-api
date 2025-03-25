@@ -336,9 +336,11 @@ export class GetUserResponse {
   email?: string;
 
   @ApiProperty({
-    type: PointsDto,
+    example: 1,
+    description: 'Поинты юзера',
+    required: false,
   })
-  points?: PointsDto;
+  points?: number;
 
   @ApiProperty({
     example: '2025-01-27 06:10:35.315982',
