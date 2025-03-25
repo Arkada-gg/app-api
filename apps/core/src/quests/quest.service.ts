@@ -894,6 +894,7 @@ export class QuestService {
     parentTx: any
   ): Promise<boolean> {
     for (const action of actions) {
+      console.log('------>', parentTx.hash);
       const signatures: string[] = action.methodSignatures || [];
       for (const sig of signatures) {
         let parsedTx: ethers.TransactionDescription | null = null;
@@ -972,6 +973,7 @@ export class QuestService {
             parsedTx,
             parentTx
           );
+          console.log('------>', sumUSD);
           if (sumUSD >= (action.minUsdTotal || 0)) {
             return true;
           } else {
@@ -1139,6 +1141,7 @@ export class QuestService {
         }
       }
     } else {
+      console.log('--actualTokens---->', actualTokens);
       for (const def of action.tokens) {
         const found = actualTokens.find(
           (t) =>
@@ -1151,8 +1154,13 @@ export class QuestService {
         if ((def.minAmountToken || 0) > 0) {
           // 466 same
         }
-        const usdVal = await this.convertToUSD(found.address, found.amount);
-        totalUsd += usdVal;
+        console.log('-foundfoundfoundfoundfound----->', found.address, found.amount);
+        if (actualTokens.length === 1) {
+          return await this.convertToUSD(found.address, found.amount);
+        } else {
+          const usdVal = await this.convertToUSD(found.address, found.amount);
+          totalUsd += usdVal;
+        }
       }
     }
     return totalUsd;
@@ -1179,12 +1187,14 @@ export class QuestService {
       tokenAddr.toLowerCase() ===
       '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
     ) {
+      console.log('-floatAmoun123123t----->', floatAmount);
       return floatAmount * 1;
     }
     const coingeckoKey =
       this.tokenToCoingeckoId[tokenAddr.toLowerCase()] || 'ethereum';
     const price = await this.priceService.getTokenPrice(coingeckoKey);
     if (!price) return 0;
+    console.log('-12312312----->', floatAmount, price);
     return floatAmount * price;
   }
 
