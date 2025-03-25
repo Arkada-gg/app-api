@@ -1,7 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Pool, PoolClient, QueryResult } from 'pg';
 import { ConfigService } from '../_config/config.service';
-import { randomUUID } from 'node:crypto';
 
 export type RaiiPoolClient = PoolClient & { [Symbol.asyncDispose](): Promise<void> };
 
@@ -10,7 +9,7 @@ export type RaiiPoolClient = PoolClient & { [Symbol.asyncDispose](): Promise<voi
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
-  private pool: Pool;
+  private readonly pool: Pool;
   private poolRead: Pool;
 
   constructor(private readonly configService: ConfigService) {
@@ -60,17 +59,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
 
   private makeRaiiPoolClient(client: PoolClient): RaiiPoolClient {
-    client[Symbol.asyncDispose] = () => {
-      client.release()
-      this.logger.log('free connection: ', client['id'])
-    };
+    client[Symbol.asyncDispose] = () => client.release()
     return client as RaiiPoolClient;
   }
 
   async getClient(): Promise<RaiiPoolClient> {
     const client = await this.pool.connect();
-    client['id'] = randomUUID();
-    this.logger.log('take connection: ', client['id'])
     return this.makeRaiiPoolClient(client);
   }
 
@@ -82,13 +76,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   // }
 
   async query<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
-    const start = performance.now();
-    const res = await this.pool.query<R>(text, params);
-    const duration = performance.now() - start;
-    this.logger.log('executed query', { text, duration, rows: res.rowCount })
-    const { totalCount, waitingCount, idleCount } = this.pool
-    this.logger.log('pool stats:', { totalCount, waitingCount, idleCount })
-    return res;
+    return this.pool.query<R>(text, params);
   }
 
   async querySelect<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
