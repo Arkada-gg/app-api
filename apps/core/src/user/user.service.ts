@@ -8,7 +8,7 @@ import * as jwt from 'jsonwebtoken';
 import { Multer } from 'multer';
 import { EPointsType } from '../quests/interface';
 import { S3Service } from '../s3/s3.service';
-import { IUser, PyramidType } from '../shared/interfaces';
+import { GetUserPointsResponse, IUser, PyramidType } from '../shared/interfaces';
 import { BindSocialDto } from './dto/bind-social.dto';
 import { CreateUserEmailDto } from './dto/create-user-email.dto';
 import { UnbindSocialDto } from './dto/unbind-social.dto';
@@ -36,6 +36,10 @@ export class UserService {
 
   async getUserPointsHistory(page: number, limit: number, address?: string) {
     return this.userRepository.getUserPointsHistory(page, limit, address);
+  }
+
+  async getUserPoints(address: string): Promise<GetUserPointsResponse> {
+    return this.userRepository.getPointsByAddress(address);
   }
 
   async createUserEmail(dto: CreateUserEmailDto) {

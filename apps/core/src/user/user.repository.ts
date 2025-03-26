@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { QuestRepository } from '../quests/quest.repository';
-import { IUser, PyramidType } from '../shared/interfaces';
+import { GetUserPointsResponse, IUser, PyramidType } from '../shared/interfaces';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PoolClient } from 'pg';
 
@@ -69,51 +69,96 @@ export class UserRepository {
       }
 
       const user = userResult.rows[0];
-      user.address = user.address.toString();
+      // user.address = user.address.toString();
 
-      const pointsResult = await this.dbService.query<{
-        point_type: string;
-        sum: number;
-      }>(
-        `
-        SELECT point_type, COALESCE(SUM(points), 0) AS sum
-        FROM user_points
-        WHERE user_address = $1
-        GROUP BY point_type
-        `,
-        [lower]
-      );
+      // const pointsResult = await this.dbService.query<{
+      //   point_type: string;
+      //   sum: number;
+      // }>(
+      //   `
+      //   SELECT point_type, COALESCE(SUM(points), 0) AS sum
+      //   FROM user_points
+      //   WHERE user_address = $1
+      //   GROUP BY point_type
+      //   `,
+      //   [lower]
+      // );
 
-      let refPoints = 0;
-      let baseCampaignPoints = 0;
-      let dailyPoints = 0;
+      // let refPoints = 0;
+      // let baseCampaignPoints = 0;
+      // let dailyPoints = 0;
 
-      for (const row of pointsResult.rows) {
-        if (row.point_type === 'referral') {
-          refPoints = +row.sum;
-        } else if (row.point_type === 'base_campaign') {
-          baseCampaignPoints = row.sum;
-        } else if (row.point_type === 'daily') {
-          dailyPoints = row.sum;
-        }
-      }
+      // for (const row of pointsResult.rows) {
+      //   if (row.point_type === 'referral') {
+      //     refPoints = +row.sum;
+      //   } else if (row.point_type === 'base_campaign') {
+      //     baseCampaignPoints = row.sum;
+      //   } else if (row.point_type === 'daily') {
+      //     dailyPoints = row.sum;
+      //   }
+      // }
 
-      user.points = {
-        ref: +refPoints,
-        daily: +dailyPoints,
-        twitter: user.twitter_points,
-        base_campaign: +baseCampaignPoints,
-        wallet: user.wallet_points || 0,
-        wallet_additional: user.wallet_additional_points || 0,
-        total: +user.total_points,
-      };
+      // user.points = {
+      //   ref: +refPoints,
+      //   daily: +dailyPoints,
+      //   twitter: user.twitter_points,
+      //   base_campaign: +baseCampaignPoints,
+      //   wallet: user.wallet_points || 0,
+      //   wallet_additional: user.wallet_additional_points || 0,
+      //   total: +user.total_points,
+      // };
 
-      delete user.total_points;
 
       return user;
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }
+  }
+
+  async getPointsByAddress(address: string): Promise<GetUserPointsResponse> {
+    const user = await this.findByAddress(address);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+    const lower = user.address.toLowerCase();
+
+    const pointsResult = await this.dbService.query<{
+      point_type: string;
+      sum: number;
+    }>(
+      `
+      SELECT point_type, COALESCE(SUM(points), 0) AS sum
+      FROM user_points
+      WHERE user_address = $1
+      GROUP BY point_type
+      `,
+      [lower]
+    );
+
+    let refPoints = 0;
+    let baseCampaignPoints = 0;
+    let dailyPoints = 0;
+
+    for (const row of pointsResult.rows) {
+      if (row.point_type === 'referral') {
+        refPoints = +row.sum;
+      } else if (row.point_type === 'base_campaign') {
+        baseCampaignPoints = row.sum;
+      } else if (row.point_type === 'daily') {
+        dailyPoints = row.sum;
+      }
+    }
+
+    const points = {
+      ref: +refPoints,
+      daily: +dailyPoints,
+      twitter: user.twitter_points,
+      base_campaign: +baseCampaignPoints,
+      wallet: user.wallet_points || 0,
+      wallet_additional: user.wallet_additional_points || 0,
+      total: +user.total_points,
+    };
+    return points
   }
 
   async findByEmail(email: string): Promise<IUser | null> {
@@ -608,20 +653,20 @@ export class UserRepository {
   ) {
     const lower = address.toLowerCase();
     const user = await this.findByAddress(address);
-    const userPoints = user.points.total;
+    const userPoints = user.points;
 
     try {
       if (pointType === 'base_campaign' && campaignId) {
         await this.dbService.query(
           `INSERT INTO user_points (user_address, points, point_type, campaign_id, points_before, points_after)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [lower, points, pointType, campaignId, user.points.total, userPoints + points]
+          [lower, points, pointType, campaignId, userPoints, userPoints + points]
         );
       } else {
         await this.dbService.query(
           `INSERT INTO user_points (user_address, points, point_type, points_before, points_after)
            VALUES ($1, $2, $3, $4, $5)`,
-          [lower, points, pointType, user.points.total, userPoints + points]
+          [lower, points, pointType, userPoints, userPoints + points]
         );
       }
 

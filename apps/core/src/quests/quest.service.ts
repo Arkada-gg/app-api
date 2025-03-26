@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { error } from 'console';
 import { ethers } from 'ethers';
 import fetch from 'node-fetch';
 import { ConfigService } from '../_config/config.service';
@@ -26,6 +27,7 @@ import {
   ARKADA_NFTS,
   SONEIUM_MULTICALL_ADDRESS,
 } from '../shared/constants/addresses';
+import { CHAIN_ID, CHAIN_NAME, SUPPORTED_CHAIN_IDS } from '../shared/constants/chain';
 import { PyramidType } from '../shared/interfaces';
 import { soneiumProvider } from '../shared/provider';
 import { UserService } from '../user/user.service';
@@ -46,7 +48,6 @@ import {
   SIGN_TYPES,
 } from './interface/sign';
 import { QuestRepository } from './quest.repository';
-import { error } from 'console';
 
 @Injectable()
 export class QuestService {
@@ -700,7 +701,11 @@ export class QuestService {
       } else {
         newBalance = await contract.balanceOf(userAddr);
       }
-      return newBalance > 0;
+      if (task.minAmountToken) {
+        return newBalance > task.minAmountToken
+      } else {
+        return newBalance > 0;
+      }
     } catch (e) {
       return false;
     }
@@ -1238,6 +1243,15 @@ export class QuestService {
         'Campaign does not require minting Pyramid'
       );
     }
+
+    const chainId = campaign.chain_id as CHAIN_ID | null
+    if (!chainId) {
+      throw new BadRequestException("Chain id not provided")
+    }
+    if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
+      throw new BadRequestException("Not supported chainId")
+    }
+
     const campaignStatus = await this.campaignService.getCampaignStatus(
       campaign.id,
       userAddress
@@ -1246,15 +1260,13 @@ export class QuestService {
       throw new BadRequestException('Campaign already completed');
     }
 
-    const chainId = this.configService.getOrThrow('SIGN_DOMAIN_CHAIN_ID');
+    const pyramidContractAddress = this.configService.getOrThrow(`PYRAMID_CONTRACT_ADDRESS_${chainId}`);
 
     const signDomain = {
       name: this.configService.getOrThrow('SIGN_DOMAIN_NAME'),
       version: this.configService.getOrThrow('SIGN_DOMAIN_VERSION'),
       chainId,
-      verifyingContract: this.configService.getOrThrow(
-        'PYRAMID_CONTRACT_ADDRESS'
-      ),
+      verifyingContract: pyramidContractAddress
     };
 
     const completedQuests =
@@ -1306,7 +1318,7 @@ export class QuestService {
         { trait_type: 'Quest ID', value: campaign.id },
         { trait_type: 'Type', value: campaign.type },
         { trait_type: 'Title', value: campaign.name },
-        { trait_type: 'Transaction Chain', value: 'Soneium' },
+        { trait_type: 'Transaction Chain', value: CHAIN_NAME[chainId] },
         { trait_type: 'Transaction Count', value: transactions.length },
         { trait_type: 'Community', value: campaign.project_name },
         ...(campaign.tags
@@ -1330,7 +1342,7 @@ export class QuestService {
     );
 
     // mint price depends on campaign type
-    const mintPrice = MINT_PRICE[pyramidType];
+    const mintPrice = MINT_PRICE[pyramidType][chainId];
 
     // reward amount is 0% of mint price, was 20% erlier
     let rewardAmount =

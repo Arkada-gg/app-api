@@ -24,6 +24,7 @@ export interface ITransaction {
   event_name: string;
   block_number: number;
   args: Record<string, any>; // JSONB can be any key-value object
+  chain_id: number;
   created_at: Date;
 }
 
@@ -269,6 +270,26 @@ export class GetCampaignByIdOrSlugResponse extends GetCampaignResponse {
   quests: QuestDto[];
 }
 
+export class GetUserPointsResponse {
+  @ApiProperty({ example: '100', description: 'Поинты за реферальную систему' })
+  ref: number;
+
+  @ApiProperty({ example: '100', description: 'Поинты за daily начисления' })
+  daily: number;
+
+  @ApiProperty({ example: '100', description: 'Поинты за кампании' })
+  base_campaign: number;
+
+  @ApiProperty({ example: '100', description: 'wallet_additional поинтов' })
+  wallet_additional: number;
+
+  @ApiProperty({ example: '100', description: 'wallet поинтов' })
+  wallet: number;
+
+  @ApiProperty({ example: '100', description: 'Всего поинтов' })
+  total: number;
+}
+
 export class GetUserResponse {
   @ApiProperty({ example: '0x12345...', description: 'Адрес пользователя' })
   address: string;
@@ -316,9 +337,11 @@ export class GetUserResponse {
   email?: string;
 
   @ApiProperty({
-    type: PointsDto,
+    example: 1,
+    description: 'Поинты юзера',
+    required: false,
   })
-  points?: PointsDto;
+  points?: number;
 
   @ApiProperty({
     example: '2025-01-27 06:10:35.315982',

@@ -1,15 +1,26 @@
 import { parseEther } from 'ethers';
 import { ARKADA_NFTS } from '../../shared/constants/addresses';
+import { CHAIN_ID } from '../../shared/constants/chain';
 import { PyramidType } from '../../shared/interfaces';
 
-export const BASIC_QUEST_MINT_PRICE =
-  process.env.ENV === 'stage'
+export const BASIC_QUEST_MINT_PRICE: Record<CHAIN_ID, bigint> = {
+  [CHAIN_ID.SONEIUM]: process.env.ENV === 'stage'
     ? parseEther('0.000000075')
-    : parseEther('0.000075');
-export const PREMIUM_QUEST_MINT_PRICE =
-  process.env.ENV === 'stage'
+    : parseEther('0.000075'),
+  [CHAIN_ID.SONIC]: process.env.ENV === 'stage'
+    ? parseEther('0.0000025')
+    : parseEther('0.25'),
+}
+
+export const PREMIUM_QUEST_MINT_PRICE: Record<CHAIN_ID, bigint> = {
+  [CHAIN_ID.SONEIUM]: process.env.ENV === 'stage'
     ? parseEther('0.00000015')
-    : parseEther('0.00015');
+    : parseEther('0.00015'),
+  [CHAIN_ID.SONIC]: process.env.ENV === 'stage'
+    ? parseEther('0.000005')
+    : parseEther('0.5'),
+}
+
 
 export const MAX_BPS = 10000; // 100%
 export const REF_OWNER_BPS = 1000; // 10%
@@ -20,7 +31,7 @@ export const ARKADA_NFTS_MULTIPLIER_BPS: Record<ARKADA_NFTS, number> = {
   [ARKADA_NFTS.SHOGUN_SECOND]: 2000, // 20%
 };
 
-export const MINT_PRICE: Record<PyramidType, bigint> = {
+export const MINT_PRICE: Record<PyramidType, Record<CHAIN_ID, bigint>> = {
   [PyramidType.BASIC]: BASIC_QUEST_MINT_PRICE,
   [PyramidType.GOLD]: PREMIUM_QUEST_MINT_PRICE,
 };
