@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Pool, PoolClient, QueryResult } from 'pg';
 import { ConfigService } from '../_config/config.service';
+import * as Sentry from '@sentry/nestjs';
 
 export type RaiiPoolClient = PoolClient & { [Symbol.asyncDispose](): Promise<void> };
 
@@ -76,7 +77,27 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   // }
 
   async query<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
-    return this.pool.query<R>(text, params);
+    const span = Sentry.getActiveSpan();
+    if (span) {
+      const {totalCount, waitingCount, idleCount, expiredCount} = this.pool
+      span.setAttributes({
+        "pg-pool.total_count": totalCount,
+        "pg-pool.waiting_count": waitingCount,
+        "pg-pool.expired_count": expiredCount,
+        "pg-poo.idle_count": idleCount,
+      })
+    }
+    const res = await this.pool.query<R>(text, params);
+    if (span) {
+      const {totalCount, waitingCount, idleCount, expiredCount} = this.pool
+      span.setAttributes({
+        "pg-pool.total_count": totalCount,
+        "pg-pool.waiting_count": waitingCount,
+        "pg-pool.expired_count": expiredCount,
+        "pg-poo.idle_count": idleCount,
+      })
+    }
+    return res;
   }
 
   async querySelect<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
