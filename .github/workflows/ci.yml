@@ -54,7 +54,7 @@ jobs:
           docker stop core-dev || true && \
           docker rm core-dev || true && \
           docker system prune -af && \
-          docker run --restart=always -d \
+          docker run --add-host=host.docker.internal:host-gateway --restart=always -d \
             --name core-dev \
             -p 3000:3000 \
             --env-file /home/core-dev.env \
