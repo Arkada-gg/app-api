@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import Redis, { RedisOptions } from 'ioredis';
+import Redis from 'ioredis';
 import fetch from 'node-fetch';
 import { CacheService } from '../redis/cache.service';
 

@@ -1,4 +1,4 @@
-import { Client, PoolClient } from 'pg';
+import { PoolClient } from 'pg';
 
 export const name = '1674235300001_create_users_table';
 
