@@ -141,7 +141,7 @@ export class AlchemyWebhooksService {
       return 'OK';
     } finally {
       const end = Date.now();
-      this.logger.log(`handleGraphQl took ${end - start}ms`);
+      this.logger.log(`handleGraphQl took for network ${event.network} ${end - start}ms`);
     }
   }
 
@@ -260,7 +260,7 @@ export class AlchemyWebhooksService {
       );
       const campaignType = campaign.type === 'basic' ? PyramidType.BASIC : PyramidType.GOLD;
       await this.userService.incrementPyramid(userAddress, campaignType, chainId);
-
+      this.logger.debug(`PyramidClaim fired: campaignId=${campaignId}, userAddress=${userAddress}`);
       return evt;
     } finally {
       const end = Date.now();

@@ -3,7 +3,6 @@ import { PoolClient } from 'pg';
 export const name = '1674235300020_assign_ref_codes_to_existing_users';
 
 export async function up(client: PoolClient): Promise<void> {
-  console.log('Fetching users without referral codes...');
   const { rows: users } = await client.query(
     `SELECT address FROM users WHERE referral_code IS NULL`
   );

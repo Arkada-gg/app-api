@@ -1,51 +1,43 @@
-const nx = require("@nx/eslint-plugin");
+const nx = require('@nx/eslint-plugin');
+
+function flattenConfig(config) {
+  return Array.isArray(config) ? config.flat() : [config];
+}
 
 module.exports = [
-    ...nx.configs["flat/base"],
-    ...nx.configs["flat/typescript"],
-    ...nx.configs["flat/javascript"],
-    {
-        ignores: [
-            "**/dist"
-        ]
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/coverage/**',
+    ],
+  },
+
+  ...flattenConfig(nx.configs['flat/base']),
+  ...flattenConfig(nx.configs['flat/typescript']),
+  ...flattenConfig(nx.configs['flat/javascript']),
+
+  {
+    files: ['apps/core/**/*.{ts,tsx,js,jsx,cjs,mjs}'],
+    rules: {
+      '@nx/enforce-module-boundaries': [
+        'error',
+        {
+          enforceBuildableLibDependency: true,
+          allow: ['^.*/eslint(\\.base)?\\.config\\.[cm]?js$'],
+          depConstraints: [
+            {
+              sourceTag: '*',
+              onlyDependOnLibsWithTags: ['*'],
+            },
+          ],
+        },
+      ],
     },
-    {
-        files: [
-            "**/*.ts",
-            "**/*.tsx",
-            "**/*.js",
-            "**/*.jsx"
-        ],
-        rules: {
-            "@nx/enforce-module-boundaries": [
-                "error",
-                {
-                    enforceBuildableLibDependency: true,
-                    allow: [
-                        "^.*/eslint(\\.base)?\\.config\\.[cm]?js$"
-                    ],
-                    depConstraints: [
-                        {
-                            sourceTag: "*",
-                            onlyDependOnLibsWithTags: [
-                                "*"
-                            ]
-                        }
-                    ]
-                }
-            ]
-        }
-    },
-    {
-        files: [
-            "**/*.ts",
-            "**/*.tsx",
-            "**/*.js",
-            "**/*.jsx",
-            "**/*.cjs",
-            "**/*.mjs"
-        ],
-        // Override or add rules here
-        rules: {}
-    },
+  },
+  {
+    files: ['apps/core/**/*.{ts,tsx,js,jsx,cjs,mjs}'],
+    rules: {},
+  },
 ];

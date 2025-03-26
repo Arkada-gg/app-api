@@ -26,7 +26,7 @@ export class DiscordController {
   constructor(
     private readonly discordBotService: DiscordBotService,
     private readonly userService: UserService
-  ) {}
+  ) { }
 
   @Get('check-membership')
   @ApiOperation({
@@ -62,7 +62,7 @@ export class DiscordController {
       guildId,
       userId
     );
-    return { member: isMember };
+    return { member: isMember.success };
   }
 
   @Post('assign-og-role')

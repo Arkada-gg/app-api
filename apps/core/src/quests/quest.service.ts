@@ -207,6 +207,10 @@ export class QuestService {
                 '0x181b42ca4856237AE76eE8c67F8FF112491eCB9e'.toLowerCase(),
               multiplier: 1.2,
             },
+            {
+              address: '0xFAC5f5ccDc024BDDF9b0438468C27214E1b4C9f2'.toLowerCase(),
+              multiplier: 1.3
+            }
           ];
 
 
@@ -319,9 +323,9 @@ export class QuestService {
     }
 
     const ok = await this.handleQuestLogic(quest, address);
-    if (!ok) return false;
+    if (!ok.success) return false;
 
-    await this.questRepository.completeQuest(id, address);
+    await this.questRepository.completeQuest(id, address, ok.tx_hash);
 
     if (quest.sequence === 1) {
       await this.campaignService.incrementParticipants(quest.campaign_id);
@@ -337,7 +341,7 @@ export class QuestService {
     return true;
   }
 
-  private async handleQuestLogic(quest: QuestType, userAddr: string) {
+  private async handleQuestLogic(quest: QuestType, userAddr: string): Promise<{ success: boolean, tx_hash?: string }> {
     const startTime = Date.now();
     if (quest.type === 'link') {
       return this.handleLinkQuest(quest, userAddr);
@@ -345,7 +349,7 @@ export class QuestService {
     if (quest.type === 'discord') {
       const user = await this.userService.findByAddress(userAddr);
       if (!user || !user.discord) {
-        return false;
+        return { success: false }
       }
       return await this.discordService.isUserInGuildByUsername(
         quest.value.guildId,
@@ -366,7 +370,7 @@ export class QuestService {
     return this.checkOnChainQuest(quest, userAddr);
   }
 
-  private async handleLinkQuest(quest: QuestType, userAddr: string) {
+  private async handleLinkQuest(quest: QuestType, userAddr: string): Promise<{ success: boolean, tx_hash?: string }> {
     const task = quest.value;
     if (task.contract) {
       try {
@@ -376,9 +380,9 @@ export class QuestService {
           soneiumProvider
         );
         const minted = await contract.hasMinted(userAddr);
-        return !!minted;
+        return { success: !!minted }
       } catch {
-        return false;
+        return { success: false }
       }
     }
     if (task.url) {
@@ -397,9 +401,9 @@ export class QuestService {
       this.logger.debug(`Найдено записей после начала кампании: ${matchingCount} (требуется: ${task.minTxns})`);
 
       if (matchingCount >= task.minTxns) {
-        return true;
+        return { success: true }
       }
-      return false;
+      return { success: false }
     }
 
     if (task.endpoint) {
@@ -408,21 +412,21 @@ export class QuestService {
         finalUrl = this.buildLinkUrl(task.endpoint, task.params, userAddr);
 
       const res = await fetch(finalUrl);
-      if (!res.ok) return false;
+      if (!res.ok) return { success: false }
       const data = await res.json();
       if (task.expression) {
         const fn = new Function('data', `return (${task.expression})(data);`);
-        return !!fn(data);
+        return { success: !!fn(data) }
       }
-      return !!data.verified;
+      return { success: !!data.verified }
     }
-    return false;
+    return { success: false }
   }
 
   private async handleOnchainCheckAmountOfTxns(
     quest: QuestType,
     userAddr: string
-  ): Promise<boolean> {
+  ): Promise<{ success: boolean }> {
     if (quest.value.url) {
       return this.handleLinkQuest(quest, userAddr);
     }
@@ -433,7 +437,7 @@ export class QuestService {
           (quest.value.contracts && quest.value.contracts[0]);
         if (!contractAddress) {
           this.logger.error('Контракт не задан в квесте');
-          return false;
+          return { success: false }
         }
         const iface = new ethers.Interface([quest.value.methodToExecute]);
         const contract = new ethers.Contract(
@@ -450,12 +454,12 @@ export class QuestService {
           })`
         );
         if (streak < quest.value.methodToEqual) {
-          return false;
+          return { success: false }
         }
-        return true;
+        return { success: true }
       } catch (err) {
         console.error('Ошибка при вызове checkDatas:', err);
-        return false;
+        return { success: false }
       }
     }
 
@@ -481,7 +485,7 @@ export class QuestService {
                     tx.to.toLowerCase() === check.contract.toLowerCase()
                 );
                 if (relevantTxs.length === 0) {
-                  return false;
+                  return { success: false }
                 }
                 const count = await relevantTxs.reduce(
                   async (prevPromise: Promise<number>, tx) => {
@@ -537,10 +541,9 @@ export class QuestService {
             `Альтернативная группа: суммарно ${groupCount} транзакций (требуется: ${groupThreshold})`
           );
           if (groupCount < groupThreshold) {
-            return false;
+            return { success: false }
           }
         } else {
-          // Одиночная проверка
           try {
             const iface = new ethers.Interface([checkItem.signature]);
             const count = txs.reduce((acc, tx) => {
@@ -566,14 +569,14 @@ export class QuestService {
               }: ${count} транзакций (требуется: ${checkItem.minTxns})`
             );
             if (count < checkItem.minTxns) {
-              return false;
+              return { success: false }
             }
           } catch (err) {
-            return false;
+            return { success: false }
           }
         }
       }
-      return true;
+      return { success: true }
     } else {
       const minTxns = quest.value.minTxns || 0;
       const contractTxs = txs.filter((tx) =>
@@ -582,14 +585,14 @@ export class QuestService {
         )
       );
       this.logger.log('Общее число транзакций по контрактам:', contractTxs.length);
-      return contractTxs.length >= minTxns;
+      return { success: contractTxs.length >= minTxns }
     }
   }
 
   private async handleCheckOnchainMethodQuest(
     quest: QuestType,
     userAddr: string
-  ) {
+  ): Promise<{ success: boolean }> {
     const abi = quest.value.actions
       ? quest.value.actions[0].methodSignatures
       : quest.value.methodSignatures;
@@ -617,16 +620,16 @@ export class QuestService {
         const parsed = iface.parseTransaction({ data: tx.input });
 
         if (parsed.name === 'checkIn') {
-          return true;
+          return { success: true }
         }
         if (parsed.name === 'safeTransferFrom') {
-          return true;
+          return { success: true }
         }
 
         if (quest.value.methodToFind) {
           for (let i = 0; i <= quest.value.methodToFind.length; i++) {
             if (parsed.name === quest.value.methodToFind[i]) {
-              return true;
+              return { success: true }
             }
           }
         }
@@ -669,7 +672,7 @@ export class QuestService {
                 encodedInput.toLowerCase().includes(token1);
               const isAmountValid = depositUSDValue >= minLimit;
               if (isPairValid && isAmountValid) {
-                return true;
+                return { success: true }
               } else {
                 this.logger.debug('❌ Квест не выполнен.');
                 continue;
@@ -684,10 +687,10 @@ export class QuestService {
       }
     }
 
-    return false;
+    return { success: false }
   }
 
-  private async handleCheckMethodQuest(quest: QuestType, userAddr: string) {
+  private async handleCheckMethodQuest(quest: QuestType, userAddr: string): Promise<{ success: boolean }> {
     const task = quest.value;
     try {
       const contract = new ethers.Contract(
@@ -703,12 +706,12 @@ export class QuestService {
         newBalance = await contract.balanceOf(userAddr);
       }
       if (task.minAmountToken) {
-        return newBalance > task.minAmountToken
+        return { success: newBalance > task.minAmountToken }
       } else {
-        return newBalance > 0;
+        return { success: newBalance > 0 }
       }
     } catch (e) {
-      return false;
+      return { success: false }
     }
   }
 
@@ -725,7 +728,7 @@ export class QuestService {
     return `${endpoint}?${qs}`;
   }
 
-  private async checkOnChainQuest(quest: QuestType, userAddr: string) {
+  private async checkOnChainQuest(quest: QuestType, userAddr: string): Promise<{ success: boolean, tx_hash?: string }> {
     const data = quest.value;
     if (
       data.actions &&
@@ -738,8 +741,8 @@ export class QuestService {
         data.actions[0].methodSignatures,
         data.actions[0].tokens[0].minAmountToken
       );
-      if (ok) return true;
-      return false;
+      if (ok) return { success: true };
+      return { success: false };
     }
 
     const chain = quest.value.chain || 'Soneium';
@@ -747,7 +750,7 @@ export class QuestService {
     const c = await this.getCampaignById(quest.campaign_id);
 
     const txs = await this.getUserTransactions(chain, userAddr, c);
-    if (!txs.length) return false;
+    if (!txs.length) return { success: false };
     const txnsToAddress = txs.filter(
       (tx) =>
         tx.to.toLowerCase() === quest.value.contracts[0].toLowerCase() ||
@@ -758,8 +761,8 @@ export class QuestService {
     for (const tx of txnsToAddress) {
       if (!data.minAmountUSD && !data.actions && data.methodSignatures) {
         const ok = await this.checkBuyNFTQuest(tx, data.methodSignatures);
-        if (ok) return true;
-        return false;
+        if (ok) return { success: true, tx_hash: tx.hash };
+        return { success: false };
       }
       if (quest.value.type === 'checkInputData') {
         if (
@@ -768,14 +771,19 @@ export class QuestService {
             .toLowerCase()
             .includes('2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase())
         ) {
-          return true;
+          return {
+            success: true,
+            tx_hash: tx.hash
+          }
         }
       }
       const ok = await this.parseOnchainTx(tx, data.actions);
-      if (ok) return true;
+      if (ok.success && ok.tx_hash) {
+        return ok;
+      }
     }
 
-    return false;
+    return { success: false };
   }
 
   private async checkTokenBalanceQuest(
@@ -877,15 +885,18 @@ export class QuestService {
       if (!parsed) continue;
 
       if (parsed.name === 'buy') {
-        return true;
+        return {
+          success: true,
+          tx_hash: tx.hash
+        }
       }
     }
     return false;
   }
 
-  private async parseOnchainTx(tx: any, actions: any[]): Promise<boolean> {
+  private async parseOnchainTx(tx: any, actions: any[]): Promise<{ success: boolean, tx_hash?: string }> {
     const rawInput = tx.input || '';
-    if (!rawInput.startsWith('0x')) return false;
+    if (!rawInput.startsWith('0x')) return { success: false };
     const ok = await this.parseOnchainData(rawInput, actions, tx);
     return ok;
   }
@@ -894,7 +905,7 @@ export class QuestService {
     hexData: string,
     actions: any[],
     parentTx: any
-  ): Promise<boolean> {
+  ): Promise<{ success: boolean, tx_hash?: string }> {
     for (const action of actions) {
       const signatures: string[] = action.methodSignatures || [];
       for (const sig of signatures) {
@@ -923,7 +934,10 @@ export class QuestService {
           }
 
           if (subcallSuccess) {
-            return true;
+            return {
+              success: true,
+              tx_hash: parentTx.hash
+            }
           } else {
             continue;
           }
@@ -931,7 +945,10 @@ export class QuestService {
         if (methodName === 'depositTokenDelegate') {
           const eventOk = await this.parseNeemoDepositEvent(parentTx.hash);
           if (eventOk) {
-            return true;
+            return {
+              success: true,
+              tx_hash: parentTx.hash
+            }
           }
         }
         if (methodName === 'swap') {
@@ -943,7 +960,9 @@ export class QuestService {
             lastToken.toLowerCase() !==
             '0x2CAE934a1e84F693fbb78CA5ED3B0A6893259441'.toLowerCase()
           ) {
-            return false;
+            return {
+              success: false
+            }
           }
 
           for (const route of routes) {
@@ -965,7 +984,10 @@ export class QuestService {
 
           Logger.debug(`Total swap USD value: ${totalUsdValue}`);
           if (totalUsdValue >= (action.minUsdTotal || 0)) {
-            return true;
+            return {
+              success: true,
+              tx_hash: parentTx.hash
+            }
           }
         } else {
           const sumUSD = await this.checkActionTokens(
@@ -974,7 +996,10 @@ export class QuestService {
             parentTx
           );
           if (sumUSD >= (action.minUsdTotal || 0)) {
-            return true;
+            return {
+              success: true,
+              tx_hash: parentTx.hash
+            }
           } else {
             continue;
           }
@@ -982,7 +1007,9 @@ export class QuestService {
       }
     }
 
-    return false;
+    return {
+      success: false
+    }
   }
 
   private async parseNeemoDepositEvent(txHash: string): Promise<boolean> {
@@ -1302,6 +1329,8 @@ export class QuestService {
         };
       });
 
+    const txnsHashes = transactions.map((tx) => tx.txHash);
+
     const recipients: IFeeRecipient[] = user.ref_owner
       ? [
         {
@@ -1323,6 +1352,7 @@ export class QuestService {
         { trait_type: 'Title', value: campaign.name },
         { trait_type: 'Transaction Chain', value: CHAIN_NAME[chainId] },
         { trait_type: 'Transaction Count', value: transactions.length },
+        { trait_type: 'Transaction Hash' },
         { trait_type: 'Community', value: campaign.project_name },
         ...(campaign.tags
           ? [{ trait_type: 'Tags', value: campaign.tags.join(",") }]

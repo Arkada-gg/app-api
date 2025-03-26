@@ -66,18 +66,18 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
   async isUserInGuildByUsername(
     guildId: string,
     username: string
-  ): Promise<boolean> {
+  ): Promise<{ success: boolean }> {
     try {
       const guild = await this.discordClientOther.guilds.fetch(guildId);
       const members = await guild.members.fetch();
 
       const member = members.find((m) => m.user.username === username);
-      return !!member;
+      return { success: !!member }
     } catch (error) {
       this.logger.error(
         `Error checking membership for username ${username} in guild ${guildId}: ${error.message}`
       );
-      return false;
+      return { success: false }
     }
   }
 

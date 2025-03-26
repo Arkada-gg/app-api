@@ -36,6 +36,10 @@ export class AcsService {
       address: '0x181b42ca4856237AE76eE8c67F8FF112491eCB9e'.toLowerCase(),
       multiplier: 1.2,
     },
+    {
+      address: '0xFAC5f5ccDc024BDDF9b0438468C27214E1b4C9f2'.toLowerCase(),
+      multiplier: 1.3
+    }
   ];
   private readonly ERC721_ABI = [
     'function balanceOf(address owner) view returns (uint256)',
@@ -244,8 +248,7 @@ export class AcsService {
       } catch (error) {
         if (error.response) {
           this.logger.error(
-            `Ошибка при отправке ACS: ${
-              error.response.status
+            `Ошибка при отправке ACS: ${error.response.status
             } - ${JSON.stringify(error.response.data)}`
           );
           console.error('🔴 Полный ответ ошибки:', error.response.data);

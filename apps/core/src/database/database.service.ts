@@ -27,7 +27,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     try {
-      console.log('------>', 1);
       await using client = await this.getClient();
       this.logger.log('Connected to PostgreSQL');
       return this.initializeSchema(client);
