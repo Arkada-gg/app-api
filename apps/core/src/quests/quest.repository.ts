@@ -52,7 +52,7 @@ export class QuestRepository {
         ON CONFLICT (quest_id, user_address) DO NOTHING
       `;
       }
-      await this.dbService.query(query, [questId, lowerAddress]);
+      await this.dbService.query(query, [questId, lowerAddress, tx_hash]);
     } catch (error) {
       throw new InternalServerErrorException(error.message);
     }

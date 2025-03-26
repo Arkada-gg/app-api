@@ -208,8 +208,8 @@ export class AlchemyWebhooksService {
           return evt;
         })
       );
-
       const fulfilledRes = res.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<IEventComb>[];
+
       return fulfilledRes.map((r) => r.value);
     } finally {
       const end = Date.now();
@@ -218,6 +218,7 @@ export class AlchemyWebhooksService {
   }
 
   private async operateEventDependsOnSignature(evt: IEventComb, signature: EventSignature, chainId: number) {
+    this.logger.log(`operateEventDependsOnSignature started for evt: ${evt} \n signature: ${signature} \n    chainId: ${chainId}`);
     const start = Date.now();
     try {
       switch (signature) {
@@ -250,6 +251,7 @@ export class AlchemyWebhooksService {
   }
 
   private async handlePyramidClaimEvent(evt: IEventComb, chainId: number) {
+    this.logger.log(`handlePyramidClaimEvent started for ${evt}    chainId: ${chainId}`);
     const start = Date.now();
     try {
       const { questId: campaignId, claimer: userAddress } = evt.event.args;

@@ -10,8 +10,8 @@
     "dev:core": "nx run core:serve:development",
     "build:all": "nx run-many --target=build --all",
     "dev:all": "nx run-many --target=serve --all",
-    "lint": "eslint . --config eslint.config.cjs --ignore-pattern node_modules",
-    "lint:fix": "eslint . --config eslint.config.cjs --fix --ignore-pattern node_modules"
+    "lint": "eslint . --config apps/core/eslint.config.cjs --ignore-pattern node_modules",
+    "lint:fix": "eslint . --config apps/core/eslint.config.cjs --fix --ignore-pattern node_modules"
   },
   "private": true,
   "dependencies": {
