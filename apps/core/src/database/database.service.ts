@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { Pool, PoolClient, QueryResult } from 'pg';
 import { ConfigService } from '../_config/config.service';
 import * as Sentry from '@sentry/nestjs';

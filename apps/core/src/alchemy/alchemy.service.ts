@@ -13,7 +13,7 @@ import { TransactionsService } from '../transactions/transactions.service';
 import { UserService } from '../user/user.service';
 import * as daylyCheckAbi from './abis/daily-check-abi.json';
 import * as pyramidAbi from './abis/pyramid-abi.json';
-import { CHAIN_ID_BY_ALCHEMY_CHAIN } from './config/chain';
+import { ALCHEMY_CHAIN, CHAIN_ID_BY_ALCHEMY_CHAIN } from './config/chain';
 import { EventSignature } from './config/signatures';
 
 export interface AlchemyWebhookEvent {
@@ -43,11 +43,12 @@ export class AlchemyWebhooksService {
   async verifyWebhookSignature(
     signature: string,
     rawBody: string,
-    eventSignature: EventSignature
+    eventSignature: EventSignature,
+    network: ALCHEMY_CHAIN
   ): Promise<boolean> {
     const start = Date.now();
     try {
-      const signingKey = this.getSigningKeyByEventSignature(eventSignature);
+      const signingKey = this.getSigningKeyByEventSignature(eventSignature, network);
 
       const hmac = crypto.createHmac('sha256', signingKey);
       const computedSignature = hmac.update(rawBody).digest('hex');
@@ -58,6 +59,25 @@ export class AlchemyWebhooksService {
     } finally {
       const end = Date.now();
       this.logger.log(`verifyWebhookSignature took ${end - start}ms`);
+    }
+  }
+
+  private getSigningKeyByEventSignature(eventSignature: EventSignature, network: ALCHEMY_CHAIN) {
+    const start = Date.now();
+    const chainId = CHAIN_ID_BY_ALCHEMY_CHAIN[network]
+    if (!chainId) throw new BadRequestException("Invalid network provided")
+    try {
+      switch (eventSignature) {
+        case EventSignature.DAILY_CHECK:
+          return this.configService.getOrThrow(`ALCHEMY_SIGNING_KEY_DAILY_CHECK`);
+        case EventSignature.PYRAMID_CLAIM:
+          return this.configService.getOrThrow(`ALCHEMY_SIGNING_KEY_PYRAMID_CLAIM_${chainId}`);
+        default:
+          throw new BadRequestException('Unsupported event signature');
+      }
+    } finally {
+      const end = Date.now();
+      this.logger.debug(`getSigningKeyByEventSignature took ${end - start}ms`);
     }
   }
 
@@ -86,23 +106,6 @@ export class AlchemyWebhooksService {
     }
   }
 
-  private getSigningKeyByEventSignature(eventSignature: EventSignature) {
-    const start = Date.now();
-    try {
-      switch (eventSignature) {
-        case EventSignature.DAILY_CHECK:
-          return this.configService.getOrThrow('ALCHEMY_SIGNING_KEY_DAILY_CHECK');
-        case EventSignature.PYRAMID_CLAIM:
-          return this.configService.getOrThrow('ALCHEMY_SIGNING_KEY_PYRAMID_CLAIM');
-        default:
-          throw new BadRequestException('Unsupported event signature');
-      }
-    } finally {
-      const end = Date.now();
-      this.logger.debug(`getSigningKeyByEventSignature took ${end - start}ms`);
-    }
-  }
-
   private async handleGraphQl(event: any, signature: EventSignature): Promise<string> {
     const start = Date.now();
     try {
@@ -116,10 +119,10 @@ export class AlchemyWebhooksService {
 
       const supportedEvents = this.filterEventsBySupported(decodedLogs, [signature]);
       if (supportedEvents.length === 0) {
-        throw new InternalServerErrorException('No supported events');
+        throw new BadRequestException('No supported events');
       }
 
-      const filteredEvents = await this.checkAndRecordTransactions(supportedEvents);
+      const filteredEvents = await this.checkAndRecordTransactions(supportedEvents, chainId);
       const updatingRes = await Promise.allSettled(
         filteredEvents.map((evt) => this.operateEventDependsOnSignature(evt, signature, chainId))
       );
@@ -186,12 +189,12 @@ export class AlchemyWebhooksService {
     }
   }
 
-  private async checkAndRecordTransactions(events: IEventComb[]) {
+  private async checkAndRecordTransactions(events: IEventComb[], chainId: number) {
     const start = Date.now();
     try {
       const res = await Promise.allSettled(
         events.map(async (evt) => {
-          const existedTx = await this.transactionsService.findByHash(evt.hash);
+          const existedTx = await this.transactionsService.findByHashAndChainId(evt.hash, chainId);
           if (existedTx) throw new Error('Tx already exist');
 
           await this.transactionsService.createTx({
@@ -199,6 +202,7 @@ export class AlchemyWebhooksService {
             event_name: evt.event.name,
             block_number: evt.blockNumber,
             args: evt.event.args,
+            chain_id: chainId
           });
 
           return evt;

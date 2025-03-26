@@ -12,14 +12,14 @@ export class TransactionsService {
 
   constructor(private readonly dbService: DatabaseService) { }
 
-  async findByHash(hash: string): Promise<ITransaction | null> {
+  async findByHashAndChainId(hash: string, chainId: number): Promise<ITransaction | null> {
     const client = await this.dbService.getClient();
 
     try {
       // Query the database to get the transaction by its hash
       const transactionResult = await client.query<ITransaction>(
-        `SELECT * FROM transactions WHERE hash = $1`,
-        [hash]
+        `SELECT * FROM transactions WHERE hash = $1 AND chain_id = $2`,
+        [hash, chainId]
       );
 
       // If no transaction is found, return null
@@ -41,8 +41,8 @@ export class TransactionsService {
     try {
       // Check if the transaction with the same hash already exists
       const transactionResult = await client.query<ITransaction>(
-        `SELECT * FROM transactions WHERE hash = $1`,
-        [txData.hash]
+        `SELECT * FROM transactions WHERE hash = $1 AND chain_id = $2`,
+        [txData.hash, txData.chain_id]
       );
 
       // If a transaction with the same hash already exists, return false
@@ -52,8 +52,8 @@ export class TransactionsService {
 
       // Insert the new transaction into the database
       await client.query(
-        `INSERT INTO transactions (hash, event_name, block_number, args, created_at) 
-         VALUES ($1, $2, $3, $4, $5)`,
+        `INSERT INTO transactions (hash, event_name, block_number, args, chain_id, created_at) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           txData.hash,
           txData.event_name,
@@ -62,6 +62,7 @@ export class TransactionsService {
             txData.args,
             (_, value) => (typeof value === 'bigint' ? Number(value) : value) // return everything else unchanged
           ),
+          txData.chain_id,
           new Date().toISOString(),
         ]
       );

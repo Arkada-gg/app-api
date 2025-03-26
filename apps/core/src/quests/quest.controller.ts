@@ -202,6 +202,7 @@ export class QuestController {
   })
   async getSignedMintData(@Body() body: GetMintDataDto) {
     const { campaignIdOrSlug, address } = body;
+
     return await this.questService.getSignedMintData(
       campaignIdOrSlug,
       address
