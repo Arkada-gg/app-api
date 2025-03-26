@@ -208,18 +208,19 @@ export class QuestService {
               multiplier: 1.2,
             },
           ];
-          let userMultiplier = 1;
-          for (const nft of nftConfigs) {
+
+
+          //TODO: use multicall
+
+          const userMultiplier = Math.max(...await Promise.all(nftConfigs.map(async nft => {
             const contract = new ethers.Contract(
               nft.address,
               ['function balanceOf(address owner) view returns (uint256)'],
               soneiumProvider
             );
             const balance = await contract.balanceOf(lowerAddress);
-            if (balance && +balance.toString() > 0) {
-              userMultiplier = Math.max(userMultiplier, nft.multiplier);
-            }
-          }
+            return Number(balance) > 0 && nft.multiplier
+          }))) || 1;
 
           const effectivePoints = totalPoints * userMultiplier;
           await this.userService.awardCampaignCompletion(
@@ -431,7 +432,7 @@ export class QuestService {
           quest.value.contract ||
           (quest.value.contracts && quest.value.contracts[0]);
         if (!contractAddress) {
-          console.error('Контракт не задан в квесте');
+          this.logger.error('Контракт не задан в квесте');
           return false;
         }
         const iface = new ethers.Interface([quest.value.methodToExecute]);
@@ -444,7 +445,7 @@ export class QuestService {
           ? await contract.balanceOf(userAddr)
           : await contract.checkDatas(userAddr);
         const streak = ethers.toBigInt(result) ? result : result.streak;
-        console.log(
+        this.logger.log(
           `checkDatas returned streak = ${streak.toString()} (требуется: ${quest.value.methodToEqual
           })`
         );
@@ -496,7 +497,7 @@ export class QuestService {
                             '0x4200000000000000000000000000000000000006',
                             tx.value
                           );
-                          console.log('ETH стоимость (USD):', usdValue);
+                          this.logger.debug('ETH стоимость (USD):', usdValue);
                         }
                       }
                       return usdValue >= check.txMinValue ? acc + 1 : acc;
@@ -532,7 +533,7 @@ export class QuestService {
               continue;
             }
           }
-          console.log(
+          this.logger.log(
             `Альтернативная группа: суммарно ${groupCount} транзакций (требуется: ${groupThreshold})`
           );
           if (groupCount < groupThreshold) {
@@ -560,7 +561,7 @@ export class QuestService {
                 return acc;
               }
             }, 0);
-            console.log(
+            this.logger.log(
               `Метод ${(iface.fragments[0] as ethers.FunctionFragment).name
               }: ${count} транзакций (требуется: ${checkItem.minTxns})`
             );
@@ -580,7 +581,7 @@ export class QuestService {
           (addr: string) => tx.to.toLowerCase() === addr.toLowerCase()
         )
       );
-      console.log('Общее число транзакций по контрактам:', contractTxs.length);
+      this.logger.log('Общее число транзакций по контрактам:', contractTxs.length);
       return contractTxs.length >= minTxns;
     }
   }
@@ -609,7 +610,7 @@ export class QuestService {
         tx.to.toLowerCase() === quest.value.contracts[2]?.toLowerCase()
     );
 
-    console.log(`Transactions found for user ${contractTransactions.length}`);
+    this.logger.log(`Transactions found for user ${contractTransactions.length}`);
 
     for (const tx of contractTransactions) {
       try {
@@ -670,7 +671,7 @@ export class QuestService {
               if (isPairValid && isAmountValid) {
                 return true;
               } else {
-                console.log('❌ Квест не выполнен.');
+                this.logger.debug('❌ Квест не выполнен.');
                 continue;
               }
             } catch (error) {
@@ -806,7 +807,7 @@ export class QuestService {
     try {
       parsedTx = iface.parseTransaction({ data: rawInput });
     } catch (err) {
-      console.log('Ошибка parseTransaction:', err);
+      this.logger.error('Ошибка parseTransaction:', err);
       return;
     }
 
@@ -908,7 +909,6 @@ export class QuestService {
         if (!parsedTx) {
           continue;
         }
-        console.log('------>', parsedTx);
         const methodName = parsedTx.name.toLowerCase();
         if (methodName === 'multicall') {
           const subcalls: string[] = parsedTx.args[0];
@@ -1059,6 +1059,7 @@ export class QuestService {
           argVal = parsedTx.args[0][tokenDef.paramIndex2];
           actualTokens.push({ address: tokenDef.address, amount: argVal });
         } else {
+          if (!tokenIdx) continue
           tokenVal = parsedTx.args[0][tokenIdx].includes(tokenDef.address)
             ? tokenDef.address
             : parsedTx.args[0][tokenIdx];
@@ -1070,8 +1071,8 @@ export class QuestService {
           if (Array.isArray(tokenVal)) {
             tokenVal = parsedTx.args[tokenIdx][0][1];
           }
-        } catch {
-          console.log('------>', error);
+        } catch (e) {
+          this.logger.error(e);
         }
       }
       if (!tokenIdx && !tokenVal) {
@@ -1152,8 +1153,12 @@ export class QuestService {
         if ((def.minAmountToken || 0) > 0) {
           // 466 same
         }
-        const usdVal = await this.convertToUSD(found.address, found.amount);
-        totalUsd += usdVal;
+        if (actualTokens.length === 1) {
+          return await this.convertToUSD(found.address, found.amount);
+        } else {
+          const usdVal = await this.convertToUSD(found.address, found.amount);
+          totalUsd += usdVal;
+        }
       }
     }
     return totalUsd;
@@ -1163,7 +1168,6 @@ export class QuestService {
     tokenAddr: string,
     amountBN: bigint
   ): Promise<number> {
-    console.log('------>', amountBN, tokenAddr);
     if (!amountBN || amountBN === 0n) return 0;
     const decimals =
       tokenAddr.toLowerCase() ===
@@ -1172,7 +1176,6 @@ export class QuestService {
         '0x29219dd400f2Bf60E5a23d13Be72B486D4038894'.toLowerCase()
         ? 6
         : 18;
-    console.log('------>', amountBN, tokenAddr);
     const floatAmount = parseFloat(ethers.formatUnits(amountBN, decimals));
     if (
       tokenAddr.toLowerCase() ===
