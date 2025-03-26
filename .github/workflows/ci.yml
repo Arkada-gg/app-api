@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: '16'
       - name: Install dependencies
-        run: npm install
+        run: npm --prefix core --omit=dev -f install
       - name: Run lint with auto-fix
         run: npm run lint:fix
 
