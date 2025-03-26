@@ -54,8 +54,7 @@ jobs:
           docker stop core-dev || true && \
           docker rm core-dev || true && \
           docker system prune -af && \
-          docker run --add-host=host.docker.internal:host-gateway --restart=always -d \
+          docker run --network host --restart=always -d \
             --name core-dev \
-            -p 3000:3000 \
             --env-file /home/core-dev.env \
             '${{ secrets.DOCKER_USERNAME }}/arkada-core:latest'"
