@@ -77,27 +77,35 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   // }
 
   async query<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
-    const span = Sentry.getActiveSpan();
-    if (span) {
-      const {totalCount, waitingCount, idleCount, expiredCount} = this.pool
-      span.setAttributes({
-        "pg-pool.total_count": totalCount,
-        "pg-pool.waiting_count": waitingCount,
-        "pg-pool.expired_count": expiredCount,
-        "pg-poo.idle_count": idleCount,
-      })
-    }
-    const res = await this.pool.query<R>(text, params);
-    if (span) {
-      const {totalCount, waitingCount, idleCount, expiredCount} = this.pool
-      span.setAttributes({
-        "pg-pool.total_count": totalCount,
-        "pg-pool.waiting_count": waitingCount,
-        "pg-pool.expired_count": expiredCount,
-        "pg-poo.idle_count": idleCount,
-      })
-    }
-    return res;
+    return Sentry.startSpan({
+      name: "PG Pool Metrics",
+      op: "pg-pool.query",
+    }, async () => {
+      const span = Sentry.getActiveSpan();
+      if (span) {
+        const {totalCount, waitingCount, idleCount, expiredCount} = this.pool
+        span.setAttributes({
+          "before.total_count": totalCount,
+          "before.waiting_count": waitingCount,
+          "before.expired_count": expiredCount,
+          "before.idle_count": idleCount,
+        })
+      }
+      const start = performance.now();
+      const res = await this.pool.query<R>(text, params);
+      const duration = performance.now() - start;
+      if (span) {
+        const {totalCount, waitingCount, idleCount, expiredCount} = this.pool
+        span.setAttributes({
+          "after.total_count": totalCount,
+          "after.waiting_count": waitingCount,
+          "after.expired_count": expiredCount,
+          "after.idle_count": idleCount,
+          duration,
+        })
+      }
+      return res;
+    })
   }
 
   async querySelect<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
