@@ -14,16 +14,19 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private poolRead: Pool;
 
   constructor(private readonly configService: ConfigService) {
-    this.pool = new Pool({
+    this.pool = this.configService.get('ENV') === "prod" ? new Pool({
       connectionString: this.configService.get('DATABASE_URL') ||
         'postgres://user:password@localhost:5432/arkada_db',
       max: +process.env.PG_MAX_CONNECTIONS || 10
+    }) : new Pool({
+      connectionString: 'postgres://user:password@127.0.0.1:6432/arkada_db',
+      max: 10
     });
-    // this.poolRead = new Pool({
-    //   connectionString: this.configService.get('DATABASE_URL_READ') ||
+    // this.pool = new Pool({
+    //   connectionString: this.configService.get('DATABASE_URL') ||
     //     'postgres://user:password@localhost:5432/arkada_db',
-    //   max: 25
-    // });
+    //   max: +process.env.PG_MAX_CONNECTIONS || 10
+    // })
   }
 
   async onModuleInit(): Promise<void> {
@@ -77,27 +80,35 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   // }
 
   async query<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
-    const span = Sentry.getActiveSpan();
-    if (span) {
-      const { totalCount, waitingCount, idleCount, expiredCount } = this.pool
-      span.setAttributes({
-        "pg-pool.total_count": totalCount,
-        "pg-pool.waiting_count": waitingCount,
-        "pg-pool.expired_count": expiredCount,
-        "pg-poo.idle_count": idleCount,
-      })
-    }
-    const res = await this.pool.query<R>(text, params);
-    if (span) {
-      const { totalCount, waitingCount, idleCount, expiredCount } = this.pool
-      span.setAttributes({
-        "pg-pool.total_count": totalCount,
-        "pg-pool.waiting_count": waitingCount,
-        "pg-pool.expired_count": expiredCount,
-        "pg-poo.idle_count": idleCount,
-      })
-    }
-    return res;
+    return Sentry.startSpan({
+      name: "PG Pool Metrics",
+      op: "pg-pool.query",
+    }, async () => {
+      const span = Sentry.getActiveSpan();
+      if (span) {
+        const { totalCount, waitingCount, idleCount, expiredCount } = this.pool
+        span.setAttributes({
+          "before.total_count": totalCount,
+          "before.waiting_count": waitingCount,
+          "before.expired_count": expiredCount,
+          "before.idle_count": idleCount,
+        })
+      }
+      const start = performance.now();
+      const res = await this.pool.query<R>(text, params);
+      const duration = performance.now() - start;
+      if (span) {
+        const { totalCount, waitingCount, idleCount, expiredCount } = this.pool
+        span.setAttributes({
+          "after.total_count": totalCount,
+          "after.waiting_count": waitingCount,
+          "after.expired_count": expiredCount,
+          "after.idle_count": idleCount,
+          duration,
+        })
+      }
+      return res;
+    })
   }
 
   async querySelect<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
