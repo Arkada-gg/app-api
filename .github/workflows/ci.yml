@@ -24,9 +24,10 @@ jobs:
         with:
           node-version: '16'
       - name: Install dependencies
-        run: npm --prefix core --omit=dev -f install
-      - name: Run lint with auto-fix
-        run: npm run lint:fix
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint
 
   build:
     name: Build and Push Docker Image
