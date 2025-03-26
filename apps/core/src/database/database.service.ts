@@ -22,19 +22,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       connectionString: this.configService.get('DATABASE_URL') || 'postgres://user:password@127.0.0.1:6432/arkada_db',
       max: 10
     });
-    // this.pool = new Pool({
-    //   connectionString: this.configService.get('DATABASE_URL') ||
-    //     'postgres://user:password@localhost:5432/arkada_db',
-    //   max: +process.env.PG_MAX_CONNECTIONS || 10
-    // })
   }
 
   async onModuleInit(): Promise<void> {
     try {
       await using client = await this.getClient();
       this.logger.log('Connected to PostgreSQL');
-      // await this.getReplicaClient()
-      // this.logger.log('Connected to PostgreSQL Replica');
       return this.initializeSchema(client);
     } catch (error) {
       this.logger.error('Failed to connect to PostgreSQL', error);
@@ -77,13 +70,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const client = await this.pool.connect();
     return this.makeRaiiPoolClient(client);
   }
-
-  // async getReplicaClient(): Promise<RaiiPoolClient> {
-  //   const client = await this.poolRead.connect();
-  //   client['id'] = randomUUID();
-  //   this.logger.log('take connection: ', client['id'])
-  //   return this.makeRaiiPoolClient(client);
-  // }
 
   async query<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
     return Sentry.startSpan({
