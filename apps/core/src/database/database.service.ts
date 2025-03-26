@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Pool, PoolClient, QueryResult } from 'pg';
 import { ConfigService } from '../_config/config.service';
+import * as Sentry from '@sentry/nestjs';
 
 export type RaiiPoolClient = PoolClient & { [Symbol.asyncDispose](): Promise<void> };
 
@@ -16,7 +17,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     this.pool = new Pool({
       connectionString: this.configService.get('DATABASE_URL') ||
         'postgres://user:password@localhost:5432/arkada_db',
-      // max: core_count * 2
+      max: +process.env.PG_MAX_CONNECTIONS || 10
     });
     // this.poolRead = new Pool({
     //   connectionString: this.configService.get('DATABASE_URL_READ') ||
@@ -76,11 +77,27 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   // }
 
   async query<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
-    if (this.pool.waitingCount > 0) {
-      const {totalCount, waitingCount, idleCount} = this.pool
-      this.logger.warn('this query is waiting!!!', { text, totalCount, waitingCount, idleCount, timestamp: performance.now(), expiredCount: this.pool.expiredCount });
+    const span = Sentry.getActiveSpan();
+    if (span) {
+      const { totalCount, waitingCount, idleCount, expiredCount } = this.pool
+      span.setAttributes({
+        "pg-pool.total_count": totalCount,
+        "pg-pool.waiting_count": waitingCount,
+        "pg-pool.expired_count": expiredCount,
+        "pg-poo.idle_count": idleCount,
+      })
     }
-    return this.pool.query<R>(text, params);
+    const res = await this.pool.query<R>(text, params);
+    if (span) {
+      const { totalCount, waitingCount, idleCount, expiredCount } = this.pool
+      span.setAttributes({
+        "pg-pool.total_count": totalCount,
+        "pg-pool.waiting_count": waitingCount,
+        "pg-pool.expired_count": expiredCount,
+        "pg-poo.idle_count": idleCount,
+      })
+    }
+    return res;
   }
 
   async querySelect<R = any>(text: string, params?: unknown[]): Promise<QueryResult<R>> {
