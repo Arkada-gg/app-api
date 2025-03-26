@@ -9,7 +9,7 @@ export class PriceService {
   private readonly logger = new Logger(PriceService.name);
   private redisClient: Redis;
 
-  private tokenToCoingeckoId: Record<string, string> = {
+  private tokenToCoingeckoId = {
     ethereum: 'ethereum',
     astroport: 'astar',
     vastr: 'bifrost-voucher-astr',
@@ -53,7 +53,7 @@ export class PriceService {
     }
   }
 
-  async getTokenPrice(tokenId: string): Promise<number> {
+  async getTokenPrice(tokenId: string | keyof typeof this.tokenToCoingeckoId): Promise<number> {
     try {
       const key = `coin:price:${tokenId}`;
       const priceStr = await this.cacheService.get(key);

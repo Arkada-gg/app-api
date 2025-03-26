@@ -8,6 +8,7 @@ import {
 import { error } from 'console';
 import { ethers } from 'ethers';
 import fetch from 'node-fetch';
+import { gql, request } from 'graphql-request';
 import { ConfigService } from '../_config/config.service';
 import { CampaignService } from '../campaigns/campaign.service';
 import { DiscordBotService } from '../discord/discord.service';
@@ -713,6 +714,69 @@ export class QuestService {
     } catch (e) {
       return { success: false }
     }
+  }
+
+
+  public async handleTheGraphMethodQuest(quest: QuestType, userAddr: string) {
+    const task = quest.value;
+
+    const query = gql`
+      query getSwaps ($address: Bytes, $blockTimestamp: BigInt)
+      {
+        swaps(
+          first: 100
+          orderBy: blockTimestamp
+          orderDirection: asc
+          where: {tx_sender: $address, blockTimestamp_gt: $blockTimestamp}
+        ) {
+          amount0
+          amount1
+          blockTimestamp
+        }
+      }`;
+    const url = 'https://api.studio.thegraph.com/query/106437/sonex-soneium-asrt-weth/version/latest';
+
+    // const headers = { Authorization: 'Bearer {api-key}' }
+
+    async function fetchSubgraphData(address: string, blockTimestamp: string) {
+      return await request<{
+        swaps: {
+          amount0: string
+          amount1: string
+          blockTimestamp: string
+        }[]
+      }>(url, query, { address: userAddr, blockTimestamp });
+    }
+
+
+    const result: bigint[] = [];
+    let blockTimestamp = '0';
+    while (true) {
+      try {
+        const res = await fetchSubgraphData(userAddr, blockTimestamp);
+        const swaps = res?.swaps;
+        if (swaps) {
+          result.push(...swaps.map(({ amount0 }) => {
+            const v = BigInt(amount0);
+            return v > 0n ? v : -v;
+          }));
+          if (swaps.length < 100) break;
+        } else break;
+        const { blockTimestamp: latestBlockTimestampInSlice } = swaps.at(-1);
+        blockTimestamp = latestBlockTimestampInSlice;
+      } catch (error) {
+        this.logger.error(error);
+        break;
+      }
+    }
+
+    const sumInToken0 = result.reduce((acc, v) => acc + v, 0n);
+
+    //TODO: var token
+    const price = await this.priceService.getTokenPrice('astar');
+    const volume = Number(sumInToken0) * price;
+    // TODO: take decimals
+    return volume;
   }
 
   private buildLinkUrl(endpoint: string, paramsStr: string, address: string) {
