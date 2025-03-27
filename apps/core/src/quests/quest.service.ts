@@ -1243,7 +1243,7 @@ export class QuestService {
       let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
       if (startTs < 0) startTs = 0;
       const apiKey = this.configService.get('ETHERSCAN_API_KEY') || '';
-      const urlForBlock = `https://api.sonicscan.org/api?module=block&action=getblocknobytime&timestamp=${startTs}&closest=before&apikey=${apiKey}`;
+      const urlForBlock = `https://api.etherscan.io/v2/api?module=block&action=getblocknobytime&timestamp=${startTs}&closest=before&apikey=${apiKey}`;
       const rBlock = await fetch(urlForBlock);
       if (!rBlock.ok) return [];
       const dataBlock = await rBlock.json();
@@ -1251,7 +1251,8 @@ export class QuestService {
         throw new Error('No block hash by ts');
       }
       const block = dataBlock.result;
-      const url = `https://api.sonicscan.org/api?module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`;
+      const url = `https://api.etherscan.io/v2/api?chainid=137&module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`
+      // const url = `https://api.sonicscan.org/api?module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`;
       console.log('------>', url);
       const r = await fetch(url);
       if (!r.ok) return [];
