@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { error } from 'console';
+import { error, log } from 'console';
 import { ethers } from 'ethers';
 import fetch from 'node-fetch';
 import { ConfigService } from '../_config/config.service';
@@ -897,8 +897,8 @@ export class QuestService {
   private async parseOnchainTx(tx: any, actions: any[]): Promise<{ success: boolean, tx_hash?: string }> {
     const rawInput = tx.input || '';
     if (!rawInput.startsWith('0x')) return { success: false };
-    const ok = await this.parseOnchainData(rawInput, actions, tx);
-    return ok;
+    const x = await this.parseOnchainData(rawInput, actions, tx);
+    return x
   }
 
   private async parseOnchainData(
@@ -907,6 +907,7 @@ export class QuestService {
     parentTx: any
   ): Promise<{ success: boolean, tx_hash?: string }> {
     for (const action of actions) {
+
       const signatures: string[] = action.methodSignatures || [];
       for (const sig of signatures) {
         let parsedTx: ethers.TransactionDescription | null = null;
@@ -927,7 +928,7 @@ export class QuestService {
 
           for (const subData of subcalls) {
             const ok = await this.parseOnchainData(subData, actions, parentTx);
-            if (ok) {
+            if (ok.success) {
               subcallSuccess = true;
               break;
             }
@@ -995,20 +996,27 @@ export class QuestService {
             parsedTx,
             parentTx
           );
+
           if (sumUSD >= (action.minUsdTotal || 0)) {
+            this.logger.debug(`Квест выполнен: ${sumUSD} >= ${action.minUsdTotal}`);
             return {
               success: true,
               tx_hash: parentTx.hash
             }
           } else {
-            continue;
+            this.logger.debug(`Квест выполнен: false`);
+            return {
+              success: false,
+              tx_hash: null
+            }
           }
         }
       }
     }
-
+    this.logger.debug(`Квест выполнен: false`);
     return {
-      success: false
+      success: false,
+      tx_hash: null
     }
   }
 
