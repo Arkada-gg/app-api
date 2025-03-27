@@ -226,7 +226,7 @@ export class QuestService {
             return Number(balance) > 0 && nft.multiplier
           }))) || 1;
 
-          const effectivePoints = totalPoints * userMultiplier;
+          const effectivePoints = Math.floor(totalPoints * userMultiplier);
           await this.userService.awardCampaignCompletion(
             lowerAddress,
             effectivePoints,
