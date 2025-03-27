@@ -366,6 +366,9 @@ export class QuestService {
     if (quest.value.type === 'checkOnchainMethod') {
       return this.handleCheckOnchainMethodQuest(quest, userAddr);
     }
+    if (quest.value.type === 'checkLiquidityAmount') {
+      return this.handleCheckLiquidityAmount(quest, userAddr);
+    }
     const endTime = Date.now();
     this.logger.log(`UserTRansactionFromBlockscout ---> latency: ${endTime - startTime}ms`);
     return this.checkOnChainQuest(quest, userAddr);
@@ -717,7 +720,7 @@ export class QuestService {
   }
 
 
-  public async handleTheGraphMethodQuest(quest: QuestType, userAddr: string) {
+  public async handleCheckLiquidityAmount(quest: QuestType, userAddr: string): Promise<{ success: boolean }> {
     const task = quest.value;
 
 
@@ -777,7 +780,10 @@ export class QuestService {
     const price = await this.priceService.getTokenPrice('astar');
     const volume = Number(sumInToken0) * price;
     // TODO: take decimals
-    return volume;
+    if (volume > task.minAmountUSD) {
+      return { success: true }
+    }
+    return { success: false }
   }
 
   private buildLinkUrl(endpoint: string, paramsStr: string, address: string) {
