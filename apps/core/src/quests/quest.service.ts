@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { error } from 'console';
+import { error, log } from 'console';
 import { ethers } from 'ethers';
 import fetch from 'node-fetch';
 import { gql, request } from 'graphql-request';
@@ -961,8 +961,8 @@ export class QuestService {
   private async parseOnchainTx(tx: any, actions: any[]): Promise<{ success: boolean, tx_hash?: string }> {
     const rawInput = tx.input || '';
     if (!rawInput.startsWith('0x')) return { success: false };
-    const ok = await this.parseOnchainData(rawInput, actions, tx);
-    return ok;
+    const x = await this.parseOnchainData(rawInput, actions, tx);
+    return x
   }
 
   private async parseOnchainData(
@@ -971,6 +971,7 @@ export class QuestService {
     parentTx: any
   ): Promise<{ success: boolean, tx_hash?: string }> {
     for (const action of actions) {
+
       const signatures: string[] = action.methodSignatures || [];
       for (const sig of signatures) {
         let parsedTx: ethers.TransactionDescription | null = null;
@@ -991,7 +992,7 @@ export class QuestService {
 
           for (const subData of subcalls) {
             const ok = await this.parseOnchainData(subData, actions, parentTx);
-            if (ok) {
+            if (ok.success) {
               subcallSuccess = true;
               break;
             }
@@ -1059,20 +1060,27 @@ export class QuestService {
             parsedTx,
             parentTx
           );
+
           if (sumUSD >= (action.minUsdTotal || 0)) {
+            this.logger.debug(`Квест выполнен: ${sumUSD} >= ${action.minUsdTotal}`);
             return {
               success: true,
               tx_hash: parentTx.hash
             }
           } else {
-            continue;
+            this.logger.debug(`Квест выполнен: false`);
+            return {
+              success: false,
+              tx_hash: null
+            }
           }
         }
       }
     }
-
+    this.logger.debug(`Квест выполнен: false`);
     return {
-      success: false
+      success: false,
+      tx_hash: null
     }
   }
 
@@ -1307,7 +1315,7 @@ export class QuestService {
       let startTs = ignoreStart ? now - 14 * 24 * 60 * 60 : startedAt;
       if (startTs < 0) startTs = 0;
       const apiKey = this.configService.get('ETHERSCAN_API_KEY') || '';
-      const urlForBlock = `https://api.sonicscan.org/api?module=block&action=getblocknobytime&timestamp=${startTs}&closest=before&apikey=${apiKey}`;
+      const urlForBlock = `https://api.etherscan.io/v2/api?chainid=146&module=block&action=getblocknobytime&timestamp=${startTs}&closest=before&apikey=${apiKey}`;
       const rBlock = await fetch(urlForBlock);
       if (!rBlock.ok) return [];
       const dataBlock = await rBlock.json();
@@ -1315,7 +1323,8 @@ export class QuestService {
         throw new Error('No block hash by ts');
       }
       const block = dataBlock.result;
-      const url = `https://api.sonicscan.org/api?module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`;
+      const url = `https://api.etherscan.io/v2/api?chainid=146&module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`
+      // const url = `https://api.sonicscan.org/api?module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`;
       const r = await fetch(url);
       if (!r.ok) return [];
       const data = await r.json();

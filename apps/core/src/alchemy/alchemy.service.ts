@@ -15,6 +15,7 @@ import * as daylyCheckAbi from './abis/daily-check-abi.json';
 import * as pyramidAbi from './abis/pyramid-abi.json';
 import { ALCHEMY_CHAIN, CHAIN_ID_BY_ALCHEMY_CHAIN } from './config/chain';
 import { EventSignature } from './config/signatures';
+import { Sentry } from '../common/sentry';
 
 export interface AlchemyWebhookEvent {
   id: string;
@@ -131,6 +132,7 @@ export class AlchemyWebhooksService {
       if (rejectedRes.length > 0) {
         for (const rej of rejectedRes) {
           const err = rej.reason;
+          Sentry.captureException(err)
           this.logger.error(`Rejected error name: ${err.name}`);
           this.logger.error(`Rejected error message: ${err.message}`);
           this.logger.error(`Rejected error stack: ${err.stack}`);

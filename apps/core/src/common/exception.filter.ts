@@ -5,6 +5,7 @@ import {
   HttpException,
   Logger,
 } from '@nestjs/common';
+import { Sentry } from './sentry';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -17,6 +18,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const status =
       exception instanceof HttpException ? exception.getStatus() : 500;
+
+    if (exception instanceof HttpException && exception.getStatus() === 500) {
+      Sentry.captureException(exception);
+    }
 
     const errorResponse = {
       statusCode: status,

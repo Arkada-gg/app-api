@@ -18,7 +18,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     this.pool = this.configService.get('ENV') === "prod" ? new Pool({
       connectionString: this.configService.get('DATABASE_URL') ||
         'postgres://user:password@localhost:5432/arkada_db',
-      max: +process.env.PG_MAX_CONNECTIONS || 10
+      max: +process.env.PG_MAX_CONNECTIONS || 10,
+      idleTimeoutMillis: 0 // when large spikes in the needs for connectors, no time to create
     }) : new Pool({
       connectionString: this.configService.get('DATABASE_URL') || 'postgres://user:password@127.0.0.1:6432/arkada_db',
       max: 10

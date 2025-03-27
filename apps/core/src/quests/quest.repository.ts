@@ -38,20 +38,11 @@ export class QuestRepository {
   async completeQuest(questId: string, userAddress: string, tx_hash?: string): Promise<void> {
     const lowerAddress = userAddress.toLowerCase();
     try {
-      let query: string
-      if (tx_hash) {
-        query = `
+      const query = `
           INSERT INTO quest_completions (quest_id, user_address, completed_at, transaction_hash)
           VALUES ($1, $2, NOW(), $3)
           ON CONFLICT (quest_id, user_address) DO NOTHING
         `;
-      } else {
-        query = `
-        INSERT INTO quest_completions (quest_id, user_address, completed_at)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (quest_id, user_address) DO NOTHING
-      `;
-      }
       await this.dbService.query(query, [questId, lowerAddress, tx_hash]);
     } catch (error) {
       throw new InternalServerErrorException(error.message);
