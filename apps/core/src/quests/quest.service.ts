@@ -991,13 +991,14 @@ export class QuestService {
             }
           }
         } else {
-          const sumUSD = await this.checkActionTokens(
+          const sumUSD1 = await this.checkActionTokens(
             action,
             parsedTx,
             parentTx
           );
-          this.logger.debug(`Сумма USD: ${sumUSD}`);
-          if (methodName === 'mint' ? sumUSD * 2 : sumUSD >= (action.minUsdTotal || 0)) {
+          const sumUSD = methodName === 'mint' ? sumUSD1 * 2 : sumUSD1
+          this.logger.debug(`Сумма USD: ${sumUSD} exp: ${sumUSD >= action.minUsdTotal}`);
+          if (sumUSD >= (action.minUsdTotal || 0)) {
             this.logger.debug(`Квест выполнен: ${methodName === 'mint' ? sumUSD * 2 : sumUSD} >= ${action.minUsdTotal}`);
             return {
               success: true,
