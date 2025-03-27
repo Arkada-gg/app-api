@@ -8,7 +8,6 @@ import {
 import { error, log } from 'console';
 import { ethers } from 'ethers';
 import fetch from 'node-fetch';
-import { gql, request } from 'graphql-request';
 import { ConfigService } from '../_config/config.service';
 import { CampaignService } from '../campaigns/campaign.service';
 import { DiscordBotService } from '../discord/discord.service';
@@ -722,69 +721,81 @@ export class QuestService {
 
   public async handleCheckLiquidityAmount(quest: QuestType, userAddr: string): Promise<{ success: boolean }> {
     const task = quest.value;
-    const pool1 = '0xe15bD143D36E329567aE9A176682AB9fAFc9C3D2'; // ASTR / WETH
-    const pool2 = '0x9E7233ff8da85b81888Bf43774013Ced9f4cC4B0'; // ASTR / USDCE
+    const pools = task.actions[0].pools;
     const url = 'https://api.studio.thegraph.com/query/106437/sonex-soneium/version/latest';
 
-    const query = gql`
-      query getSwaps ($contract: Bytes, $address: Bytes, $blockTimestamp: BigInt)
-      {
+    const query = `
+      query getSwaps($contract: Bytes, $address: Bytes, $blockTimestamp: BigInt) {
         swaps(
-          first: 100
-          orderBy: blockTimestamp
-          orderDirection: asc
-          where: {contract: $contract, sender: $address, blockTimestamp_gt: $blockTimestamp}
+          first: 100,
+          orderBy: blockTimestamp,
+          orderDirection: asc,
+          where: { contract: $contract, sender: $address, blockTimestamp_gt: $blockTimestamp }
         ) {
           amount0
           amount1
           blockTimestamp
+          transactionHash
         }
-      }`;
-
-    // const headers = { Authorization: 'Bearer {api-key}' }
+      }
+    `;
 
     async function fetchSubgraphData(contract: string, address: string, blockTimestamp: string) {
-      return await request<{
-        swaps: {
-          amount0: string
-          amount1: string
-          blockTimestamp: string
-        }[]
-      }>(url, query, {contract, address: userAddr, blockTimestamp });
+      const body = JSON.stringify({
+        query,
+        variables: { contract, address, blockTimestamp },
+      });
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+      if (!response.ok) {
+        throw new Error(`GraphQL query failed: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      return data.data as {
+        swaps: { amount0: string; amount1: string; blockTimestamp: string }[];
+      };
     }
 
-
-    const result: bigint[] = [];
-    let blockTimestamp = '0';
-    while (true) {
-      try {
-        const res = await fetchSubgraphData(pool1, userAddr, blockTimestamp);
-        const swaps = res?.swaps;
-        if (swaps) {
-          result.push(...swaps.map(({ amount0 }) => {
-            const v = BigInt(amount0);
-            return v > 0n ? v : -v;
-          }));
-          if (swaps.length < 100) break;
-        } else break;
-        const { blockTimestamp: latestBlockTimestampInSlice } = swaps.at(-1);
-        blockTimestamp = latestBlockTimestampInSlice;
-      } catch (error) {
-        this.logger.error(error);
-        break;
+    const result = [];
+    for (const pool of pools) {
+      let localBlockTimestamp = '0';
+      while (true) {
+        try {
+          const res = await fetchSubgraphData(pool, userAddr, localBlockTimestamp);
+          console.log('Response for pool', pool, res);
+          const swaps = res?.swaps;
+          if (swaps && swaps.length) {
+            result.push(
+              ...swaps.map(({ amount0 }) => {
+                const v = BigInt(amount0);
+                return v > 0n ? v : -v;
+              })
+            );
+            if (swaps.length < 100) break;
+            const { blockTimestamp: latestBlockTimestampInSlice } = swaps.at(-1);
+            localBlockTimestamp = latestBlockTimestampInSlice;
+          } else {
+            break;
+          }
+        } catch (error) {
+          this.logger.error(error);
+          break;
+        }
       }
     }
 
     const sumInToken0 = result.reduce((acc, v) => acc + v, 0n);
+    const floatAmount = parseFloat(ethers.formatUnits(sumInToken0, 18));
 
-    //TODO: var token
     const price = await this.priceService.getTokenPrice('astar');
-    const volume = Number(sumInToken0) * price;
-    // TODO: take decimals
+    const volume = Number(floatAmount) * price;
     if (volume > task.minAmountUSD) {
-      return { success: true }
+      return { success: true };
     }
-    return { success: false }
+    return { success: false };
   }
 
   private buildLinkUrl(endpoint: string, paramsStr: string, address: string) {

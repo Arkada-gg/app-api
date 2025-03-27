@@ -29,6 +29,7 @@ export interface QuestTask {
   methodToExecute?: string;
   methodToEqual?: any;
   url?: string;
+  pools?: string[];
 }
 
 export interface QuestType {
