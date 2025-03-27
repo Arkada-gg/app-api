@@ -720,6 +720,7 @@ export class QuestService {
   public async handleTheGraphMethodQuest(quest: QuestType, userAddr: string) {
     const task = quest.value;
 
+
     const query = gql`
       query getSwaps ($address: Bytes, $blockTimestamp: BigInt)
       {
