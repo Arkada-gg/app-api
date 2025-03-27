@@ -996,9 +996,9 @@ export class QuestService {
             parsedTx,
             parentTx
           );
-
-          if (sumUSD >= (action.minUsdTotal || 0)) {
-            this.logger.debug(`Квест выполнен: ${sumUSD} >= ${action.minUsdTotal}`);
+          this.logger.debug(`Сумма USD: ${sumUSD}`);
+          if (methodName === 'mint' ? sumUSD * 2 : sumUSD >= (action.minUsdTotal || 0)) {
+            this.logger.debug(`Квест выполнен: ${methodName === 'mint' ? sumUSD * 2 : sumUSD} >= ${action.minUsdTotal}`);
             return {
               success: true,
               tx_hash: parentTx.hash
