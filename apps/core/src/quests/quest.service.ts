@@ -719,34 +719,35 @@ export class QuestService {
 
   public async handleTheGraphMethodQuest(quest: QuestType, userAddr: string) {
     const task = quest.value;
-
+    const pool1 = '0xe15bD143D36E329567aE9A176682AB9fAFc9C3D2'; // ASTR / WETH
+    const pool2 = '0x9E7233ff8da85b81888Bf43774013Ced9f4cC4B0'; // ASTR / USDCE
+    const url = 'https://api.studio.thegraph.com/query/106437/sonex-soneium/version/latest';
 
     const query = gql`
-      query getSwaps ($address: Bytes, $blockTimestamp: BigInt)
+      query getSwaps ($contract: Bytes, $address: Bytes, $blockTimestamp: BigInt)
       {
         swaps(
           first: 100
           orderBy: blockTimestamp
           orderDirection: asc
-          where: {tx_sender: $address, blockTimestamp_gt: $blockTimestamp}
+          where: {contract: $contract, sender: $address, blockTimestamp_gt: $blockTimestamp}
         ) {
           amount0
           amount1
           blockTimestamp
         }
       }`;
-    const url = 'https://api.studio.thegraph.com/query/106437/sonex-soneium-asrt-weth/version/latest';
 
     // const headers = { Authorization: 'Bearer {api-key}' }
 
-    async function fetchSubgraphData(address: string, blockTimestamp: string) {
+    async function fetchSubgraphData(contract: string, address: string, blockTimestamp: string) {
       return await request<{
         swaps: {
           amount0: string
           amount1: string
           blockTimestamp: string
         }[]
-      }>(url, query, { address: userAddr, blockTimestamp });
+      }>(url, query, {contract, address: userAddr, blockTimestamp });
     }
 
 
@@ -754,7 +755,7 @@ export class QuestService {
     let blockTimestamp = '0';
     while (true) {
       try {
-        const res = await fetchSubgraphData(userAddr, blockTimestamp);
+        const res = await fetchSubgraphData(pool1, userAddr, blockTimestamp);
         const swaps = res?.swaps;
         if (swaps) {
           result.push(...swaps.map(({ amount0 }) => {
