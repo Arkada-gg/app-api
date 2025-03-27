@@ -15,7 +15,6 @@ import { UnbindSocialDto } from './dto/unbind-social.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ESocialPlatform, SocialFieldMap } from './user.constants';
 import { UserRepository } from './user.repository';
-import * as Sentry from '@sentry/node';
 import { CacheService } from '../redis/cache.service';
 
 @Injectable()
@@ -25,10 +24,6 @@ export class UserService {
     private readonly s3Service: S3Service,
     private readonly cacheService: CacheService,
   ) { }
-
-  onModuleInit() {
-    Sentry.captureMessage('Hello from Sentry manually!');
-  }
 
   async findByAddress(address: string): Promise<IUser | null> {
     return this.userRepository.findByAddress(address);

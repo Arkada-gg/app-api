@@ -5,7 +5,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { error, log } from 'console';
 import { ethers } from 'ethers';
 import fetch from 'node-fetch';
 import { ConfigService } from '../_config/config.service';
