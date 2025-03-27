@@ -364,6 +364,9 @@ export class QuestService {
     if (quest.value.type === 'checkOnchainMethod') {
       return this.handleCheckOnchainMethodQuest(quest, userAddr);
     }
+    if (quest.value.type === 'checkLiquidityAmount') {
+      return this.handleCheckLiquidityAmount(quest, userAddr);
+    }
     const endTime = Date.now();
     this.logger.log(`UserTRansactionFromBlockscout ---> latency: ${endTime - startTime}ms`);
     return this.checkOnChainQuest(quest, userAddr);
@@ -712,6 +715,86 @@ export class QuestService {
     } catch (e) {
       return { success: false }
     }
+  }
+
+
+  public async handleCheckLiquidityAmount(quest: QuestType, userAddr: string): Promise<{ success: boolean }> {
+    const task = quest.value;
+    const pools = task.actions[0].pools;
+    const url = 'https://api.studio.thegraph.com/query/106437/sonex-soneium/version/latest';
+
+    const query = `
+      query getSwaps($contract: Bytes, $address: Bytes, $blockTimestamp: BigInt) {
+        swaps(
+          first: 100,
+          orderBy: blockTimestamp,
+          orderDirection: asc,
+          where: { contract: $contract, sender: $address, blockTimestamp_gt: $blockTimestamp }
+        ) {
+          amount0
+          amount1
+          blockTimestamp
+          transactionHash
+        }
+      }
+    `;
+
+    async function fetchSubgraphData(contract: string, address: string, blockTimestamp: string) {
+      const body = JSON.stringify({
+        query,
+        variables: { contract, address, blockTimestamp },
+      });
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+      if (!response.ok) {
+        throw new Error(`GraphQL query failed: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      return data.data as {
+        swaps: { amount0: string; amount1: string; blockTimestamp: string }[];
+      };
+    }
+
+    const result = [];
+    for (const pool of pools) {
+      let localBlockTimestamp = '0';
+      while (true) {
+        try {
+          const res = await fetchSubgraphData(pool, userAddr, localBlockTimestamp);
+          console.log('Response for pool', pool, res);
+          const swaps = res?.swaps;
+          if (swaps && swaps.length) {
+            result.push(
+              ...swaps.map(({ amount0 }) => {
+                const v = BigInt(amount0);
+                return v > 0n ? v : -v;
+              })
+            );
+            if (swaps.length < 100) break;
+            const { blockTimestamp: latestBlockTimestampInSlice } = swaps.at(-1);
+            localBlockTimestamp = latestBlockTimestampInSlice;
+          } else {
+            break;
+          }
+        } catch (error) {
+          this.logger.error(error);
+          break;
+        }
+      }
+    }
+
+    const sumInToken0 = result.reduce((acc, v) => acc + v, 0n);
+    const floatAmount = parseFloat(ethers.formatUnits(sumInToken0, 18));
+
+    const price = await this.priceService.getTokenPrice('astar');
+    const volume = Number(floatAmount) * price;
+    if (volume > task.minAmountUSD) {
+      return { success: true };
+    }
+    return { success: false };
   }
 
   private buildLinkUrl(endpoint: string, paramsStr: string, address: string) {
