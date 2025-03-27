@@ -1253,7 +1253,6 @@ export class QuestService {
       const block = dataBlock.result;
       const url = `https://api.etherscan.io/v2/api?chainid=146&module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`
       // const url = `https://api.sonicscan.org/api?module=account&action=txlist&address=${addr}&startblock=${block}&endblock=latest&page=1&offset=500&sort=desc&apikey=${apiKey}`;
-      console.log('------>', url);
       const r = await fetch(url);
       if (!r.ok) return [];
       const data = await r.json();
