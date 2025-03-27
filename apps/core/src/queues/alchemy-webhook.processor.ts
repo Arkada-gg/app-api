@@ -2,6 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job, MetricsTime } from 'bullmq';
 import { Logger, Injectable } from '@nestjs/common';
 import { AlchemyWebhooksService } from '../alchemy/alchemy.service';
+import { Sentry } from '../common/sentry';
 
 @Processor('alchemy-webhooks', {
   concurrency: 1, metrics: {
