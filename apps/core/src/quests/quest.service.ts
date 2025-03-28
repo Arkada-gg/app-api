@@ -215,15 +215,18 @@ export class QuestService {
 
           //TODO: use multicall
 
-          const userMultiplier = Math.max(...await Promise.all(nftConfigs.map(async nft => {
+          let userMultiplier = 1;
+          for (const nft of nftConfigs) {
             const contract = new ethers.Contract(
               nft.address,
               ['function balanceOf(address owner) view returns (uint256)'],
               soneiumProvider
             );
             const balance = await contract.balanceOf(lowerAddress);
-            return Number(balance) > 0 && nft.multiplier
-          }))) || 1;
+            if (balance && +balance.toString() > 0) {
+              userMultiplier = Math.max(userMultiplier, nft.multiplier);
+            }
+          }
 
           const effectivePoints = Math.floor(totalPoints * userMultiplier);
           await this.userService.awardCampaignCompletion(

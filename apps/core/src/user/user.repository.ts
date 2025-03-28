@@ -653,6 +653,9 @@ export class UserRepository {
   ) {
     const lower = address.toLowerCase();
     const user = await this.findByAddress(address);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
     const userPoints = user.points;
 
     try {
