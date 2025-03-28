@@ -1172,7 +1172,11 @@ export class QuestService {
       let argVal;
       let tokenVal;
       if (Array.isArray(parsedTx.args[0])) {
-        argVal = parsedTx.args[0][idx];
+        argVal = parsedTx.args[0][idx];;
+
+        if (parsedTx.signature.includes('exactInput') && parsedTx.args[0][0].includes('0x4200000000000000000000000000000000000006') && parsedTx.args[0][0].includes('00bb82cae934a1e84f693fbb78ca5ed3b0a6893259441')) {
+          actualTokens.push({ address: '0x4200000000000000000000000000000000000006', amount: argVal });
+        }
         if (Array.isArray(parsedTx.args[0][tokenIdx])) {
           tokenVal = parsedTx.args[0][tokenIdx][1];
         }
@@ -1214,7 +1218,6 @@ export class QuestService {
         actualTokens.push({ address: tokenVal, amount: amountBN });
       }
     }
-
     if (action.orderedTokens) {
       for (let i = 0; i < action.tokens.length; i++) {
         const actual = actualTokens[i];
@@ -1447,7 +1450,7 @@ export class QuestService {
         { trait_type: 'Title', value: campaign.name },
         { trait_type: 'Transaction Chain', value: CHAIN_NAME[chainId] },
         { trait_type: 'Transaction Count', value: transactions.length },
-        { trait_type: 'Transaction Hash' },
+        { trait_type: 'Transaction Hash', value: txnsHashes.join(",") },
         { trait_type: 'Community', value: campaign.project_name },
         ...(campaign.tags
           ? [{ trait_type: 'Tags', value: campaign.tags.join(",") }]
