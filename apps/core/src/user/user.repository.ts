@@ -458,14 +458,13 @@ export class UserRepository {
     WHERE cc.completed_at BETWEEN $1 AND $2
     GROUP BY cc.user_address
   ),
-  user_pyramids AS (
+  user_pyramids_agg AS (
     SELECT
-      u.address,
-      SUM((p.value->>'gold')::INTEGER) AS gold_pyramids,
-      SUM((p.value->>'basic')::INTEGER) AS basic_pyramids
-    FROM users u,
-    LATERAL jsonb_each(u.pyramids_info) AS p
-    GROUP BY u.address
+      user_address,
+      SUM(gold_amount) AS gold_pyramids,
+      SUM(basic_amount) AS basic_pyramids
+    FROM user_pyramids
+    GROUP BY user_address
   ),
   ranked_users AS (
     SELECT
@@ -475,18 +474,21 @@ export class UserRepository {
       u.twitter,
       COALESCE(upa.total_points, 0) AS total_points,
       COALESCE(cca.campaigns_completed, 0) AS campaigns_completed,
-      COALESCE(up.gold_pyramids, 0) AS gold_pyramids,
-      COALESCE(up.basic_pyramids, 0) AS basic_pyramids,
+      COALESCE(upp.gold_pyramids, 0) AS gold_pyramids,
+      COALESCE(upp.basic_pyramids, 0) AS basic_pyramids,
       ROW_NUMBER() OVER (
         ORDER BY
-          ${sortBy === 'pyramids' ? 'gold_pyramids DESC NULLS LAST, basic_pyramids DESC NULLS LAST' : 'total_points DESC'}
+          ${sortBy === 'pyramids'
+        ? 'COALESCE(upp.gold_pyramids, 0) + COALESCE(upp.basic_pyramids, 0) DESC NULLS LAST'
+        : 'COALESCE(upa.total_points, 0) DESC'}
       ) AS rank
     FROM users u
     LEFT JOIN user_points_aggregated upa ON u.address = upa.user_address
     LEFT JOIN campaigns_completed_aggregated cca ON u.address = cca.user_address
-    LEFT JOIN user_pyramids up ON u.address = up.address
+    LEFT JOIN user_pyramids_agg upp ON u.address = upp.user_address
     WHERE COALESCE(upa.total_points, 0) > 0
-  )`;
+  )
+`;
 
     const topNsql = `
     ${cte}
@@ -749,21 +751,25 @@ export class UserRepository {
 
   async incrementPyramid(address: string, type: PyramidType, chainId: number) {
     const lower = address.toLowerCase();
+    const pyramidType = type.toLowerCase();
     await this.dbService.query(
       `
-        UPDATE users
-        SET pyramids_info = COALESCE(pyramids_info, '{}') ||
-          jsonb_build_object($2::text,
-            jsonb_build_object(
-              $3::text,
-              COALESCE((pyramids_info->($2::text)->($3::text))::int, 0) + 1
-            )
-          )
-        WHERE address = $1
-        `,
-      [lower, chainId, type.toLowerCase()]
+      INSERT INTO user_pyramids (user_address, chain_id, basic_amount, gold_amount)
+      VALUES (
+        $1,
+        $2,
+        CASE WHEN $3 = 'basic' THEN 1 ELSE 0 END,
+        CASE WHEN $3 = 'gold' THEN 1 ELSE 0 END
+      )
+      ON CONFLICT (user_address, chain_id)
+      DO UPDATE SET
+        basic_amount = CASE WHEN $3 = 'basic' THEN user_pyramids.basic_amount + 1 ELSE user_pyramids.basic_amount END,
+        gold_amount = CASE WHEN $3 = 'gold' THEN user_pyramids.gold_amount + 1 ELSE user_pyramids.gold_amount END;
+      `,
+      [lower, chainId, pyramidType]
     );
   }
+
 
   async findUsersWithWalletChunk(
     offset: number,
