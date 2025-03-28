@@ -7,6 +7,7 @@ import {
 import * as crypto from 'crypto';
 import { Interface, LogDescription, ethers } from 'ethers';
 import { ConfigService } from '../_config/config.service';
+import { DatabaseService } from '../database/database.service';
 import { QuestService } from '../quests/quest.service';
 import { PyramidType } from '../shared/interfaces';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -37,7 +38,8 @@ export class AlchemyWebhooksService {
     private readonly userService: UserService,
     private readonly transactionsService: TransactionsService,
     private readonly questService: QuestService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly dbService: DatabaseService
   ) { }
 
   async verifyWebhookSignature(
@@ -251,7 +253,10 @@ export class AlchemyWebhooksService {
 
   private async handlePyramidClaimEvent(evt: IEventComb, chainId: number) {
     const start = Date.now();
+
     try {
+      await this.dbService.query('BEGIN');
+
       const { questId: campaignId, claimer: userAddress } = evt.event.args;
       const campaign = await this.questService.completeCampaignAndAwardPoints(
         campaignId,
@@ -261,7 +266,11 @@ export class AlchemyWebhooksService {
       const campaignType = campaign.type === 'basic' ? PyramidType.BASIC : PyramidType.GOLD;
       await this.userService.incrementPyramid(userAddress, campaignType, chainId);
 
+      await this.dbService.query('COMMIT');
       return evt;
+    } catch (error) {
+      await this.dbService.query('ROLLBACK');
+      throw error;
     } finally {
       const end = Date.now();
       this.logger.debug(`handlePyramidClaimEvent took ${end - start}ms`);
