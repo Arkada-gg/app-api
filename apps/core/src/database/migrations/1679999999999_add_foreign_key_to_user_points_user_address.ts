@@ -13,12 +13,23 @@ export async function up(client: RaiiPoolClient): Promise<void> {
   `);
 
   await client.query(`
-    ALTER TABLE user_points
-    ADD CONSTRAINT user_points_user_address_fk
-    FOREIGN KEY (user_address)
-    REFERENCES users(address)
-    ON UPDATE CASCADE
-    ON DELETE SET NULL;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.table_constraints 
+        WHERE constraint_type = 'FOREIGN KEY'
+          AND table_name = 'user_points'
+          AND constraint_name = 'user_points_user_address_fk'
+      ) THEN
+        ALTER TABLE user_points
+        ADD CONSTRAINT user_points_user_address_fk
+        FOREIGN KEY (user_address)
+        REFERENCES users(address)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL;
+      END IF;
+    END $$;
   `);
 }
 
