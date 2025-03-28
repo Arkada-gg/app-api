@@ -18,7 +18,7 @@ import {
   GetCampaignWithUserStatusResponse,
 } from '../shared/interfaces';
 import { CampaignService } from './campaign.service';
-import { CampaignStatsDto } from './dto/campaign-status.dto';
+import { CampaignStatusDto } from './dto/campaign-status.dto';
 import { GetCampaignDto } from './dto/get-campaign.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { GetUserCampaignsDto } from './dto/get-user-campaigns.dto';
@@ -26,7 +26,7 @@ import { GetUserCampaignsDto } from './dto/get-user-campaigns.dto';
 @ApiTags('Campaigns')
 @Controller('campaigns')
 export class CampaignController {
-  constructor(private readonly campaignService: CampaignService) {}
+  constructor(private readonly campaignService: CampaignService) { }
 
   @Get()
   @ApiOperation({ summary: 'Получить активные кампании с фильтрами' })
@@ -58,7 +58,7 @@ export class CampaignController {
     status: 200,
     description:
       'Возвращает количество квестов и количество выполненных квестов для каждой кампании',
-    type: CampaignStatsDto,
+    type: CampaignStatusDto,
     isArray: true,
   })
   @ApiBadRequestResponse({ description: 'Некорректные параметры запроса' })
