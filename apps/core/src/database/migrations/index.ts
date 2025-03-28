@@ -34,6 +34,7 @@ import * as m33 from './1674235500029_add_pyramid_fields_to_user_table';
 import * as m34 from './1674235500030_add_pyramid_required_to_campaigns_table';
 import * as m35 from './1674235800026_add_campaign_id_points_before_after_to_user_points';
 import * as m36 from './1679235800027_add_chain_id_to_txns'
+import * as m37 from './1679999999999_add_foreign_key_to_user_points_user_address'
 
 
 import * as s3 from './1674235300013_seed_sonnex_campaign_and_quiz_quest';
@@ -76,6 +77,6 @@ export const allMigrations = [
   m34,
   m35,
   m36,
-
+  m37,
   s3,
 ];
